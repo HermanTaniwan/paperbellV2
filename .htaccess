@@ -1,0 +1,15 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Paksa domain publik memakai HTTPS tanpa mengganggu localhost/LAN.
+RewriteCond %{HTTP_HOST} ^app\.paperbell\.id(?::[0-9]+)?$ [NC]
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !^https$ [NC]
+RewriteRule ^ https://app.paperbell.id%{REQUEST_URI} [R=301,L,NE]
+
+AddType application/x-x509-ca-cert .crt
+
+<FilesMatch "^(config\.php|setup\.php|package.*|README\.md|start-paperbell\.ps1)$">
+    Require all denied
+</FilesMatch>

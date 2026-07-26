@@ -1,0 +1,625 @@
+/*
+ * Tablet layout
+ * Covers common portrait and landscape tablet widths without changing the
+ * compact phone layout declared in the existing feature styles.
+ */
+.sidebar-close {
+  display: none;
+}
+
+.labels-tablet-select-all {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .sidebar-close {
+    position: absolute;
+    top: 20px;
+    right: 16px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .08);
+    color: #fff;
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .sidebar-close:hover {
+    background: rgba(255, 255, 255, .14);
+    filter: none;
+    transform: none;
+  }
+
+  aside .brand {
+    padding-right: 52px;
+  }
+}
+
+@media (min-width: 621px) and (max-width: 1180px) {
+  html,
+  body,
+  #app,
+  .app-shell {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  main {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  aside {
+    width: min(310px, 78vw);
+    padding: 24px 18px 20px;
+    transform: translateX(-105%);
+    transition: transform .22s ease, box-shadow .22s ease;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  aside.open {
+    transform: translateX(0);
+    box-shadow: 24px 0 60px rgba(13, 34, 24, .24);
+  }
+
+  nav button {
+    min-height: 44px;
+    padding: 11px 14px;
+  }
+
+  .menu-button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    margin-right: 13px;
+    padding: 0;
+    font-size: 19px;
+  }
+
+  main > header {
+    height: 80px;
+    padding: 0 24px;
+  }
+
+  main > header > div:not(.header-actions) {
+    min-width: 0;
+  }
+
+  main > header h1,
+  main > header p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content {
+    width: 100%;
+    max-width: 100%;
+    padding: 24px 24px 54px;
+  }
+
+  .alert {
+    margin-right: 24px;
+    margin-left: 24px;
+  }
+
+  button,
+  .upload-button,
+  .google-sheet-link {
+    min-height: 40px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .toolbar .search {
+    max-width: none;
+    min-width: min(340px, 100%);
+  }
+
+  .toolbar .filters {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .toolbar .filters button,
+  .toolbar > button,
+  .toolbar > a {
+    flex: 0 0 auto;
+  }
+
+  .hero {
+    min-height: 176px;
+    padding: 28px 30px;
+  }
+
+  .hero h2 {
+    font-size: clamp(28px, 4vw, 32px);
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table-card {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 760px;
+  }
+
+  th,
+  td {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .pagination {
+    position: sticky;
+    left: 0;
+    min-width: min(100%, 760px);
+  }
+
+  .order-group-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .grouped-items {
+    padding: 0 18px;
+  }
+
+  .inline-print-item {
+    grid-template-columns: minmax(220px, 1fr) 88px minmax(190px, 230px);
+    gap: 14px;
+  }
+
+  .inline-item-actions,
+  .inline-print-button {
+    grid-column: 3;
+  }
+
+  .inline-item-actions button {
+    min-height: 38px;
+  }
+
+  .inline-advanced {
+    grid-column: 1 / -1;
+  }
+
+  .print-options-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row > button {
+    min-width: max-content;
+  }
+
+  .labels-split {
+    grid-template-columns: 1fr;
+  }
+
+  .label-preview {
+    position: static;
+    height: min(620px, 70vh);
+    min-height: 440px;
+  }
+
+  .label-global-printer {
+    flex: 1 1 320px;
+  }
+
+  .label-global-printer select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .printer-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .document-card {
+    grid-template-columns: 1fr;
+  }
+
+  .document-print-settings {
+    grid-template-columns: minmax(190px, 1.4fr) repeat(2, minmax(125px, 1fr)) 72px;
+  }
+
+  .document-print-settings button {
+    min-height: 40px;
+  }
+
+  .connection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connection-card {
+    min-width: 0;
+  }
+
+  .credential-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+  }
+
+  .settings-actions {
+    flex-wrap: wrap;
+  }
+
+  .modal-backdrop {
+    padding: 28px;
+  }
+
+  .modal-card {
+    width: min(920px, 100%);
+    max-height: calc(100dvh - 56px);
+  }
+
+  .history-modal {
+    width: 100%;
+  }
+
+  .modal-table {
+    margin-right: 20px;
+    margin-left: 20px;
+  }
+
+  .printer-queue-fab {
+    right: 20px;
+    bottom: 20px;
+  }
+}
+
+@media (min-width: 621px) and (max-width: 900px) {
+  .sync-state {
+    display: none;
+  }
+
+  .connection-grid,
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .document-print-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .connection-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 621px) and (max-width: 760px) {
+  main > header {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .content {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .alert {
+    margin-right: 18px;
+    margin-left: 18px;
+  }
+
+  .header-actions .sync-state {
+    display: none;
+  }
+
+  .inline-print-item {
+    grid-template-columns: minmax(0, 1fr) 86px;
+  }
+
+  .inline-printer,
+  .inline-item-actions {
+    grid-column: 1 / -1;
+  }
+
+  .inline-item-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inline-item-actions .inventory-use-button {
+    grid-column: 1 / -1;
+  }
+
+  .print-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button:hover,
+  .google-sheet-link:hover {
+    filter: none;
+    transform: none;
+  }
+
+  .link,
+  .customer-history-link,
+  .copy-url {
+    min-height: 36px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+}
+
+/* Label workflow: order navigation and actions are tablet-only. */
+@media (min-width: 621px) and (max-width: 1180px) {
+  .labels-list tbody tr.is-previewing {
+    border-color: #75a68b;
+    box-shadow: 0 0 0 2px rgba(32, 112, 76, .12);
+  }
+
+  .pdf-order-controls {
+    display: flex;
+  }
+
+  .pdf-order-controls span {
+    min-width: 94px;
+  }
+
+  .pdf-page-controls {
+    display: none;
+  }
+
+  .label-preview-actions {
+    display: grid;
+    grid-template-columns: minmax(120px, .8fr) minmax(150px, 1.2fr);
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    background: #fff;
+  }
+
+  .label-preview-actions button {
+    min-height: 42px;
+  }
+}
+
+/* Landscape tablets use a persistent master-detail workspace. */
+@media (min-width: 760px) and (max-width: 1180px) and (orientation: landscape) {
+  .labels-split {
+    grid-template-columns: minmax(330px, .42fr) minmax(0, .58fr);
+    gap: 12px;
+  }
+
+  .labels-tablet-select-all {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 42px;
+    margin-bottom: 8px;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: #fff;
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .labels-tablet-select-all input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--green);
+  }
+
+  .labels-tablet-select-all:has(input:disabled) {
+    color: var(--muted);
+    cursor: default;
+    opacity: .65;
+  }
+
+  .labels-list .table-card {
+    max-height: calc(100dvh - 236px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .labels-list table {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .labels-list thead {
+    display: none;
+  }
+
+  .labels-list tbody {
+    display: contents;
+  }
+
+  .labels-list table > tr,
+  .labels-list tbody tr {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check order status"
+      "check resi pdf"
+      "actions actions actions";
+    gap: 5px 8px;
+    align-items: start;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .labels-list table > tr.labels-loading-row,
+  .labels-list tbody tr.labels-loading-row,
+  .labels-list table > tr.labels-empty-row,
+  .labels-list tbody tr.labels-empty-row {
+    display: block;
+    cursor: default;
+  }
+
+  .labels-list table > tr.labels-loading-row td,
+  .labels-list tbody tr.labels-loading-row td,
+  .labels-list table > tr.labels-empty-row td,
+  .labels-list tbody tr.labels-empty-row td {
+    padding: 18px;
+    text-align: center;
+  }
+
+  .labels-list table > tr > td,
+  .labels-list tbody td {
+    display: block;
+    width: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .labels-list table > tr > td:nth-child(1), .labels-list tbody td:nth-child(1) { grid-area: check; padding-top: 2px; }
+  .labels-list table > tr > td:nth-child(2), .labels-list tbody td:nth-child(2) { grid-area: order; min-width: 0; }
+  .labels-list table > tr > td:nth-child(3), .labels-list tbody td:nth-child(3) { grid-area: resi; min-width: 0; }
+  .labels-list table > tr > td:nth-child(4),
+  .labels-list tbody td:nth-child(4) { display: none; }
+  .labels-list table > tr > td:nth-child(5), .labels-list tbody td:nth-child(5) { grid-area: pdf; justify-self: end; }
+  .labels-list table > tr > td:nth-child(6), .labels-list tbody td:nth-child(6) { grid-area: status; }
+  .labels-list table > tr > td:nth-child(7), .labels-list tbody td:nth-child(7) { grid-area: actions; }
+
+  .labels-list tbody td:nth-child(2) b,
+  .labels-list .tracking-number {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .labels-list table > tr > td:nth-child(5) .link,
+  .labels-list tbody td:nth-child(5) .link {
+    min-height: 28px;
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .labels-list td.actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding-top: 7px;
+  }
+
+  .labels-list td.actions button {
+    width: 100%;
+    min-height: 38px;
+    padding: 7px 5px;
+    font-size: 9px;
+  }
+
+  .labels-list .pagination {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+  }
+
+  .label-preview {
+    position: sticky;
+    top: 160px;
+    height: calc(100dvh - 236px);
+    min-height: 420px;
+  }
+
+  .label-preview-head {
+    padding: 11px 12px;
+  }
+
+  .pdf-viewer-viewport {
+    padding: 12px;
+  }
+}
+
+/* Portrait tablets keep the list readable and open preview as a focused sheet. */
+@media (min-width: 621px) and (max-width: 900px) and (orientation: portrait) {
+  .label-preview:not(.has-document) {
+    display: none;
+  }
+
+  .label-preview.has-document {
+    position: fixed;
+    inset: 12px;
+    z-index: 160;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    border-radius: 16px;
+    box-shadow: 0 18px 70px rgba(18, 32, 24, .3);
+  }
+
+  .label-preview-close {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    padding: 0 !important;
+    font-size: 22px !important;
+  }
+
+  .label-preview-head,
+  .pdf-viewer-toolbar,
+  .label-preview-actions {
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  aside {
+    transition: none;
+  }
+}

@@ -1,0 +1,140 @@
+.page-status {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 64px);
+  margin: 14px auto 0;
+  padding: 13px 14px;
+  border: 1px solid #c8dccc;
+  border-radius: 12px;
+  background: #eef7f1;
+  color: #27563d;
+  box-shadow: 0 4px 16px rgba(28, 45, 35, .04);
+}
+
+.page-status b,
+.page-status span { display: block; }
+.page-status b { font-size: 12px; }
+
+.page-status div > span {
+  margin-top: 3px;
+  color: #607269;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.status-spinner {
+  display: block;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #c9ded0;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: status-spin .75s linear infinite;
+}
+
+.status-icon {
+  width: 26px;
+  height: 26px;
+  display: grid !important;
+  place-items: center;
+  border-radius: 50%;
+  background: #f5caca;
+  color: #8e3030;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.page-status.is-error {
+  border-color: #efcaca;
+  background: #fff1f1;
+  color: #8e3030;
+}
+
+.page-status.is-error div > span {
+  color: #8b5c5c;
+  overflow-wrap: anywhere;
+}
+
+.status-retry {
+  min-height: 36px;
+  padding: 8px 12px;
+  background: #963838;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.status-dismiss {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid #efcaca;
+  background: #fff;
+  color: #963838;
+  font-size: 20px;
+}
+
+.connection-load-state {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: left;
+}
+
+.connection-load-state h3 {
+  margin: 0 0 5px;
+  font-size: 15px;
+}
+
+.connection-load-state p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.connection-load-state.is-error {
+  border-color: #efcaca;
+  background: #fff8f8;
+}
+
+@keyframes status-spin { to { transform: rotate(360deg); } }
+
+@media (min-width: 1181px) {
+  .content {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .page-status {
+    width: calc(100% - 40px);
+  }
+}
+
+@media (max-width: 620px) {
+  .page-status {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    width: calc(100% - 30px);
+    margin-top: 10px;
+  }
+
+  .status-retry {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .status-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-spinner { animation-duration: 1.5s; }
+}

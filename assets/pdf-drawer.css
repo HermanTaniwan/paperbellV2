@@ -1,0 +1,44 @@
+.labels-split{grid-template-columns:minmax(0,1fr)!important}
+
+.pdf-drawer-backdrop{position:fixed;inset:0;z-index:220;display:flex;justify-content:flex-end;background:rgba(13,28,20,.42);backdrop-filter:blur(2px)}
+.pdf-drawer-panel{position:relative;inset:auto;width:min(760px,calc(100vw - 48px));height:100dvh;margin:0;padding:0;border:0;border-left:1px solid #dbe4de;border-radius:18px 0 0 18px;background:#fff;color:var(--ink);box-shadow:-20px 0 60px rgba(15,35,24,.22);overflow:hidden;overscroll-behavior-x:none;transform:translateX(var(--pdf-drawer-drag,0));transition:transform .2s ease}
+.pdf-drawer-panel.is-swiping{transition:none}
+.pdf-drawer-swipe-handle{display:none}
+.pdf-drawer-panel .label-preview-content{height:100%;display:flex;flex-direction:column}
+.pdf-drawer-panel .label-preview-head{flex:0 0 auto;min-height:68px;padding:13px 16px;background:#fff}
+.pdf-drawer-panel .label-preview-head>div:first-child{min-width:0}
+.pdf-drawer-panel .label-preview-head b{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-drawer-panel .label-preview-head button{min-height:38px}
+.pdf-drawer-panel .label-preview-close{display:grid;place-items:center;width:38px;padding:0;font-size:21px}
+.pdf-drawer-panel .pdf-viewer-toolbar{flex:0 0 auto;flex-wrap:wrap}
+.pdf-drawer-panel .pdf-order-controls{display:flex}
+.pdf-drawer-panel .pdf-page-controls,.pdf-drawer-panel .pdf-zoom-controls{display:flex;align-items:center}
+.pdf-drawer-panel .pdf-viewer-viewport{flex:1;min-height:0}
+.pdf-drawer-panel .pdf-page-stack{width:max-content;min-width:100%;margin:0 auto}
+.pdf-drawer-panel .pdf-page-canvas{display:block;margin:0 auto 16px;background:#fff;box-shadow:0 3px 16px rgba(30,45,36,.16)}
+.pdf-drawer-panel .pdf-page-canvas:last-child{margin-bottom:0}
+.pdf-drawer-panel .label-preview-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:0 0 auto;padding:10px 12px;border-top:1px solid var(--line);background:#fff}
+.pdf-drawer-panel .label-preview-actions button{min-height:42px}
+
+.pdf-drawer-enter-active,.pdf-drawer-leave-active{transition:background-color .2s ease,backdrop-filter .2s ease}
+.pdf-drawer-enter-active .pdf-drawer-panel,.pdf-drawer-leave-active .pdf-drawer-panel{transition:transform .24s ease,opacity .2s ease}
+.pdf-drawer-enter-from,.pdf-drawer-leave-to{background:rgba(13,28,20,0);backdrop-filter:blur(0)}
+.pdf-drawer-enter-from .pdf-drawer-panel,.pdf-drawer-leave-to .pdf-drawer-panel{transform:translateX(100%);opacity:.7}
+
+@media(max-width:700px){
+ .pdf-drawer-panel{width:100vw;border-left:0;border-radius:0}
+ .pdf-drawer-panel .label-preview-head{min-height:62px;padding:10px 12px}
+ .pdf-drawer-panel .label-preview-head-actions button:first-child{display:none}
+ .pdf-drawer-panel .pdf-viewer-toolbar{justify-content:center;gap:6px;padding:7px 8px}
+ .pdf-drawer-panel .pdf-order-controls{width:100%;justify-content:center}
+ .pdf-drawer-panel .pdf-viewer-viewport{padding:10px}
+}
+
+@media(pointer:coarse){
+ .pdf-drawer-swipe-handle{display:flex;align-items:center;justify-content:center;flex:0 0 22px;background:#fff;touch-action:pan-y;overscroll-behavior-x:none}
+ .pdf-drawer-swipe-handle i{display:block;width:42px;height:4px;border-radius:999px;background:#c8d0cb}
+}
+
+@media(prefers-reduced-motion:reduce){
+ .pdf-drawer-enter-active,.pdf-drawer-leave-active,.pdf-drawer-enter-active .pdf-drawer-panel,.pdf-drawer-leave-active .pdf-drawer-panel{transition:none}
+}

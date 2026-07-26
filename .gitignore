@@ -1,0 +1,8 @@
+/node_modules/
+__pycache__/
+*.py[cod]
+/.tmp/
+/tmp/
+/output/
+/storage/
+/paperbell-local-ca.crt
