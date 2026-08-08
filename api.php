@@ -13,14 +13,21 @@ require __DIR__ . '/src/MarketplaceOAuthService.php';
 require __DIR__ . '/src/MarketplaceLabelService.php';
 require __DIR__ . '/src/MarketplaceOrderSyncService.php';
 require __DIR__ . '/src/ShopeeEscrowService.php';
+require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/DataMappingService.php';
 require __DIR__ . '/src/PrintQueueService.php';
 require __DIR__ . '/src/PdfToolsService.php';
+require __DIR__ . '/src/ScannerService.php';
 
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
 function unixText(int|string|null $unix): string { $value=(int)$unix; return $value > 0 ? date('d M Y H:i', $value) : '-'; }
 function appBaseUrl(array $config): string { if(($config['app']['public_url']??'')!=='')return rtrim($config['app']['public_url'],'/');$host=(string)($_SERVER['HTTP_HOST']??'localhost');if(!preg_match('/^[A-Za-z0-9.\-:\[\]]+$/',$host))throw new RuntimeException('Host URL tidak valid.');$scheme=!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'?'https':'http';return $scheme.'://'.$host.rtrim((string)$config['app']['base_path'],'/'); }
+function storeHolidays(PDO $db): array {
+    $stmt=$db->prepare("SELECT meta_value FROM app_meta WHERE meta_key='store_holidays'");$stmt->execute();$decoded=json_decode((string)($stmt->fetchColumn()?:'[]'),true);$items=[];
+    foreach(is_array($decoded)?$decoded:[] as $value){$date=DateTimeImmutable::createFromFormat('!Y-m-d',(string)$value);if($date&&$date->format('Y-m-d')===$value)$items[]=$value;}
+    $items=array_values(array_unique($items));sort($items);return $items;
+}
 function streamPdf(string $path, string $downloadName): never {
     $size = filesize($path);
     if ($size === false || $size < 1) respond(['error'=>'File PDF kosong atau tidak dapat dibaca.'], 404);
@@ -107,6 +114,27 @@ try {
     $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__);
     $queueService = new PrintQueueService($mysql);
     $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__);
+    $scannerService = new ScannerService($config['scanner']??[],__DIR__);
+
+    if ($action === 'scanner_overview') respond($scannerService->overview());
+    if ($action === 'scanner_start') respond($scannerService->start(body(),(string)$_SESSION['paperbell_user']),202);
+    if ($action === 'scanner_job') respond($scannerService->job(trim((string)($_GET['id']??''))));
+    if ($action === 'scanner_cancel') {$input=body();respond($scannerService->cancel(trim((string)($input['id']??''))));}
+    if ($action === 'scanner_file') {
+        $file=$scannerService->file(trim((string)($_GET['id']??'')),trim((string)($_GET['type']??'')),(int)($_GET['page']??0));
+        $size=filesize($file['path']);if($size===false)throw new RuntimeException('Ukuran file scanner tidak dapat dibaca.');
+        header('Content-Type: '.$file['mime']);header('Content-Length: '.$size);header('Cache-Control: private, max-age=3600');
+        header('Content-Disposition: '.(($_GET['type']??'')==='report'?'attachment':'inline').'; filename="'.preg_replace('/[^A-Za-z0-9._-]+/','_',basename($file['name'])).'"');
+        readfile($file['path']);exit;
+    }
+
+    if ($action === 'save_store_holiday') {
+        $input=body();$dateText=trim((string)($input['date']??''));$operation=(string)($input['operation']??'add');$date=DateTimeImmutable::createFromFormat('!Y-m-d',$dateText);
+        if(!$date||$date->format('Y-m-d')!==$dateText)respond(['error'=>'Tanggal libur tidak valid.'],422);
+        if(!in_array($operation,['add','remove'],true))respond(['error'=>'Operasi tanggal libur tidak valid.'],422);
+        $mysql->beginTransaction();
+        try{$mysql->exec("INSERT INTO app_meta(meta_key,meta_value) VALUES('store_holidays','[]') ON DUPLICATE KEY UPDATE meta_key=VALUES(meta_key)");$stmt=$mysql->query("SELECT meta_value FROM app_meta WHERE meta_key='store_holidays' FOR UPDATE");$items=json_decode((string)($stmt->fetchColumn()?:'[]'),true);$items=is_array($items)?array_values(array_filter(array_map('strval',$items))):[];$lookup=array_fill_keys($items,true);if($operation==='add')$lookup[$dateText]=true;else unset($lookup[$dateText]);$items=array_keys($lookup);sort($items);$update=$mysql->prepare("UPDATE app_meta SET meta_value=? WHERE meta_key='store_holidays'");$update->execute([json_encode($items,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)]);$mysql->commit();respond(['ok'=>true,'holidays'=>$items]);}catch(Throwable $e){if($mysql->inTransaction())$mysql->rollBack();throw $e;}
+    }
 
     if ($action === 'mapping') respond($mappingService->overview((string)($_GET['q']??''),(int)($_GET['page']??1)));
     if ($action === 'sync_mapping') respond($mappingService->syncFromGoogle((string)$_SESSION['paperbell_user']));
@@ -116,6 +144,12 @@ try {
     if ($action === 'delete_manual_pdf') {$input=body();$pdfTools->delete((int)($input['id']??0));respond(['ok'=>true]);}
     if ($action === 'print_manual_pdf') {$input=body();$doc=$pdfTools->document((int)($input['id']??0));respond($printing->queueFile((string)$doc['source_type'],(string)$doc['file_path'],trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user'],is_array($input['settings']??null)?$input['settings']:[]));}
     if ($action === 'print_mapping_pdf') {$input=body();respond($printing->queueMappingFile((int)($input['mapping_id']??0),trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user'],is_array($input['settings']??null)?$input['settings']:[]));}
+    if ($action === 'print_stock_product') {
+        $input=body();$mappingId=(int)($input['mapping_id']??0);$packs=(int)($input['packs']??0);$printer=trim((string)($input['printer']??''));
+        if($packs<1)respond(['error'=>'Qty cetak minimal 1 pak.'],422);$stmt=$mysql->prepare('SELECT * FROM data_mappings WHERE id=?');$stmt->execute([$mappingId]);$map=$stmt->fetch();if(!$map)respond(['error'=>'Data Mapping tidak ditemukan.'],404);$key=trim((string)$map['sku_id']);if($key==='')respond(['error'=>'SKU ID mapping kosong.'],422);
+        $now=time();$reference='STOCK-'.$mappingId.'-'.$now.'-'.bin2hex(random_bytes(3));$mysql->beginTransaction();
+        try{$print=$printing->queueMappingFile($mappingId,$printer,(string)$_SESSION['paperbell_user'],['copies'=>$packs*20],'stock',$reference);$up=$mysql->prepare('INSERT INTO product_inventory(item_key,model_sku,item_sku,item_name,model_name,no_ref,sku_induk,qty,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE model_sku=VALUES(model_sku),item_sku=VALUES(item_sku),item_name=VALUES(item_name),model_name=VALUES(model_name),no_ref=VALUES(no_ref),sku_induk=VALUES(sku_induk),qty=qty+VALUES(qty),updated_at=VALUES(updated_at)');$up->execute([$key,$map['sku_id'],$map['parent_sku'],$map['search_alias']?:$map['product_name'],$map['variation']?:$map['variation_name'],$map['sku_id'],$map['parent_sku'],$packs,$now]);$afterStmt=$mysql->prepare('SELECT qty FROM product_inventory WHERE item_key=?');$afterStmt->execute([$key]);$after=(int)$afterStmt->fetchColumn();$log=$mysql->prepare("INSERT INTO inventory_movements(item_key,movement_type,qty_delta,qty_after,note,created_by,created_at) VALUES(?,'add',?,?,?, ?,?)");$log->execute([$key,$packs,$after,'Tambah otomatis dari cetak rekomendasi stok #'.$print['id'],(string)$_SESSION['paperbell_user'],$now]);$mysql->commit();respond($print+['packs'=>$packs,'sheets'=>$packs*20,'inventoryQty'=>$after]);}catch(Throwable $e){if($mysql->inTransaction())$mysql->rollBack();throw$e;}
+    }
     if ($action === 'random_pool') {$pool=$pdfTools->randomPool();respond(['counts'=>$pool['counts']]);}
     if ($action === 'generate_random') respond($pdfTools->generateRandom(body(),(string)$_SESSION['paperbell_user']));
     if ($action === 'generate_random_order') {
@@ -124,8 +158,10 @@ try {
         respond($generated+['order_sn'=>$orderSn]);
     }
     if ($action === 'print_job_action') {$input=body();respond($queueService->appAction((int)($input['id']??0),trim((string)($input['operation']??''))));}
+    if ($action === 'acknowledge_printer_incident') {$input=body();respond($queueService->acknowledgeIncident((int)($input['id']??0),(string)$_SESSION['paperbell_user']));}
     if ($action === 'clear_completed_jobs') respond(['ok'=>true,'deleted'=>$queueService->clearCompleted()]);
     if ($action === 'spooler_action') {$input=body();respond($queueService->spoolerAction(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['operation']??''))));}
+    if ($action === 'move_spooler_job') {$input=body();respond($queueService->moveSpoolerJob(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['target_printer']??''))));}
 
     if ($action === 'oauth_status') respond($oauth->statuses(appBaseUrl($config)));
     if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauth->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauth->statuses(appBaseUrl($config))]); }
@@ -143,6 +179,11 @@ try {
     }
     if ($action === 'product_pdf') {
         $pdf=$printing->productPdf((int)($_GET['line_id']??0));$path=(string)$pdf['path'];if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'PDF produk tidak tersedia.'],404);streamPdf($path, (string)$pdf['name']);
+    }
+    if ($action === 'mapping_pdf') {
+        $stmt=$mysql->prepare('SELECT sku_id,product_name,variation_name,file_path FROM data_mappings WHERE id=?');$stmt->execute([(int)($_GET['mapping_id']??0)]);$mapping=$stmt->fetch();
+        if(!$mapping)respond(['error'=>'Data Mapping tidak ditemukan.'],404);$path=(string)$mapping['file_path'];if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'PDF produk tidak tersedia.'],404);
+        streamPdf($path,basename($path));
     }
     if ($action === 'manual_pdf') {
         $doc=$pdfTools->document((int)($_GET['id']??0));$path=(string)$doc['file_path'];streamPdf($path, (string)$doc['original_name']);
@@ -164,6 +205,18 @@ try {
         respond($shopeeEscrow->sync($from,$to));
     }
 
+    if ($action === 'shopee_shop_stats') {
+        respond((new ShopeeShopStatsService($mysql))->dashboard());
+    }
+
+    if ($action === 'shopee_shop_stats_comparison') {
+        respond((new ShopeeShopStatsService($mysql))->comparison(
+            trim((string)($_GET['from'] ?? '')),
+            trim((string)($_GET['to'] ?? '')),
+            trim((string)($_GET['granularity'] ?? 'daily'))
+        ));
+    }
+
     if ($action === 'dashboard') {
         $totals = $mysql->query("SELECT COUNT(*) total,SUM(UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)) unprinted,SUM(UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process done WHERE done.order_sn=o.order_sn) AND NOT EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)) printed,SUM(UPPER(o.status)='CANCELLED') cancelled FROM orders o")->fetch();
         $labels = $mysql->query("SELECT COUNT(*) total,SUM(resi_printed=0) unprinted,SUM(resi_printed=1) printed FROM order_resi")->fetch();
@@ -171,6 +224,120 @@ try {
         $lastSync = (int)($mysql->query("SELECT meta_value FROM app_meta WHERE meta_key='last_sync_at'")->fetchColumn() ?: 0);
         $queued = (int)$mysql->query("SELECT COUNT(*) FROM print_jobs WHERE status IN ('queued','processing')")->fetchColumn();
         respond(['orders'=>$totals,'labels'=>$labels,'inventory'=>$inventory,'queued'=>$queued,'lastSync'=>$lastSync,'lastSyncText'=>unixText($lastSync)]);
+    }
+
+    if ($action === 'sales_contribution') {
+        $today=new DateTimeImmutable('today');$defaultFrom=$today->modify('-29 days');
+        $from=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($_GET['from']??'')))?:$defaultFrom;
+        $to=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($_GET['to']??'')))?:$today;
+        if($from>$to)respond(['error'=>'Tanggal mulai tidak boleh melewati tanggal akhir.'],422);
+        if((int)$from->diff($to)->format('%a')>365)respond(['error'=>'Rentang kontribusi maksimal 366 hari.'],422);
+
+        $normalize=static fn(string $value):string=>mb_strtolower(preg_replace('/\s+/','',trim($value)));
+        $mappingPaper=[];
+        foreach($mysql->query("SELECT sku_id,paper FROM data_mappings WHERE paper IN ('A5','B5') AND sku_id<>''")->fetchAll() as $mapping){$key=$normalize((string)$mapping['sku_id']);if($key!=='')$mappingPaper[$key]=strtoupper((string)$mapping['paper']);}
+        foreach($mysql->query("SELECT a.alias_key,m.paper FROM mapping_aliases a JOIN data_mappings m ON m.id=a.mapping_id WHERE m.paper IN ('A5','B5')")->fetchAll() as $alias){$key=$normalize((string)$alias['alias_key']);if($key!=='')$mappingPaper[$key]=strtoupper((string)$alias['paper']);}
+
+        $stmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(o.create_time)) order_date,op.order_sn,op.item_key,op.model_sku,op.item_sku,op.item_name,op.model_name,op.qty FROM order_process op JOIN orders o ON o.order_sn=op.order_sn WHERE o.create_time>=? AND o.create_time<? AND op.qty>0 AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED')");
+        $stmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
+        $categories=[
+            'a5_20'=>['key'=>'a5_20','label'=>'A5 (20 Lubang)','shortLabel'=>'A5 20L','qty'=>0,'orders'=>[],'color'=>'#ef7558'],
+            'a5_6'=>['key'=>'a5_6','label'=>'A5 (6 Lubang)','shortLabel'=>'A5 6L','qty'=>0,'orders'=>[],'color'=>'#e7b54a'],
+            'b5'=>['key'=>'b5','label'=>'B5','shortLabel'=>'B5','qty'=>0,'orders'=>[],'color'=>'#4f8f78'],
+        ];
+        $uncategorizedQty=0;$allOrders=[];$daily=[];
+        for($date=$from;$date<=$to;$date=$date->modify('+1 day'))$daily[$date->format('Y-m-d')]=['a5_20'=>0,'a5_6'=>0,'b5'=>0];
+        foreach($stmt->fetchAll() as $line){
+            $keys=array_values(array_unique(array_filter([
+                $normalize((string)$line['item_key']),$normalize((string)$line['model_sku'].(string)$line['item_sku']),
+                $normalize((string)$line['item_sku'].(string)$line['model_sku']),$normalize((string)$line['model_sku']),$normalize((string)$line['item_sku'])
+            ])));
+            $paper='';foreach($keys as $key)if(isset($mappingPaper[$key])){$paper=$mappingPaper[$key];break;}
+            $description=(string)$line['item_name'].' '.(string)$line['model_name'];
+            if($paper===''){
+                if(preg_match('/(?:^|\D)B\s*5(?:\D|$)/i',$description))$paper='B5';
+                elseif(preg_match('/(?:^|\D)A\s*5(?:\D|$)/i',$description))$paper='A5';
+            }
+            $six=preg_match('/(?:^|\D)6\s*(?:lubang|hole)(?:\D|$)/i',$description)===1;
+            $category=$paper==='B5'?'b5':($paper==='A5'?($six?'a5_6':'a5_20'):'');$qty=(int)$line['qty'];
+            if($category===''){$uncategorizedQty+=$qty;continue;}
+            $categories[$category]['qty']+=$qty;$categories[$category]['orders'][(string)$line['order_sn']]=true;$allOrders[(string)$line['order_sn']]=true;
+            $dateKey=(string)$line['order_date'];if(isset($daily[$dateKey]))$daily[$dateKey][$category]+=$qty;
+        }
+        $total=array_sum(array_column($categories,'qty'));$items=[];
+        foreach($categories as $category){$orders=count($category['orders']);unset($category['orders']);$category['orders']=$orders;$category['share']=$total>0?round($category['qty']/$total*100,1):0.0;$items[]=$category;}
+        usort($items,fn(array $a,array $b):int=>$b['qty']<=>$a['qty']);
+        $series=[];foreach($daily as $date=>$values){$dayTotal=array_sum($values);$series[]=['date'=>$date,'label'=>(new DateTimeImmutable($date))->format('d M'),'total'=>$dayTotal,'qty'=>$values];}
+        respond(['from'=>$from->format('Y-m-d'),'to'=>$to->format('Y-m-d'),'items'=>$items,'series'=>$series,'summary'=>['qty'=>$total,'orders'=>count($allOrders),'uncategorizedQty'=>$uncategorizedQty,'coverage'=>($total+$uncategorizedQty)>0?round($total/($total+$uncategorizedQty)*100,1):100.0]]);
+    }
+
+    if ($action === 'stock_recommendations') {
+        $coverDays=max(7,min(30,(int)($_GET['cover_days']??14)));
+        $query=mb_strtolower(trim((string)($_GET['q']??'')));
+        $priorityFilter=trim((string)($_GET['priority']??'all'));
+        $sort=trim((string)($_GET['sort']??'score'));
+        $page=max(1,(int)($_GET['page']??1));$size=50;
+        $today=strtotime('today');$day7=$today-6*86400;$day30=$today-29*86400;$day60=$today-59*86400;$day90=$today-89*86400;
+
+        $mappingBySku=[];
+        foreach($mysql->query("SELECT id,sku_id,parent_sku,product_name,variation_name,file_path,printer FROM data_mappings WHERE sku_id<>''")->fetchAll() as $mapping)$mappingBySku[mb_strtolower(preg_replace('/\s+/','',(string)$mapping['sku_id']))]=$mapping;
+        $sales=$mysql->prepare("SELECT op.order_sn,op.item_key,op.model_sku,op.item_sku,op.item_name,op.model_name,op.qty,op.create_time FROM order_process op JOIN orders o ON o.order_sn=op.order_sn WHERE op.create_time>=? AND op.qty>0 AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED')");
+        $sales->execute([$day90]);$salesBySku=[];
+        foreach($sales->fetchAll() as $line){
+            $normalize=fn($value)=>mb_strtolower(preg_replace('/\s+/','',trim((string)$value)));
+            $itemKey=$normalize($line['item_key']);$modelSku=$normalize($line['model_sku']);$itemSku=$normalize($line['item_sku']);
+            $map=null;foreach(array_unique(array_filter([$itemKey,$itemSku.$modelSku,$modelSku.$itemSku,$modelSku,$itemSku])) as $candidate)if(isset($mappingBySku[$candidate])){$map=$mappingBySku[$candidate];break;}
+            $sku=trim((string)($map['sku_id']??''))?:trim((string)$line['item_key'])?:trim((string)$line['model_sku'])?:trim((string)$line['item_sku']);if($sku==='')continue;$key=mb_strtolower($sku);
+            if(!isset($salesBySku[$key]))$salesBySku[$key]=['sku'=>$sku,'product_name'=>(string)($map['product_name']??$line['item_name']),'variation_name'=>(string)($map['variation_name']??$line['model_name']),'sold_90'=>0,'sold_30'=>0,'sold_7'=>0,'previous_30'=>0,'orders_30_set'=>[],'active_days_30_set'=>[],'active_days_90_set'=>[],'last_sale_at'=>0];
+            $qty=(int)$line['qty'];$created=(int)$line['create_time'];$salesBySku[$key]['sold_90']+=$qty;
+            if($created>=$day30){$salesBySku[$key]['sold_30']+=$qty;$salesBySku[$key]['orders_30_set'][(string)$line['order_sn']]=true;$salesBySku[$key]['active_days_30_set'][date('Y-m-d',$created)]=true;}
+            if($created>=$day7)$salesBySku[$key]['sold_7']+=$qty;if($created>=$day60&&$created<$day30)$salesBySku[$key]['previous_30']+=$qty;
+            $salesBySku[$key]['active_days_90_set'][date('Y-m-d',$created)]=true;$salesBySku[$key]['last_sale_at']=max($salesBySku[$key]['last_sale_at'],$created);
+        }
+        foreach($salesBySku as &$row){$row['orders_30']=count($row['orders_30_set']);$row['active_days_30']=count($row['active_days_30_set']);$row['active_days_90']=count($row['active_days_90_set']);unset($row['orders_30_set'],$row['active_days_30_set'],$row['active_days_90_set']);}unset($row);
+        $inventoryBySku=[];
+        foreach($mysql->query('SELECT item_key,model_sku,item_sku,no_ref,qty FROM product_inventory')->fetchAll() as $stock){
+            $keys=array_unique(array_filter(array_map(fn($value)=>mb_strtolower(trim((string)$value)),[$stock['item_key'],$stock['model_sku'],$stock['item_sku'],$stock['no_ref']])));
+            foreach($keys as $key)$inventoryBySku[$key]=($inventoryBySku[$key]??0)+(int)$stock['qty'];
+        }
+        $items=[];$stockPrinters=$printing->configuredPrinters();
+        foreach(array_values($salesBySku) as $row){
+            $sku=trim((string)$row['sku']);$key=mb_strtolower($sku);$stock=(int)($inventoryBySku[$key]??0);
+            $sold7=(int)$row['sold_7'];$sold30=(int)$row['sold_30'];$sold90=(int)$row['sold_90'];$previous30=(int)$row['previous_30'];
+            $daily30=$sold30/30;$daily90=$sold90/90;$daily=round(($daily30*.65)+($daily90*.35),3);
+            $trend=$previous30>0?round((($sold30-$previous30)/$previous30)*100):($sold30>0?100:0);
+            $map=$mappingBySku[$key]??null;$name=trim((string)($row['product_name']??''));$variation=trim((string)($row['variation_name']??''));
+            if($name===''&&$map)$name=(string)$map['product_name'];if($variation===''&&$map)$variation=(string)$map['variation_name'];
+            $confidence=$sold90>=10&&(int)$row['active_days_90']>=5?'high':($sold90>=3?'medium':'low');
+            $filePath=(string)($map['file_path']??'');$defaultPrinter=$map?$printing->resolveMappedPrinter((string)($map['printer']??'')):'';$items[]=['sku'=>$sku,'parentSku'=>(string)($map['parent_sku']??''),'productName'=>$name?:'Produk tanpa nama','variationName'=>$variation,'mappingId'=>(int)($map['id']??0),'fileName'=>$filePath!==''?basename($filePath):'','hasPdf'=>$filePath!==''&&is_file($filePath)&&strtolower(pathinfo($filePath,PATHINFO_EXTENSION))==='pdf','defaultPrinter'=>$defaultPrinter,'printerAvailable'=>$defaultPrinter!==''&&in_array($defaultPrinter,$stockPrinters,true),'stock'=>$stock,'sold7'=>$sold7,'sold30'=>$sold30,'sold90'=>$sold90,'orders30'=>(int)$row['orders_30'],'activeDays30'=>(int)$row['active_days_30'],'dailyVelocity'=>$daily,'trend'=>$trend,'confidence'=>$confidence,'lastSaleAt'=>(int)$row['last_sale_at'],'lastSaleText'=>unixText($row['last_sale_at'])];
+        }
+        $maxDaily=max(0.001,...array_column($items,'dailyVelocity'));$maxOrders=max(1,...array_column($items,'orders30'));
+        foreach($items as &$item){
+            $momentumBase=max(.03,$item['sold30']/30);$momentum=min(2,($item['sold7']/7)/$momentumBase);
+            $recencyDays=max(0,(int)floor(($today-$item['lastSaleAt'])/86400));
+            $item['starterScore']=(int)round(50*sqrt($item['dailyVelocity']/$maxDaily)+20*sqrt($item['orders30']/$maxOrders)+15*min(1,$item['activeDays30']/12)+10*($momentum/2)+5*max(0,1-$recencyDays/30));
+        }unset($item);
+        usort($items,fn($a,$b)=>[$b['starterScore'],$b['sold30'],$b['sold7']]<=>[$a['starterScore'],$a['sold30'],$a['sold7']]);
+        $packSize=20;$summary=['skuTotal'=>count($items),'start'=>0,'next'=>0,'trial'=>0,'wait'=>0,'openingPacks'=>0,'openingSheets'=>0];
+        foreach($items as $index=>&$item){
+            if($index<12&&$item['sold30']>=5)$tier='start';elseif($index<30&&$item['sold30']>=3)$tier='next';elseif($index<60&&($item['sold30']>=2||$item['sold7']>0))$tier='trial';else$tier='wait';
+            $base=max(2,(int)ceil($item['dailyVelocity']*($coverDays+3)));
+            $openingQty=$tier==='start'?$base:($tier==='next'?max(2,(int)ceil($base*.7)):($tier==='trial'?max(2,(int)ceil($base*.4)):0));$openingSheets=$openingQty*$packSize;
+            $item['priority']=$tier;$item['openingQty']=$openingQty;$item['openingSheets']=$openingSheets;$item['recommendedQty']=$openingQty;$item['rank']=$index+1;
+            $item['reason']=$tier==='start'?($item['trend']>20?'Demand tinggi dan sedang naik.':'Demand tinggi dan konsisten.') : ($tier==='next'?'Layak ditambahkan setelah SKU utama stabil.':($tier==='trial'?'Tes dalam jumlah kecil untuk validasi demand.':'Belum perlu dijadikan stok awal.'));
+            $summary[$tier]++;if($tier==='start'){$summary['openingPacks']+=$openingQty;$summary['openingSheets']+=$openingSheets;}
+        }unset($item);
+        $topPicks=array_slice($items,0,5);
+        if($query!=='')$items=array_values(array_filter($items,fn($item)=>str_contains(mb_strtolower($item['sku'].' '.$item['parentSku'].' '.$item['productName'].' '.$item['variationName']),$query)));
+        if(in_array($priorityFilter,['start','next','trial','wait'],true))$items=array_values(array_filter($items,fn($item)=>$item['priority']===$priorityFilter));
+        usort($items,function($a,$b)use($sort){
+            if($sort==='sales')return[$b['sold30'],$b['recommendedQty']]<=>[$a['sold30'],$a['recommendedQty']];
+            if($sort==='trend')return[$b['trend'],$b['sold30']]<=>[$a['trend'],$a['sold30']];
+            if($sort==='opening')return[$b['openingQty'],$b['starterScore']]<=>[$a['openingQty'],$a['starterScore']];
+            return[$b['starterScore'],$b['sold30']]<=>[$a['starterScore'],$a['sold30']];
+        });
+        $total=count($items);$pages=max(1,(int)ceil($total/$size));$page=min($page,$pages);$items=array_slice($items,($page-1)*$size,$size);
+        respond(['items'=>$items,'topPicks'=>$topPicks,'summary'=>$summary,'printers'=>$stockPrinters,'page'=>$page,'pages'=>$pages,'total'=>$total,'settings'=>['coverDays'=>$coverDays,'lookbackDays'=>90,'packSize'=>$packSize,'generatedAt'=>time(),'generatedText'=>unixText(time())]]);
     }
 
     if ($action === 'dashboard_analytics') {
@@ -189,13 +356,13 @@ try {
         foreach($fallbackStmt->fetchAll() as $row){$raw=json_decode((string)$row['raw_json'],true);if(!is_array($raw))continue;$marketplace=(string)$row['marketplace'];$primary=$marketplace==='tiktok'?(float)($raw['payment']['total_amount']??0):(float)($raw['total_amount']??0);if($primary>0)continue;$fallback=0.0;if($marketplace==='tiktok'){$fallback=(float)($raw['payment']['sub_total']??0);if($fallback<=0)foreach(($raw['line_items']??[]) as $line)$fallback+=(float)($line['sale_price']??0)*max(1,(int)($line['quantity']??1));}else foreach(($raw['item_list']??[]) as $line)$fallback+=(float)($line['model_discounted_price']??$line['model_original_price']??0)*max(1,(int)($line['model_quantity_purchased']??1));if($fallback<=0)continue;$key=(string)$row['order_date'];$counts[$key][$marketplace]['revenue']=(float)($counts[$key][$marketplace]['revenue']??0)+$fallback;$counts[$key][$marketplace]['pricedOrders']=(int)($counts[$key][$marketplace]['pricedOrders']??0)+1;}
         $escrowStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(order_create_time)) order_date,COUNT(*) orders,COALESCE(SUM(payout_amount),0) payout,COALESCE(SUM(total_marketplace_fee),0) fees FROM shopee_escrow_details WHERE order_create_time>=? AND order_create_time<? GROUP BY order_date");
         $escrowStmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);$escrowCounts=[];foreach($escrowStmt->fetchAll() as $row)$escrowCounts[(string)$row['order_date']]=['orders'=>(int)$row['orders'],'payout'=>(float)$row['payout'],'fees'=>(float)$row['fees']];
+        $holidays=storeHolidays($mysql);$holidayLookup=array_fill_keys($holidays,true);$rangeHolidayDays=0;
         $items=[];$shopee=0;$tiktok=0;$itemTotal=0;$revenueTotal=0.0;$pricedOrders=0;$shopeePayout=0.0;$shopeeFees=0.0;$escrowOrders=0;
-        for($date=$from;$date<=$to;$date=$date->modify('+1 day')){$key=$date->format('Y-m-d');$dayShopee=(int)($counts[$key]['shopee']['orders']??0);$dayTiktok=(int)($counts[$key]['tiktok']['orders']??0);$dayItems=(int)($counts[$key]['shopee']['items']??0)+(int)($counts[$key]['tiktok']['items']??0);$dayShopeeRevenue=(float)($counts[$key]['shopee']['revenue']??0);$dayTiktokRevenue=(float)($counts[$key]['tiktok']['revenue']??0);$dayRevenue=$dayShopeeRevenue+$dayTiktokRevenue;$dayPriced=(int)($counts[$key]['shopee']['pricedOrders']??0)+(int)($counts[$key]['tiktok']['pricedOrders']??0);$dayPayout=(float)($escrowCounts[$key]['payout']??0);$dayFees=(float)($escrowCounts[$key]['fees']??0);$dayEscrowOrders=(int)($escrowCounts[$key]['orders']??0);$shopee+=$dayShopee;$tiktok+=$dayTiktok;$itemTotal+=$dayItems;$revenueTotal+=$dayRevenue;$pricedOrders+=$dayPriced;$shopeePayout+=$dayPayout;$shopeeFees+=$dayFees;$escrowOrders+=$dayEscrowOrders;$items[]=['date'=>$key,'label'=>$date->format('d M'),'shopee'=>$dayShopee,'tiktok'=>$dayTiktok,'total'=>$dayShopee+$dayTiktok,'items'=>$dayItems,'revenue'=>$dayRevenue,'shopeeRevenue'=>$dayShopeeRevenue,'tiktokRevenue'=>$dayTiktokRevenue,'shopeePayout'=>$dayPayout,'shopeeFees'=>$dayFees,'escrowOrders'=>$dayEscrowOrders,'pricedOrders'=>$dayPriced];}
-        $productStmt=$mysql->prepare("SELECT op.item_name name,COUNT(DISTINCT o.order_sn) order_total,COALESCE(SUM(op.qty),0) item_total FROM orders o JOIN order_process op ON op.order_sn=o.order_sn WHERE o.create_time>=? AND o.create_time<? AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND TRIM(op.item_name)<>'' GROUP BY op.item_name ORDER BY item_total DESC,order_total DESC LIMIT 10");
-        $productStmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
-        $products=[];foreach($productStmt->fetchAll() as $product)$products[]=['name'=>(string)$product['name'],'orders'=>(int)$product['order_total'],'items'=>(int)$product['item_total']];
+        for($date=$from;$date<=$to;$date=$date->modify('+1 day')){$key=$date->format('Y-m-d');$isHoliday=isset($holidayLookup[$key]);if($isHoliday)$rangeHolidayDays++;$dayShopee=(int)($counts[$key]['shopee']['orders']??0);$dayTiktok=(int)($counts[$key]['tiktok']['orders']??0);$dayItems=(int)($counts[$key]['shopee']['items']??0)+(int)($counts[$key]['tiktok']['items']??0);$dayShopeeRevenue=(float)($counts[$key]['shopee']['revenue']??0);$dayTiktokRevenue=(float)($counts[$key]['tiktok']['revenue']??0);$dayRevenue=$dayShopeeRevenue+$dayTiktokRevenue;$dayPriced=(int)($counts[$key]['shopee']['pricedOrders']??0)+(int)($counts[$key]['tiktok']['pricedOrders']??0);$dayPayout=(float)($escrowCounts[$key]['payout']??0);$dayFees=(float)($escrowCounts[$key]['fees']??0);$dayEscrowOrders=(int)($escrowCounts[$key]['orders']??0);$shopee+=$dayShopee;$tiktok+=$dayTiktok;$itemTotal+=$dayItems;$revenueTotal+=$dayRevenue;$pricedOrders+=$dayPriced;$shopeePayout+=$dayPayout;$shopeeFees+=$dayFees;$escrowOrders+=$dayEscrowOrders;$items[]=['date'=>$key,'label'=>$date->format('d M'),'isHoliday'=>$isHoliday,'shopee'=>$dayShopee,'tiktok'=>$dayTiktok,'total'=>$dayShopee+$dayTiktok,'items'=>$dayItems,'revenue'=>$dayRevenue,'shopeeRevenue'=>$dayShopeeRevenue,'tiktokRevenue'=>$dayTiktokRevenue,'shopeePayout'=>$dayPayout,'shopeeFees'=>$dayFees,'escrowOrders'=>$dayEscrowOrders,'pricedOrders'=>$dayPriced];}
         $orderTotal=$shopee+$tiktok;
-        respond(['from'=>$from->format('Y-m-d'),'to'=>$to->format('Y-m-d'),'items'=>$items,'products'=>$products,'summary'=>['shopee'=>$shopee,'tiktok'=>$tiktok,'total'=>$orderTotal,'items'=>$itemTotal,'itemsPerOrder'=>$orderTotal>0?round($itemTotal/$orderTotal,2):0,'revenue'=>$revenueTotal,'pricedOrders'=>$pricedOrders,'shopeePayout'=>$shopeePayout,'shopeeFees'=>$shopeeFees,'escrowOrders'=>$escrowOrders]]);
+        $rangeDays=(int)$from->diff($to)->format('%a')+1;
+        $operatingDays=$rangeDays-$rangeHolidayDays;
+        respond(['from'=>$from->format('Y-m-d'),'to'=>$to->format('Y-m-d'),'holidays'=>$holidays,'items'=>$items,'summary'=>['shopee'=>$shopee,'tiktok'=>$tiktok,'total'=>$orderTotal,'rangeDays'=>$rangeDays,'holidayDays'=>$rangeHolidayDays,'operatingDays'=>$operatingDays,'ordersPerDay'=>$operatingDays>0?round($orderTotal/$operatingDays,2):0,'items'=>$itemTotal,'itemsPerDay'=>$operatingDays>0?round($itemTotal/$operatingDays,2):0,'itemsPerOrder'=>$orderTotal>0?round($itemTotal/$orderTotal,2):0,'revenue'=>$revenueTotal,'pricedOrders'=>$pricedOrders,'shopeePayout'=>$shopeePayout,'shopeeFees'=>$shopeeFees,'escrowOrders'=>$escrowOrders]]);
     }
 
     if ($action === 'orders') {
@@ -206,7 +373,8 @@ try {
         if ($paperFilter==='all'&&$filter==='unprinted') $where[]="UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)";
         if ($paperFilter==='all'&&$filter==='printed') $where[]="UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process done WHERE done.order_sn=o.order_sn) AND NOT EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)";
         $sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
-        $orderSelect="SELECT o.order_sn,o.status,o.create_time,o.buyer_username,o.packaged,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.pdf_path,'') label_pdf_path,IFNULL(r.resi_printed,0) resi_printed,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.buyer_message')),'null'),'') ELSE COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.message_to_seller')),'null'),'') END customer_note,COUNT(op.id) line_count,COALESCE(SUM(op.qty),0) item_qty,SUM(op.printed=0) unprinted_lines FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN order_process op ON op.order_sn=o.order_sn {$sqlWhere} GROUP BY o.order_sn ORDER BY o.create_time DESC";
+        $orderBy=$filter==='printed'?'COALESCE(MAX(op.printed_at),0) DESC,o.create_time DESC':'o.create_time DESC';
+        $orderSelect="SELECT o.order_sn,o.status,o.create_time,o.buyer_username,o.packaged,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.pdf_path,'') label_pdf_path,IFNULL(r.resi_printed,0) resi_printed,IFNULL(lf.status,'') label_fetch_status,IFNULL(lf.message,'') label_fetch_message,IFNULL(lf.error,'') label_fetch_error,IFNULL(lf.attempts,0) label_fetch_attempts,MAX(op.printed_at) printed_at,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.buyer_message')),'null'),'') ELSE COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.message_to_seller')),'null'),'') END customer_note,COUNT(op.id) line_count,COALESCE(SUM(op.qty),0) item_qty,SUM(op.printed=0) unprinted_lines FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN label_fetch_jobs lf ON lf.order_sn=o.order_sn LEFT JOIN order_process op ON op.order_sn=o.order_sn {$sqlWhere} GROUP BY o.order_sn ORDER BY {$orderBy}";
         if($paperFilter==='all'){$count=$mysql->prepare("SELECT COUNT(*) FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere}");$count->execute($params);$total=(int)$count->fetchColumn();$stmt=$mysql->prepare($orderSelect." LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();$listItems=$printing->listOrderItems(array_column($items,'order_sn'));}
         else{
             $stmt=$mysql->prepare($orderSelect);$stmt->execute($params);$candidates=$stmt->fetchAll();$matchingByOrder=[];
@@ -221,7 +389,7 @@ try {
             foreach($items as &$row){$ids=$matchingByOrder[(string)$row['order_sn']];$row['items']=array_values(array_filter($listItems[(string)$row['order_sn']]??[],fn($line)=>isset($ids[(int)$line['id']])));$row['line_count']=count($row['items']);$row['item_qty']=array_sum(array_column($row['items'],'qty'));$row['unprinted_lines']=count(array_filter($row['items'],fn($line)=>!$line['printed']));}unset($row);
         }
         foreach($items as &$row){$row['createdText']=unixText($row['create_time']);$row['packaged']=(bool)$row['packaged'];$row['has_label_pdf']=$row['label_pdf_path']!==''&&is_file($row['label_pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];unset($row['label_pdf_path']);if(!isset($row['items']))$row['items']=$listItems[(string)$row['order_sn']]??[];}
-        respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->configuredPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
+        respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->configuredPrinters(),'labelPrinters'=>$printing->labelPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
     if ($action === 'order_detail') {
@@ -314,9 +482,10 @@ try {
 
     if ($action === 'labels') {
         $q=trim((string)($_GET['q']??''));$filter=$_GET['filter']??'all';$page=max(1,(int)($_GET['page']??1));$size=30;$offset=($page-1)*$size;$where=["o.order_sn NOT LIKE 'MANUAL-%'","o.order_sn NOT LIKE 'RANDOM-%'"];$params=[];
-        if($q!==''){$where[]='(o.order_sn LIKE ? OR r.tracking_number LIKE ?)';$params[]="%{$q}%";$params[]="%{$q}%";}if($filter==='unprinted')$where[]="IFNULL(r.resi_printed,0)=0 AND ((o.order_sn LIKE 'TIKTOK:%' AND UPPER(o.status)='AWAITING_COLLECTION') OR (o.order_sn NOT LIKE 'TIKTOK:%' AND UPPER(o.status)='PROCESSED'))";if($filter==='printed')$where[]='r.resi_printed=1';if($filter==='cancelled')$where[]="UPPER(o.status)='CANCELLED'";$sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
+        if($q!==''){$where[]='(o.order_sn LIKE ? OR r.tracking_number LIKE ?)';$params[]="%{$q}%";$params[]="%{$q}%";}if($filter==='unprinted')$where[]="IFNULL(r.resi_printed,0)=0 AND ((o.order_sn LIKE 'TIKTOK:%' AND UPPER(o.status) IN ('AWAITING_SHIPMENT','AWAITING_COLLECTION')) OR (o.order_sn NOT LIKE 'TIKTOK:%' AND UPPER(o.status) IN ('PROCESSED','READY_TO_SHIP')))";if($filter==='printed')$where[]='r.resi_printed=1';if($filter==='cancelled')$where[]="UPPER(o.status)='CANCELLED'";$sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
         $count=$mysql->prepare("SELECT COUNT(*) FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere}");$count->execute($params);$total=(int)$count->fetchColumn();
-        $stmt=$mysql->prepare("SELECT o.order_sn,o.status,o.create_time,IFNULL(r.pdf_path,'') pdf_path,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.resi_printed,0) resi_printed FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere} ORDER BY o.create_time DESC LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();foreach($items as &$row){$row['createdText']=unixText($row['create_time']);$row['hasPdf']=$row['pdf_path']!==''&&is_file($row['pdf_path']);unset($row['pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];}respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->configuredPrinters(),'defaultPrinter'=>$printing->defaultLabelPrinter()]);
+        $labelOrderBy=$filter==='printed'?'COALESCE(r.resi_printed_at,0) DESC,o.create_time DESC':'o.create_time DESC';
+        $stmt=$mysql->prepare("SELECT o.order_sn,o.status,o.create_time,IFNULL(r.pdf_path,'') pdf_path,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.resi_printed,0) resi_printed,r.resi_printed_at,IFNULL(lf.status,'') label_fetch_status,IFNULL(lf.message,'') label_fetch_message,IFNULL(lf.error,'') label_fetch_error,IFNULL(lf.attempts,0) label_fetch_attempts FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN label_fetch_jobs lf ON lf.order_sn=o.order_sn {$sqlWhere} ORDER BY {$labelOrderBy} LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();foreach($items as &$row){$row['createdText']=unixText($row['create_time']);$row['hasPdf']=$row['pdf_path']!==''&&is_file($row['pdf_path']);unset($row['pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];}respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->labelPrinters(),'defaultPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
     if ($action === 'command') respond(['error'=>'Bridge desktop sudah dinonaktifkan. Gunakan endpoint native web.'],410);

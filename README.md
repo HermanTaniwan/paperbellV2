@@ -18,18 +18,42 @@ powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 
 Task **Paperbell Auto Start** berjalan saat pengguna Windows yang memasangnya login. Mode ini diperlukan agar worker dapat memakai printer dan konfigurasi SumatraPDF milik pengguna tersebut.
 
+## Ketahanan MariaDB dan backup
+
+Untuk mencegah database dimatikan paksa saat Windows shutdown, jalankan PowerShell sebagai Administrator lalu pasang MariaDB sebagai Windows Service:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\install-mariadb-service.ps1
+```
+
+Service memakai mode **Automatic (Delayed Start)** dan recovery terbatas dua kali. Watchdog Paperbell akan memakai service ini bila tersedia, dengan fallback proses biasa hanya untuk instalasi lama.
+
+Pasang backup harian pukul 02:00 untuk pengguna Windows aktif:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\install-backup-task.ps1
+```
+
+Backup lokal disimpan selama 30 hari di `storage/backups`; salinan bulanan terbaru disimpan di `H:\My Drive\Paperbell Backups`. Hasil startup dan backup masing-masing dicatat di `storage/logs/startup.log` dan `storage/logs/backup.log`.
+
 Menu **Konfigurasi Printer** mendeteksi printer Windows pada komputer host. Dari menu ini dapat diatur printer yang muncul di web, printer default label, serta override mapping Brother dan EPSON L3210. Semua pengaturan disimpan di MySQL dan berlaku untuk seluruh komputer pengguna.
 
 ## Fitur operasional web
 
 - **Data Mapping**: sinkron langsung dari Google Sheets, menampilkan jumlah mapping serta file PDF yang hilang.
-- **Antrean printer**: status print worker, retry/cancel/hapus job aplikasi, serta pause/resume/cancel Windows print spooler.
+- **Antrean dan alert printer**: status print worker, insiden persisten dengan diagnosis, retry manual, notifikasi browser/Windows, serta pause/resume/cancel Windows print spooler.
 - **Inventory**: tambah dari Data Mapping, tambah seluruh item dari nomor order, edit/hapus stok, riwayat perubahan, dan gunakan stok langsung untuk item order.
 - **Customer History**: klik nama customer pada halaman Order untuk melihat riwayat satu tahun terakhir.
+- **Shopee Shop Stats**: tren omzet, funnel, pelanggan, produk, traffic, dan atribusi iklan disimpan di tabel MySQL historis dan ditampilkan pada Dashboard.
 - **PDF Manual**: upload PDF ke host, buka preview browser, atur halaman/ganjil-genap/duplex/kertas/copies/printer, lalu antrekan cetak.
 - **Random Pages**: mode Planner atau Loose Leaf, A5/B5, jumlah PDF, exclude kata kunci, merge halaman otomatis, lalu hasilnya masuk ke PDF Manual.
+- **ADF Scanner**: scan A5 landscape dari Epson WF-C5790 melalui TWAIN sampai kertas habis, hitung total lembar, tandai halaman blank, serta simpan preview, PDF, dan report CSV.
+
+ADF Scanner memakai Python 3.11 yang berisi `pytwain` dan Pillow. Path default mengikuti instalasi WFScanner pada host ini. Jika dipindahkan ke host lain, set `PAPERBELL_SCANNER_PYTHON_PATH` dan bila perlu `PAPERBELL_SCANNER_SOURCE`. Setting scan dibuat tetap pada ADF, single-sided, A5 landscape, color, dan 200 dpi; blank page tidak dilewati oleh driver agar tetap masuk dalam hitungan.
 
 Cetak label/resi mengikuti preset aplikasi desktop: semua halaman dicetak pada kertas A6, isi berskala 72% dan diratakan ke kiri-atas, simplex, serta hitam-putih. Untuk Brother DCP label dipaksa melalui MP Tray (`bin=258`), sedangkan Epson WF melalui Rear Paper Feed/tray atas (`bin=261`).
+
+Job berstatus `submitted` berarti file sudah diterima Windows spooler, bukan konfirmasi sensor bahwa kertas berhasil keluar. Paperbell memantau error worker, paper jam/out-of-paper, job spooler bermasalah atau macet, dan heartbeat worker. Printer yang sekadar offline/nonaktif tetap ditampilkan di panel tetapi tidak membuat insiden. Kondisi yang jelas membutuhkan tindakan dikonfirmasi dua kali; status generic `Error + Printing` ditahan selama 90 detik dan diabaikan selama halaman masih bertambah agar gangguan driver sementara tidak menjadi alarm. Insiden aktif harus diperiksa dan di-retry manual agar tidak berisiko tercetak ganda.
 
 Random Pages dan pembacaan XLSX memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl` dan `pypdf`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.
 
@@ -42,7 +66,7 @@ Paperbell memakai MariaDB/MySQL XAMPP standar di port `3306`. Database `paperbel
 ## Status deprecasi desktop
 
 - Cetak produk: native web/worker, tidak bergantung desktop.
-- Pengambilan dan pencetakan PDF label: native web/worker, tidak bergantung desktop.
+- Pengambilan PDF label otomatis berjalan async melalui label worker terpisah; pencetakan tetap melalui print worker.
 - Order, inventory, dan status operasional: MySQL canonical.
 - Koneksi OAuth Shopee/TikTok: native web, token terenkripsi dan refresh otomatis.
 - Sync order Shopee/TikTok: native PHP langsung ke API marketplace dan MySQL.

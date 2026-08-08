@@ -1,5 +1,7 @@
 <?php
 $config = require __DIR__ . '/config.php';
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((string) $config['mapping']['spreadsheet_id']) . '/edit#gid=' . rawurlencode((string) $config['mapping']['gid']);
 ?>
 <!doctype html>
@@ -10,13 +12,18 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=20">
+  <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=18">
-  <link rel="stylesheet" href="assets/features.css?v=19">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=20">
+  <link rel="stylesheet" href="assets/features.css?v=22">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
+  <link rel="stylesheet" href="assets/theme-pastel.css?v=12">
+  <link rel="stylesheet" href="assets/stock-recommendations.css?v=7">
   <link rel="stylesheet" href="assets/pdf-drawer.css?v=3">
+  <link rel="stylesheet" href="assets/motion.css?v=1">
+  <link rel="stylesheet" href="assets/scanner.css?v=2">
+  <link rel="stylesheet" href="assets/shopee-insights.css?v=8">
 </head>
 <body>
 <script>
@@ -61,7 +68,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button class="menu-button" @click="toggleMenu">☰</button>
         <div>
 <h1>{{ title }}</h1>
-<p>{{ subtitle }}</p>
+<p>{{ view==='stock'?'Shortlist SKU terbaik untuk memulai stok produk jadi.':subtitle }}</p>
 </div>
         <div class="header-actions">
 <span class="sync-state">
@@ -72,6 +79,15 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
       </header>
       <div v-if="toast" class="toast" :class="toast.type">{{ toast.message }}</div>
+      <section v-if="unacknowledgedPrinterIncidents().length" class="printer-incident-banner" role="alert" aria-live="assertive">
+        <span class="printer-incident-banner-icon" aria-hidden="true">!</span>
+        <div>
+          <b>{{unacknowledgedPrinterIncidents().length}} masalah printer perlu diperiksa</b>
+          <span>{{unacknowledgedPrinterIncidents()[0].title}} · {{unacknowledgedPrinterIncidents()[0].printer||'Komputer host'}}</span>
+        </div>
+        <button type="button" class="ghost" @click="enablePrinterNotifications">Aktifkan notifikasi</button>
+        <button type="button" @click="openQueuePanel">Lihat masalah</button>
+      </section>
       <div v-if="loading||busy" class="page-status is-loading" role="status" aria-live="polite">
         <span class="status-spinner" aria-hidden="true"></span>
         <div><b>{{ activityText }}</b><span>Mohon tunggu, proses masih berjalan.</span></div>
@@ -84,25 +100,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </div>
 
       <section v-if="view==='dashboard'" class="content">
-        <div class="hero">
-<div>
-<span class="eyebrow">OPERASIONAL HARI INI</span>
-<h2>Semua order dalam satu tempat.</h2>
-<p>Order diambil langsung dari Shopee dan TikTok Shop ke MySQL.</p>
-</div>
-<button @click="go('orders')">Buka order</button>
-</div>
         <div class="stats" v-if="dashboard">
-          <article>
-<span>Order aktif</span>
-<strong>{{ number(dashboard.orders.total-dashboard.orders.cancelled) }}</strong>
-<small>{{ number(dashboard.orders.unprinted) }} belum dicetak</small>
-</article>
-          <article>
-<span>Sudah dicetak</span>
-<strong>{{ number(dashboard.orders.printed) }}</strong>
-<small>Seluruh item selesai dicetak</small>
-</article>
           <article>
 <span>Label belum cetak</span>
 <strong>{{ number(dashboard.labels.unprinted) }}</strong>
@@ -114,6 +112,52 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <small>{{ number(dashboard.inventory.items) }} jenis produk</small>
 </article>
         </div>
+        <article class="panel contribution-panel">
+          <div class="analytics-head contribution-head">
+            <div><span class="eyebrow">KONTRIBUSI PENJUALAN</span><h3>Komposisi ukuran loose leaf</h3><p>Proporsi berdasarkan quantity item marketplace yang terjual.</p></div>
+            <form class="analytics-range" @submit.prevent="loadSalesContribution">
+              <div class="analytics-presets"><button v-for="days in [7,14,30,90]" :key="days" type="button" class="ghost" :class="{active:contributionRangeDays===days}" :disabled="contributionLoading" @click="setContributionRange(days)">{{days}} hari</button></div>
+              <label class="analytics-month-shortcut">Bulan<input v-model="contributionMonth" type="month" :max="analyticsMonthMax()" :disabled="contributionLoading" @change="setContributionMonth"></label>
+              <label>Dari<input v-model="contributionFrom" type="date" :max="contributionTo" required @change="contributionMonth=''"></label>
+              <label>Sampai<input v-model="contributionTo" type="date" :min="contributionFrom" required @change="contributionMonth=''"></label>
+              <button type="submit" :disabled="contributionLoading">{{contributionLoading?'Memuat…':'Terapkan'}}</button>
+            </form>
+          </div>
+          <div v-if="contributionLoading&&!salesContribution" class="analytics-empty">Memuat kontribusi penjualan…</div>
+          <div v-else-if="salesContribution&&!salesContribution.summary.qty" class="analytics-empty">Belum ada penjualan A5 atau B5 pada rentang tanggal ini.</div>
+          <div v-else-if="salesContribution" class="contribution-body">
+            <section class="contribution-chart-card">
+              <div class="contribution-chart-head">
+                <div><b>Pergerakan share penjualan</b><small>{{contributionWindow()>1?'Rata-rata berjalan '+contributionWindow()+' hari':'Share per hari'}}</small></div>
+                <div class="contribution-legend"><span v-for="item in salesContribution.items" :key="item.key"><i :style="{background:item.color}"></i>{{item.shortLabel}}</span></div>
+              </div>
+              <div class="contribution-chart-wrap">
+                <svg viewBox="0 0 836 265" role="img" aria-label="Time series persentase kontribusi penjualan A5 dan B5">
+                  <g class="contribution-grid"><g v-for="tick in [0,25,50,75,100]" :key="tick"><line x1="58" :y1="contributionChartY(tick)" x2="778" :y2="contributionChartY(tick)"></line><text x="48" :y="contributionChartY(tick)+3" text-anchor="end">{{tick}}%</text></g></g>
+                  <line class="axis-line" x1="58" y1="40" x2="58" y2="215"></line><line class="axis-line" x1="58" y1="215" x2="778" y2="215"></line>
+                  <g class="contribution-x-ticks"><g v-for="tick in contributionChartDateTicks()" :key="tick.index"><line :x1="contributionChartX(tick.index)" y1="215" :x2="contributionChartX(tick.index)" y2="220"></line><text :x="contributionChartX(tick.index)" y="236" text-anchor="middle">{{tick.label}}</text></g></g>
+                  <polyline class="contribution-line a5-20" :points="contributionChartPoints('a5_20')"></polyline>
+                  <polyline class="contribution-line a5-6" :points="contributionChartPoints('a5_6')"></polyline>
+                  <polyline class="contribution-line b5" :points="contributionChartPoints('b5')"></polyline>
+                  <g v-if="salesContribution.series.length<=31"><circle v-for="(day,index) in contributionSeries()" :key="'20-'+day.date" class="contribution-point a5-20" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_20)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'6-'+day.date" class="contribution-point a5-6" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_6)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'b5-'+day.date" class="contribution-point b5" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.b5)" r="2.8"></circle></g>
+                  <line v-if="contributionSelected" class="contribution-guide" :x1="contributionChartX(contributionSelected.index)" y1="40" :x2="contributionChartX(contributionSelected.index)" y2="215"></line>
+                  <rect v-for="(day,index) in contributionSeries()" :key="'hover-'+day.date" class="contribution-hover-zone" :x="index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2" y="40" :width="index===salesContribution.series.length-1?778-(index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2):(contributionChartX(index+1)-contributionChartX(index-1))/2" height="175" @mouseenter="contributionSelect(day,index)" @click.stop="contributionSelect(day,index)"></rect>
+                  <text class="axis-title" x="418" y="258" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="128" text-anchor="middle" transform="rotate(-90 13 128)">Kontribusi</text>
+                </svg>
+                <div v-if="contributionSelected" class="contribution-tooltip" :style="{left:(contributionChartX(contributionSelected.index)/8.36)+'%'}"><b>{{contributionSelected.label}}</b><span><i style="background:#ef7558"></i>A5 20L <strong>{{number(contributionSelected.share.a5_20.toFixed(1))}}%</strong></span><span><i style="background:#e7b54a"></i>A5 6L <strong>{{number(contributionSelected.share.a5_6.toFixed(1))}}%</strong></span><span><i style="background:#4f8f78"></i>B5 <strong>{{number(contributionSelected.share.b5.toFixed(1))}}%</strong></span></div>
+              </div>
+              <div v-if="contributionShift()" class="contribution-shift" :class="contributionShift().delta>=0?'up':'down'"><span>Perubahan terbesar</span><b>{{contributionShiftText()}}</b></div>
+            </section>
+            <div class="contribution-breakdown">
+              <article v-for="item in salesContribution.items" :key="item.key" :class="'contribution-'+item.key">
+                <div class="contribution-card-head"><span><i :style="{background:item.color}"></i>{{item.label}}</span><strong>{{number(item.share)}}%</strong></div>
+                <div class="contribution-track"><i :style="{width:item.share+'%',background:item.color}"></i></div>
+                <div class="contribution-card-foot"><b>{{number(item.qty)}} item</b><span>tersebar di {{number(item.orders)}} order</span></div>
+              </article>
+              <div class="contribution-coverage"><span>{{number(salesContribution.summary.orders)}} order terkategori</span><span>Cakupan klasifikasi {{number(salesContribution.summary.coverage)}}%</span></div>
+            </div>
+          </div>
+        </article>
         <article class="panel analytics-panel">
           <div class="analytics-head">
             <div><span class="eyebrow">ANALITIK ORDER</span><h3>Order harian per marketplace</h3><p>Order masuk yang tidak dibatalkan, dibedakan antara Shopee dan TikTok Shop.</p></div>
@@ -127,29 +171,36 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </form>
           </div>
           <div v-if="analytics" class="analytics-summary">
-            <div><i class="legend-dot shopee"></i><span>Shopee</span><strong>{{number(analytics.summary.shopee)}}</strong></div>
-            <div><i class="legend-dot tiktok"></i><span>TikTok Shop</span><strong>{{number(analytics.summary.tiktok)}}</strong></div>
+            <div class="market-summary"><i class="legend-dot shopee"></i><span>Shopee</span><strong>{{number(analytics.summary.shopee)}}</strong></div>
+            <div class="market-summary"><i class="legend-dot tiktok"></i><span>TikTok Shop</span><strong>{{number(analytics.summary.tiktok)}}</strong></div>
             <div class="analytics-metric"><span>Total order</span><strong>{{number(analytics.summary.total)}}</strong></div>
             <div class="analytics-metric"><span>Total item</span><strong>{{number(analytics.summary.items)}}</strong></div>
             <div class="analytics-metric"><span>Item / order</span><strong>{{number(analytics.summary.itemsPerOrder)}}</strong></div>
+            <div class="analytics-metric average-summary"><span>Rata-rata order / hari</span><strong>{{number(analytics.summary.ordersPerDay)}}</strong><small>{{number(analytics.summary.operatingDays)}} hari operasional</small></div>
+            <div class="analytics-metric average-summary"><span>Rata-rata item / hari</span><strong>{{number(analytics.summary.itemsPerDay)}}</strong><small>{{number(analytics.summary.operatingDays)}} hari operasional</small></div>
             <div class="analytics-metric revenue-summary"><span>Omzet pesanan</span><strong>{{currency(analytics.summary.revenue)}}</strong><small>{{number(analytics.summary.pricedOrders)}} order memiliki nominal</small></div>
             <div class="analytics-metric payout-summary"><span>Payout bersih Shopee</span><strong>{{currency(analytics.summary.shopeePayout)}}</strong><small>{{number(analytics.summary.escrowOrders)}} order escrow</small></div>
           </div>
+          <details class="store-holiday-settings">
+            <summary><span><b>Hari libur toko</b><small>Atur tanggal yang tidak dihitung sebagai hari operasional</small></span><em v-if="analytics">{{number(analytics.summary.operatingDays)}} hari operasional <i>&middot;</i> {{number(analytics.summary.holidayDays)}} libur</em></summary>
+            <div class="store-holiday-body"><form @submit.prevent="addStoreHoliday"><label>Tambah tanggal libur<input v-model="storeHolidayDate" type="date" required :disabled="holidaySaving"></label><button type="submit" :disabled="holidaySaving||!storeHolidayDate">{{holidaySaving?'Menyimpan...':'Tambah'}}</button></form><div class="store-holiday-list"><span v-if="!analytics?.holidays?.length">Belum ada tanggal libur yang disimpan.</span><button v-for="date in (analytics?.holidays||[])" :key="date" type="button" class="holiday-chip" :class="{'in-range':date>=analyticsFrom&&date<=analyticsTo}" :disabled="holidaySaving" @click="removeStoreHoliday(date)" :title="'Hapus '+holidayDateText(date)">{{holidayDateText(date)}} &times;</button></div></div>
+          </details>
           <div v-if="analyticsLoading&&!analytics" class="analytics-empty">Memuat analitik order…</div>
           <div v-else-if="analytics&&!analytics.summary.total" class="analytics-empty">Belum ada order marketplace pada rentang tanggal ini.</div>
-          <div v-else-if="analytics" class="analytics-chart-scroll"><div class="analytics-chart">
+          <div v-else-if="analytics" class="analytics-chart-scroll"><small class="chart-drag-hint">Geser jari di grafik untuk melihat data per tanggal</small><div class="analytics-chart" @pointerdown.prevent="dragOrderTooltip($event,true)" @pointermove.prevent="dragOrderTooltip" @pointerup="finishAnalyticsTooltipDrag" @pointercancel="finishAnalyticsTooltipDrag" @pointerleave="finishAnalyticsTooltipDrag">
             <div class="analytics-grid-lines" aria-hidden="true"><div v-for="tick in analyticsBarTicks()" :key="tick" class="analytics-grid-line" :style="{bottom:analyticsBarTickPosition(tick)+'%'}"><span>{{number(tick)}}</span><i></i></div></div>
             <span class="analytics-y-title">Order</span>
-            <div v-for="day in analytics.items" :key="day.date" class="analytics-day" @mouseenter="showOrderBarTooltip($event,day)" @mousemove="showOrderBarTooltip($event,day)" @mouseleave="analyticsTooltip=null">
+            <div v-for="day in analytics.items" :key="day.date" class="analytics-day" :class="{'is-holiday':day.isHoliday}" @mouseenter="showOrderBarTooltip($event,day)" @mousemove="showOrderBarTooltip($event,day)" @click.stop="showOrderBarTooltip($event,day,true)" @mouseleave="hideAnalyticsTooltip">
               <div class="analytics-bars"><div class="analytics-bar shopee" :style="{height:analyticsBarHeight(day.shopee)+'%'}"><b v-if="day.shopee&&analytics.items.length<=31">{{day.shopee}}</b></div><div class="analytics-bar tiktok" :style="{height:analyticsBarHeight(day.tiktok)+'%'}"><b v-if="day.tiktok&&analytics.items.length<=31">{{day.tiktok}}</b></div></div>
               <span v-if="showAnalyticsLabel(day,analytics.items)">{{day.label}}</span>
             </div>
-            <div v-if="analyticsTooltip?.type==='orders'" class="metric-tooltip analytics-bar-tooltip" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong><span>{{analyticsTooltip.detail}}</span></div>
+            <i v-if="analyticsTooltip?.type==='orders'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
+            <div v-if="analyticsTooltip?.type==='orders'" class="metric-tooltip google-chart-tooltip analytics-bar-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
           </div></div>
           <section v-if="analytics?.summary?.total" class="metric-line-grid">
             <article class="metric-line-card revenue-card">
               <div class="metric-line-head revenue-combined-head"><div><span>Omzet pesanan</span><strong>{{currency(analytics.summary.revenue)}}</strong></div><div><span>Payout bersih Shopee</span><strong>{{currency(analytics.summary.shopeePayout)}}</strong></div><div class="revenue-line-legend"><span><i class="gross"></i>Omzet semua marketplace</span><span><i class="payout"></i>Payout Shopee</span></div></div>
-              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart omzet pesanan per hari">
+              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart omzet pesanan per hari" @pointerdown.prevent="dragAnalyticsLineTooltip($event,'revenue',true)" @pointermove.prevent="dragAnalyticsLineTooltip($event,'revenue')" @pointerup="finishAnalyticsTooltipDrag" @pointercancel="finishAnalyticsTooltipDrag" @pointerleave="finishAnalyticsTooltipDrag">
                 <g class="line-grid"><g v-for="tick in analyticsLineTicks('revenue')" :key="tick"><line x1="55" :y1="analyticsLineTickY(tick,'revenue')" x2="580" :y2="analyticsLineTickY(tick,'revenue')"></line><text x="47" :y="analyticsLineTickY(tick,'revenue')+3" text-anchor="end">{{compactCurrency(tick)}}</text></g></g>
                 <line class="axis-line" x1="55" y1="20" x2="55" y2="135"></line><line class="axis-line" x1="55" y1="135" x2="580" y2="135"></line>
                 <g class="x-ticks"><g v-for="tick in analyticsLineDateTicks()" :key="tick.index"><line :x1="analyticsLineX(tick.index)" y1="135" :x2="analyticsLineX(tick.index)" y2="140"></line><text :x="analyticsLineX(tick.index)" y="153" text-anchor="middle">{{tick.label}}</text></g></g>
@@ -157,53 +208,109 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <polyline class="metric-line shopee-payout" :points="analyticsLinePoints('shopeePayout')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point revenue" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'revenue')" r="3"><title>{{day.label}}: {{currency(day.revenue)}}</title></circle></g>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="'payout-'+day.date" class="metric-point shopee-payout" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'shopeePayout')" r="3"><title>{{day.label}}: {{currency(day.shopeePayout)}}</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'revenue-hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showCombinedRevenueTooltip($event,day)" @mousemove="showCombinedRevenueTooltip($event,day)" @click="showCombinedRevenueTooltip($event,day)" @mouseleave="analyticsTooltip=null"></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'revenue-hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showCombinedRevenueTooltip($event,day)" @mousemove="showCombinedRevenueTooltip($event,day)" @click.stop="showCombinedRevenueTooltip($event,day,true)" @mouseleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Omzet</text>
               </svg>
-              <div v-if="analyticsTooltip?.type==='revenue'" class="metric-tooltip" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong><span>{{analyticsTooltip.detail}}</span></div>
+              <i v-if="analyticsTooltip?.type==='revenue'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
+              <div v-if="analyticsTooltip?.type==='revenue'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
             <article class="metric-line-card">
               <div class="metric-line-head"><div><span>Item terjual</span><strong>{{number(analytics.summary.items)}}</strong></div><small>Total quantity item</small></div>
-              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart jumlah item terjual per hari">
+              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart jumlah item terjual per hari" @pointerdown.prevent="dragAnalyticsLineTooltip($event,'soldItems',true)" @pointermove.prevent="dragAnalyticsLineTooltip($event,'soldItems')" @pointerup="finishAnalyticsTooltipDrag" @pointercancel="finishAnalyticsTooltipDrag" @pointerleave="finishAnalyticsTooltipDrag">
                 <g class="line-grid"><g v-for="tick in analyticsLineTicks('soldItems')" :key="tick"><line x1="55" :y1="analyticsLineTickY(tick,'soldItems')" x2="580" :y2="analyticsLineTickY(tick,'soldItems')"></line><text x="47" :y="analyticsLineTickY(tick,'soldItems')+3" text-anchor="end">{{number(tick)}}</text></g></g>
                 <line class="axis-line" x1="55" y1="20" x2="55" y2="135"></line><line class="axis-line" x1="55" y1="135" x2="580" y2="135"></line>
                 <g class="x-ticks"><g v-for="tick in analyticsLineDateTicks()" :key="tick.index"><line :x1="analyticsLineX(tick.index)" y1="135" :x2="analyticsLineX(tick.index)" y2="140"></line><text :x="analyticsLineX(tick.index)" y="153" text-anchor="middle">{{tick.label}}</text></g></g>
                 <polyline class="metric-line sold-items" :points="analyticsLinePoints('soldItems')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point sold-items" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'soldItems')" r="4"><title>{{day.label}}: {{day.items}} item</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showAnalyticsTooltip($event,day,'soldItems')" @mousemove="showAnalyticsTooltip($event,day,'soldItems')" @mouseleave="analyticsTooltip=null"></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showAnalyticsTooltip($event,day,'soldItems')" @mousemove="showAnalyticsTooltip($event,day,'soldItems')" @click.stop="showAnalyticsTooltip($event,day,'soldItems',true)" @mouseleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item</text>
               </svg>
-              <div v-if="analyticsTooltip?.type==='soldItems'" class="metric-tooltip" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong><span>{{analyticsTooltip.detail}}</span></div>
+              <i v-if="analyticsTooltip?.type==='soldItems'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
+              <div v-if="analyticsTooltip?.type==='soldItems'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
             <article class="metric-line-card">
               <div class="metric-line-head"><div><span>Item per order</span><strong>{{number(analytics.summary.itemsPerOrder)}}</strong></div><small>Rata-rata quantity per order</small></div>
-              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart jumlah item per order per hari">
+              <svg viewBox="0 0 600 190" role="img" aria-label="Line chart jumlah item per order per hari" @pointerdown.prevent="dragAnalyticsLineTooltip($event,'ratio',true)" @pointermove.prevent="dragAnalyticsLineTooltip($event,'ratio')" @pointerup="finishAnalyticsTooltipDrag" @pointercancel="finishAnalyticsTooltipDrag" @pointerleave="finishAnalyticsTooltipDrag">
                 <g class="line-grid"><g v-for="tick in analyticsLineTicks('ratio')" :key="tick"><line x1="55" :y1="analyticsLineTickY(tick,'ratio')" x2="580" :y2="analyticsLineTickY(tick,'ratio')"></line><text x="47" :y="analyticsLineTickY(tick,'ratio')+3" text-anchor="end">{{number(tick)}}</text></g></g>
                 <line class="axis-line" x1="55" y1="20" x2="55" y2="135"></line><line class="axis-line" x1="55" y1="135" x2="580" y2="135"></line>
                 <g class="x-ticks"><g v-for="tick in analyticsLineDateTicks()" :key="tick.index"><line :x1="analyticsLineX(tick.index)" y1="135" :x2="analyticsLineX(tick.index)" y2="140"></line><text :x="analyticsLineX(tick.index)" y="153" text-anchor="middle">{{tick.label}}</text></g></g>
                 <polyline class="metric-line ratio" :points="analyticsLinePoints('ratio')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point ratio" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'ratio')" r="4"><title>{{day.label}}: {{number(analyticsLineValue(day,'ratio'))}} item/order</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showAnalyticsTooltip($event,day,'ratio')" @mousemove="showAnalyticsTooltip($event,day,'ratio')" @mouseleave="analyticsTooltip=null"></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @mouseenter="showAnalyticsTooltip($event,day,'ratio')" @mousemove="showAnalyticsTooltip($event,day,'ratio')" @click.stop="showAnalyticsTooltip($event,day,'ratio',true)" @mouseleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item / order</text>
               </svg>
-              <div v-if="analyticsTooltip?.type==='ratio'" class="metric-tooltip" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong><span>{{analyticsTooltip.detail}}</span></div>
+              <i v-if="analyticsTooltip?.type==='ratio'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
+              <div v-if="analyticsTooltip?.type==='ratio'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
           </section>
-          <section v-if="analytics?.products?.length" class="product-analytics">
-            <div class="product-analytics-head">
-              <div><h4>Produk teratas</h4><p>Jumlah item dan jumlah order per produk pada rentang terpilih.</p></div>
-              <div class="product-legend"><span><i class="items"></i>Item</span><span><i class="orders"></i>Order</span></div>
-            </div>
-            <div class="product-chart">
-              <article v-for="product in analytics.products" :key="product.name" class="product-chart-row" :title="product.name+' — '+product.items+' item, '+product.orders+' order'">
-                <strong>{{product.name}}</strong>
-                <div class="product-bars">
-                  <div><span class="product-bar items" :style="{width:analyticsProductWidth(product.items)+'%'}"></span><b>{{number(product.items)}} item</b></div>
-                  <div><span class="product-bar orders" :style="{width:analyticsProductWidth(product.orders)+'%'}"></span><b>{{number(product.orders)}} order</b></div>
-                </div>
-              </article>
-            </div>
+        </article>
+        <article v-if="shopeeStats" class="panel shopee-insights">
+          <div class="shopee-insights-head">
+            <div><span class="eyebrow">SHOPEE SHOP STATS</span><h3>Growth, funnel, dan kesehatan pelanggan</h3><p>{{shopeeStats.meta.source}} · {{shopeeStats.meta.periodLabel}} · status {{shopeeStats.meta.orderStatus}}</p></div>
+            <span class="shopee-source-badge">{{number(shopeeStats.meta.sourceFiles.length)}} export terhubung</span>
+          </div>
+          <section class="shopee-kpis" aria-label="Ringkasan Shopee bulan terbaru">
+            <article v-for="kpi in shopeeStats.latestKpis" :key="kpi.label" class="shopee-kpi">
+              <span>{{kpi.label}}</span><strong>{{shopeeKpiValue(kpi)}}</strong>
+              <div class="shopee-kpi-foot"><b :class="shopeeDeltaTone(kpi)">{{shopeeDeltaText(kpi)}}</b><small>{{kpi.note}}</small></div>
+            </article>
           </section>
+          <div class="shopee-analysis-grid">
+            <section class="shopee-card">
+              <div class="shopee-card-head">
+                <div><h4>Pengunjung vs pendapatan</h4><p>Lihat apakah kenaikan traffic benar-benar diikuti pertumbuhan omzet.</p></div>
+                <div class="shopee-trend-tabs" aria-label="Pilih interval grafik"><button type="button" :class="{active:shopeeComparisonGranularity==='daily'}" @click="setShopeeComparisonGranularity('daily')">Harian</button><button type="button" :class="{active:shopeeComparisonGranularity==='monthly'}" @click="setShopeeComparisonGranularity('monthly')">Bulanan</button></div>
+              </div>
+              <div class="shopee-date-controls">
+                <label><span>Dari</span><input v-model="shopeeComparisonFrom" type="date" :min="shopeeComparison?.minDate" :max="shopeeComparison?.maxDate"></label>
+                <label><span>Sampai</span><input v-model="shopeeComparisonTo" type="date" :min="shopeeComparison?.minDate" :max="shopeeComparison?.maxDate"></label>
+                <button type="button" :disabled="shopeeComparisonLoading" @click="loadShopeeComparison()">{{shopeeComparisonLoading?'Memuat...':'Terapkan'}}</button>
+              </div>
+              <div v-if="shopeeComparison" class="shopee-comparison-summary">
+                <div><span>Total pendapatan</span><strong>{{currency(shopeeComparison.summary.sales)}}</strong></div>
+                <div><span>Akumulasi pengunjung harian</span><strong>{{number(shopeeComparison.summary.visitors)}}</strong></div>
+                <div><span>Omzet / pengunjung</span><strong>{{currency(shopeeComparison.summary.salesPerVisitor)}}</strong></div>
+              </div>
+              <div v-if="shopeeComparison" class="shopee-comparison-legend"><span class="sales">Pendapatan</span><span class="visitors">Pengunjung</span><small>{{shopeeComparisonGranularity==='daily'?'Tiap hari':'Dijumlahkan per bulan'}}</small></div>
+              <div v-if="shopeeComparison?.items?.length" class="shopee-comparison-scroll">
+                <div class="shopee-comparison-canvas">
+                  <svg viewBox="0 0 860 290" role="img" aria-label="Grafik perbandingan pendapatan dan pengunjung Shopee">
+                    <g class="shopee-comparison-grid"><g v-for="tick in shopeeChartTicks('sales')" :key="'sales-'+tick.ratio"><line :x1="shopeeChartLeft()" :y1="tick.y" :x2="shopeeChartRight()" :y2="tick.y"></line><text :x="shopeeChartLeft()-9" :y="tick.y+3" text-anchor="end">{{shopeeChartCurrencyTick(tick.value)}}</text></g></g>
+                    <g class="shopee-comparison-right-axis"><text v-for="tick in shopeeChartTicks('visitors')" :key="'visitor-'+tick.ratio" :x="shopeeChartRight()+9" :y="tick.y+3">{{number(Math.round(tick.value))}}</text></g>
+                    <line class="shopee-comparison-axis" :x1="shopeeChartLeft()" y1="225" :x2="shopeeChartRight()" y2="225"></line>
+                    <g class="shopee-comparison-bars"><rect v-for="(item,index) in shopeeComparison.items" :key="'bar-'+item.date" :x="shopeeChartX(index)-shopeeChartBarWidth()/2" :y="shopeeChartSalesY(item.sales)" :width="shopeeChartBarWidth()" :height="225-shopeeChartSalesY(item.sales)" :rx="Math.min(4,shopeeChartBarWidth()/2)"><title>{{item.fullLabel}}: {{shopeeComparisonDetail(item)}}</title></rect></g>
+                    <polyline class="shopee-comparison-line" :points="shopeeChartVisitorPoints()"></polyline>
+                    <g v-if="shopeeComparison.items.length<=90" class="shopee-comparison-points"><circle v-for="(item,index) in shopeeComparison.items" :key="'point-'+item.date" :cx="shopeeChartX(index)" :cy="shopeeChartVisitorY(item.visitors)" r="4"><title>{{item.fullLabel}}: {{number(item.visitors)}} pengunjung</title></circle></g>
+                    <g class="shopee-comparison-x-axis"><g v-for="tick in shopeeChartDateTicks()" :key="tick.index"><line :x1="shopeeChartX(tick.index)" y1="225" :x2="shopeeChartX(tick.index)" y2="230"></line><text :x="shopeeChartX(tick.index)" y="244" text-anchor="middle">{{tick.label}}</text></g></g>
+                    <g class="shopee-comparison-hover"><rect v-for="(item,index) in shopeeComparison.items" :key="'zone-'+item.date" :x="shopeeChartZoneX(index)" y="28" :width="shopeeChartZoneWidth()" height="197" @mouseenter="shopeeComparisonSelected=item" @click="shopeeComparisonSelected=item"><title>{{item.fullLabel}}: {{shopeeComparisonDetail(item)}}</title></rect></g>
+                    <text class="shopee-comparison-axis-title" :x="shopeeChartLeft()" y="17">Pendapatan</text><text class="shopee-comparison-axis-title visitors" :x="shopeeChartRight()" y="17" text-anchor="end">Pengunjung</text>
+                  </svg>
+                  <div v-if="shopeeComparisonSelected" class="shopee-comparison-tooltip" :style="{left:shopeeChartTooltipPercent(shopeeComparisonSelected)+'%'}"><b>{{shopeeComparisonSelected.fullLabel}}</b><span>{{currency(shopeeComparisonSelected.sales)}} pendapatan</span><span>{{number(shopeeComparisonSelected.visitors)}} pengunjung</span><small>{{currency(shopeeComparisonSelected.salesPerVisitor)}} / pengunjung</small></div>
+                </div>
+              </div>
+              <div v-else-if="shopeeComparisonLoading" class="shopee-comparison-empty">Memuat data Shopee...</div>
+              <div v-else class="shopee-comparison-empty">Tidak ada data pada rentang ini.</div>
+              <small v-if="shopeeComparison" class="shopee-comparison-note">{{shopeeComparison.visitorMetric}}</small>
+            </section>
+            <section class="shopee-card">
+              <div class="shopee-card-head"><div><h4>Insight prioritas · {{shopeeStats.meta.latestLabel}}</h4><p>Sinyal yang paling relevan untuk keputusan berikutnya.</p></div></div>
+              <div class="shopee-insight-list">
+                <article v-for="insight in shopeeStats.insights" :key="insight.title" class="shopee-insight" :class="insight.tone"><span>{{insight.label}}</span><h5>{{insight.title}}</h5><p>{{insight.text}}</p></article>
+              </div>
+            </section>
+          </div>
+          <div class="shopee-detail-grid">
+            <section class="shopee-card">
+              <div class="shopee-card-head"><div><h4>Produk penggerak omzet</h4><p>Top 5 menyumbang {{shopeePercent(shopeeStats.topProductsShare,1)}} dari penjualan halaman produk.</p></div></div>
+              <div class="shopee-table-wrap"><table class="shopee-product-table"><thead><tr><th>Produk</th><th>Kontribusi</th><th>Omzet</th><th>Order atribusi</th><th>Konversi</th></tr></thead><tbody><tr v-for="product in shopeeStats.topProducts" :key="product.code"><td><b>{{product.name}}</b><small>{{product.code}}</small></td><td><span class="shopee-share"><i :style="{'--share':shopeeProductBar(product)+'%'}"></i>{{shopeePercent(product.share,1)}}</span></td><td>{{currency(product.sales)}}</td><td>{{number(product.orders)}}</td><td>{{shopeePercent(product.conversion,2)}}</td></tr></tbody></table></div>
+            </section>
+            <section class="shopee-card">
+              <div class="shopee-card-head"><div><h4>Sumber traffic yang menghasilkan</h4><p>Porsi omzet dari halaman produk pada {{shopeeStats.meta.latestLabel}}.</p></div></div>
+              <div class="shopee-traffic-list"><div v-for="source in shopeeStats.trafficSources" :key="source.name" class="shopee-traffic-row"><span>{{source.name}}</span><i><b :style="{width:shopeeTrafficBar(source)+'%'}"></b></i><strong>{{shopeePercent(source.share,1)}}</strong></div></div>
+              <div class="shopee-ads"><div><span>ROAS iklan</span><strong>{{number(shopeeStats.ads.roas)}}×</strong></div><div><span>Belanja iklan</span><strong>{{currency(shopeeStats.ads.spend)}}</strong></div><div><span>Omzet atribusi</span><strong>{{currency(shopeeStats.ads.sales)}}</strong></div></div>
+              <small class="shopee-attribution-note">Atribusi channel Shopee dapat saling tumpang tindih, sehingga nilainya tidak dijumlahkan sebagai omzet total.</small>
+            </section>
+          </div>
         </article>
         <div class="panel-grid">
 <article class="panel">
@@ -214,6 +321,11 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 </div>
 <div class="quick-actions">
+<button @click="go('stock')">↗<span>
+<b>Rekomendasi stok</b>
+<small>Cek prioritas per SKU</small>
+</span>
+</button>
 <button @click="go('orders')">▤<span>
 <b>Kelola order</b>
 <small>Cek cetak & kemasan</small>
@@ -285,7 +397,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <div v-if="syncSummary" class="sync-result-box" :class="{warning:syncSummary.cancel_requests?.length}">
 <div>
 <b>Hasil Sync {{syncSummary.marketplace}}</b>
-<span>{{syncSummary.new_orders}} order baru dari {{syncSummary.orders}} order diperiksa</span>
+<span>{{syncSummary.new_orders}} order baru dari {{syncSummary.orders}} order diperiksa · {{syncSummary.labels_queued||0}} resi masuk antrean async</span>
 </div>
 <p v-if="syncSummary.cancel_requests?.length">
 <strong>Permintaan cancel:</strong> {{syncSummary.cancel_requests.slice(0,8).join(', ')}}<span v-if="syncSummary.cancel_requests.length>8"> +{{syncSummary.cancel_requests.length-8}} lainnya</span>
@@ -302,10 +414,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <h3>{{row.order_sn}}</h3>
 <p>
 <button class="customer-history-link" @click="openCustomerHistory(row.buyer_username)">{{row.buyer_username||'Tanpa nama pembeli'}}</button> · {{row.createdText}}</p>
+<p v-if="row.unprinted_lines==0&&row.printed_at" class="printed-update-time">Dipindahkan ke Sudah Dicetak: {{timeText(row.printed_at)}}</p>
 </div>
+<div class="order-group-overview-actions">
 <div class="order-group-status">
 <span class="badge gray">{{row.status}}</span>
 <span class="badge" :class="row.unprinted_lines>0?'amber':'green'">{{row.unprinted_lines>0?row.unprinted_lines+' belum tercetak':'Cetak selesai'}}</span>
+</div>
+<button class="print-all-order-button" :disabled="row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':''))}}</button>
 </div>
 <p v-if="row.customer_note&&!row.order_sn.startsWith('RANDOM-')" class="customer-note-text">Catatan: {{row.customer_note}}</p>
 </header>
@@ -316,15 +432,15 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <span class="eyebrow">RESI PENGIRIMAN</span>
 <b class="order-resi-number">{{row.tracking_number||'Nomor resi belum tersedia'}}</b>
 <div class="order-resi-badges">
-<span class="badge" :class="row.has_label_pdf?'blue':'gray'">{{row.has_label_pdf?'PDF siap':'PDF belum diambil'}}</span>
+<span class="badge" :class="labelFetchBadgeClass(row)" :title="row.label_fetch_error||row.label_fetch_message||''">{{labelFetchBadgeText(row)}}</span>
 <span class="badge" :class="row.resi_printed?'green':'amber'">{{row.resi_printed?'Sudah tercetak':'Belum tercetak'}}</span>
 </div>
 </div>
 </div>
 <div class="order-resi-controls">
-<label v-if="row.has_label_pdf">Printer resi<select v-model="row.label_printer" aria-label="Printer resi"><option value="">Pilih printer…</option><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
+<label v-if="row.has_label_pdf">Printer resi<select v-model="row.label_printer" aria-label="Printer resi"><option value="">Pilih printer…</option><option v-for="printer in (pageData.labelPrinters||pageData.printers)" :value="printer">{{printer}}</option></select></label>
 <div class="order-resi-actions">
-<button class="ghost" :disabled="row.label_fetching" @click="fetchOrderLabel(row)">{{row.label_fetching?'Mengambil resi…':(row.has_label_pdf?'Ambil ulang':'Ambil resi')}}</button>
+<button class="ghost" :disabled="row.label_fetching||labelFetchActive(row)" :title="row.label_fetch_error||row.label_fetch_message||''" @click="fetchOrderLabel(row)">{{labelFetchButtonText(row)}}</button>
 <button v-if="row.has_label_pdf" class="ghost" @click="openOrderLabel(row)">Buka PDF</button>
 <button v-if="row.has_label_pdf" :disabled="!row.label_printer||row.label_printing" @click="printOrderLabel(row)">{{row.label_printing?'Mengantre…':'Cetak resi'}}</button>
 </div>
@@ -346,6 +462,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="inline-item-summary">
 <b>{{line.qty}} pcs</b>
 <span class="badge" :class="line.queued?'blue':(line.printed?'green':(line.print_ready?'amber':'red'))">{{line.queued?'Dalam antrean':(line.printed?'Tercetak':(line.print_ready?'Siap cetak':'Tidak siap'))}}</span>
+<small v-if="line.printed&&line.printed_at">Dicetak {{timeText(line.printed_at)}}</small>
 <small v-if="line.printed_odd||line.printed_even">Ganjil {{line.printed_odd?'✓':'—'}} · Genap {{line.printed_even?'✓':'—'}}</small>
 </div>
 <label class="inline-printer">Printer<select v-model="line.selected_printer" :disabled="!line.print_ready||line.queued">
@@ -431,6 +548,50 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="manual-order-footer"><button class="ghost" @click="randomPrint.open=false">Batal</button><button :disabled="randomPrint.printing" @click="generateRandomFromPopup">{{randomPrint.printing?'Membuat PDF…':'Buat Random Pages'}}</button></div>
 </section>
 </div>
+      </section>
+
+      <section v-if="view==='stock'" class="content stock-dashboard">
+        <article class="panel stock-control-panel">
+          <form class="stock-controls" @submit.prevent="applyStockFilters">
+            <label class="stock-search">Cari SKU / produk<input v-model="stockFilters.q" placeholder="Contoh: planner A5 atau kode SKU"></label>
+            <label>Tahap<select v-model="stockFilters.priority"><option value="all">Semua tahap</option><option value="start">Mulai dulu</option><option value="next">Tahap berikut</option><option value="trial">Uji terbatas</option><option value="wait">Belum perlu</option></select></label>
+            <label>Urutkan<select v-model="stockFilters.sort"><option value="score">Skor terbaik</option><option value="sales">Penjualan 30 hari</option><option value="opening">Jumlah stok awal</option><option value="trend">Tren tertinggi</option></select></label>
+            <label>Stok awal untuk<input type="number" min="7" max="30" v-model.number="stockFilters.coverDays"><small>hari</small></label>
+            <button type="submit" :disabled="loading">Hitung ulang</button>
+          </form>
+          <div class="stock-formula" v-if="stockRecommendations"><b>Cara memilih</b><span>Skor menggabungkan kecepatan jual, jumlah order, hari aktif terjual, momentum 7 hari, tren 30 hari, dan recency. Terjual, kecepatan, dan stok awal dihitung dalam pak untuk {{stockRecommendations.settings.coverDays}} hari + buffer 3 hari. Saat dicetak, 1 pak = {{stockRecommendations.settings.packSize||20}} lembar.</span></div>
+        </article>
+
+        <article v-if="stockRecommendations" class="panel stock-table-panel">
+          <div class="stock-table-head"><div><h3>Shortlist stok perdana</h3><p>{{number(stockRecommendations.total)}} SKU rekomendasi berdasarkan penjualan 90 hari terakhir.</p></div><span class="stock-updated">Diperbarui {{stockRecommendations.settings.generatedText}}</span></div>
+          <div class="table-wrap stock-table-wrap"><table class="stock-table">
+            <thead><tr><th>Ranking</th><th>SKU & produk</th><th>Skor</th><th>Terjual<br><small>pak</small></th><th>Tren 30H</th><th>Kecepatan</th><th>Konsistensi</th><th>Stok terkini</th><th>Alasan</th><th>Stok awal</th><th>Cetak produk<br><small>1 pak = 20 lembar</small></th></tr></thead>
+            <tbody>
+              <tr v-if="!stockRecommendations.items.length"><td colspan="11" class="empty">Tidak ada SKU yang cocok dengan filter ini.</td></tr>
+              <tr v-for="row in stockRecommendations.items" :key="row.sku" :class="'stock-row-'+row.priority">
+                <td><b>#{{row.rank}}</b><span class="stock-priority" :class="row.priority"><i></i>{{stockPriorityLabel(row.priority)}}</span><small class="stock-confidence">{{stockConfidenceLabel(row.confidence)}}</small></td>
+                <td class="stock-product"><button v-if="row.hasPdf" type="button" class="stock-pdf-link" @click="openStockPdf(row)"><b>{{row.productName}}</b><span>{{row.variationName||'Tanpa varian'}}</span><code>{{row.sku}}<template v-if="row.parentSku"> · Induk {{row.parentSku}}</template></code><em>Preview PDF ↗</em></button><template v-else><b>{{row.productName}}</b><span>{{row.variationName||'Tanpa varian'}}</span><code>{{row.sku}}<template v-if="row.parentSku"> · Induk {{row.parentSku}}</template></code></template><small>Terakhir laku {{row.lastSaleText}}</small></td>
+                <td><strong class="stock-current">{{number(row.starterScore)}}</strong><small>dari 100</small></td>
+                <td><div class="stock-sales"><b>{{number(row.sold30)}}</b><span>30H</span></div><small>{{number(row.sold7)}} / 7H · {{number(row.sold90)}} / 90H</small></td>
+                <td><span class="stock-trend" :class="{up:row.trend>0,down:row.trend<0}">{{row.trend>0?'+':''}}{{number(row.trend)}}%</span><small>vs 30H sebelumnya</small></td>
+                <td><b>{{number(row.dailyVelocity)}}</b><small>pak / hari</small></td>
+                <td><b>{{number(row.activeDays30)}} hari</b><small>{{number(row.orders30)}} order / 30H</small></td>
+                <td><strong class="inventory-stock" :class="{empty:row.stock<=0}">{{number(row.stock)}}</strong><small>pak di inventory</small></td>
+                <td class="starter-reason">{{row.reason}}</td>
+                <td><strong class="stock-recommendation" :class="{zero:!row.openingQty}">{{number(row.openingQty)}}</strong><small>{{row.openingQty?'pak pembukaan · '+number(row.openingSheets)+' lembar':'jangan dulu'}}</small></td>
+                <td class="stock-print-cell">
+                  <div v-if="row.hasPdf" class="stock-print-controls">
+                    <label><span>Qty (pak)</span><input type="number" min="0" step="1" v-model.number="row.printQty" :disabled="row.printing"></label>
+                    <label><span>Printer</span><select v-model="row.selectedPrinter" :disabled="row.printing"><option value="" disabled>Pilih printer</option><option v-for="printer in stockRecommendations.printers" :key="printer" :value="printer">{{printer}}</option></select></label>
+                    <button type="button" @click="printStockProduct(row)" :disabled="row.printing||!row.selectedPrinter||row.printQty<1">{{row.printing?'Mengantre…':'Cetak'}}</button>
+                  </div>
+                  <small v-else class="stock-print-unavailable">PDF belum tersedia</small>
+                </td>
+              </tr>
+            </tbody>
+          </table></div>
+          <pagination :data="stockRecommendations" @change="p=>{page=p;refresh()}"></pagination>
+        </article>
       </section>
 
       <section v-if="view==='inventory'" class="content">
@@ -581,17 +742,18 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
 </td>
-<td><b class="tracking-number">{{row.tracking_number||'-'}}</b></td>
+<td><b class="tracking-number">{{row.tracking_number||'Belum tersedia'}}</b><small v-if="!row.tracking_number" class="badge amber">Nomor resi belum tersedia</small></td>
 <td>{{row.createdText}}</td>
 <td>
 <button v-if="row.hasPdf" class="link" @click="openLabel(row.order_sn)">Buka PDF</button>
-<span v-else class="badge gray">Belum ada</span>
+<span v-else class="badge" :class="labelFetchBadgeClass(row)" :title="row.label_fetch_error||row.label_fetch_message||''">{{labelFetchBadgeText(row)}}</span>
 </td>
 <td>
 <span class="badge" :class="row.resi_printed?'green':'amber'">{{row.resi_printed?'Sudah cetak':'Belum cetak'}}</span>
+<small v-if="row.resi_printed&&row.resi_printed_at">{{timeText(row.resi_printed_at)}}</small>
 </td>
 <td class="actions">
-<button class="ghost" :disabled="labelFetches.has(row.order_sn)" @click="queue('fetch_label',row.order_sn)">{{labelFetches.has(row.order_sn)?'Mengambil…':'Ambil'}}</button>
+<button class="ghost" :disabled="labelFetches.has(row.order_sn)||labelFetchActive(row)" :title="row.label_fetch_error||row.label_fetch_message||''" @click="queue('fetch_label',row.order_sn)">{{labelFetches.has(row.order_sn)?'Mengambil…':labelFetchButtonText(row,true)}}</button>
 <button :disabled="!row.hasPdf||!labelPrinter||row.labelPrinting" @click="queue('print_label',row.order_sn,labelPrinter)">{{row.labelPrinting?'Mengantre…':'Cetak'}}</button>
 <button class="ghost mark-printed-button" :class="{revert:row.resi_printed}" :disabled="row.statusChanging" @click="queue('set_label_printed',row.order_sn+'|'+(row.resi_printed?'0':'1'))">{{row.statusChanging?'Menyimpan…':(row.resi_printed?'Belum tercetak':'Sudah dicetak')}}</button>
 </td>
@@ -773,6 +935,113 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
       </section>
 
+      <section v-if="view==='scanner'" class="content adf-scanner-page">
+        <div class="adf-scanner-grid">
+          <article class="panel adf-control-card">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">TWAIN · WF-5790</span>
+                <h3>Scan dan hitung lembar</h3>
+                <p>Masukkan kertas ke ADF. Halaman blank tetap discan dan ikut dalam total.</p>
+              </div>
+              <span class="badge" :class="scannerData.available?'green':'red'">{{scannerData.available?'Scanner siap':'Scanner tidak siap'}}</span>
+            </div>
+
+            <div v-if="scannerData.source_error" class="scanner-inline-error">{{scannerData.source_error}}</div>
+            <div class="adf-settings">
+              <label>TWAIN source
+                <select v-model="scannerForm.source" :disabled="scanIsActive(scannerData.current)||scannerStarting">
+                  <option v-for="source in scannerData.sources" :key="source" :value="source">{{source}}</option>
+                </select>
+              </label>
+              <label>Batas blank (%)
+                <input v-model.number="scannerForm.blank_threshold" type="number" min="0.01" max="5" step="0.01" :disabled="scanIsActive(scannerData.current)||scannerStarting">
+                <small>Default 0,18%. Naikkan bila halaman kosong masih dianggap tercetak.</small>
+              </label>
+            </div>
+
+            <div class="adf-fixed-settings">
+              <span><b>A5 landscape</b><small>Ukuran</small></span>
+              <span><b>200 dpi</b><small>Resolusi</small></span>
+              <span><b>Color</b><small>Mode</small></span>
+              <span><b>1 sisi</b><small>ADF</small></span>
+            </div>
+
+            <button class="adf-start-button" type="button" @click="startAdfScan" :disabled="!scannerData.available||scannerStarting||scanIsActive(scannerData.current)">
+              <span aria-hidden="true">▦</span>
+              {{scannerStarting?'Menjalankan…':scanIsActive(scannerData.current)?'Scan sedang berjalan…':'Mulai Scan Sampai Habis'}}
+            </button>
+            <p class="adf-safety-note">ADF akan berhenti otomatis saat kertas habis. Jangan menutup Epson Scan 2 Utility selama proses.</p>
+          </article>
+
+          <article class="panel adf-result-card" v-if="scannerData.current">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">HASIL TERKINI</span>
+                <h3>{{scannerData.current.message||'Menunggu scanner…'}}</h3>
+                <p>{{scannerData.current.source||scannerForm.source}}</p>
+              </div>
+              <span class="badge" :class="scanStatusClass(scannerData.current.status)">{{scanStatusLabel(scannerData.current.status)}}</span>
+            </div>
+
+            <div v-if="scanIsActive(scannerData.current)" class="adf-live-status" role="status" aria-live="polite">
+              <span class="status-spinner" aria-hidden="true"></span>
+              <div><b>{{scannerData.current.message}}</b><small>{{scannerData.current.captured_pages||0}} halaman sudah diterima</small></div>
+              <button class="danger-button" type="button" @click="cancelAdfScan">Batalkan</button>
+            </div>
+            <div v-if="scannerData.current.status==='failed'" class="scanner-inline-error">
+              <b>Scan gagal</b><span>{{scannerData.current.error}}</span>
+            </div>
+
+            <div class="adf-counts">
+              <div class="total"><strong>{{scannerData.current.total_sheets||scannerData.current.captured_pages||0}}</strong><span>Total lembar</span></div>
+              <div><strong>{{scannerData.current.printed_pages||0}}</strong><span>Berisi</span></div>
+              <div class="blank"><strong>{{scannerData.current.blank_pages||0}}</strong><span>Blank</span></div>
+            </div>
+
+            <div v-if="scannerData.current.status==='completed'" class="adf-blank-summary" :class="{clear:!scannerData.current.blank_pages}">
+              <b>{{scannerData.current.blank_pages?scannerData.current.blank_pages+' halaman blank ditemukan':'Tidak ada halaman blank'}}</b>
+              <span v-if="scannerData.current.blank_pages">Halaman {{scannerData.current.blank_page_numbers.join(', ')}}</span>
+              <span v-else>Semua lembar terdeteksi memiliki isi.</span>
+            </div>
+
+            <div v-if="scannerData.current.pdf_url" class="adf-result-actions">
+              <a class="button-link" :href="scannerData.current.pdf_url" target="_blank" rel="noopener">Buka PDF hasil ↗</a>
+              <a class="button-link ghost" :href="scannerData.current.report_url" download>Unduh report CSV</a>
+            </div>
+          </article>
+
+          <article v-else class="panel adf-result-card adf-empty-result">
+            <span aria-hidden="true">▤</span>
+            <h3>Belum ada hasil scan</h3>
+            <p>Hasil hitungan dan nomor halaman blank akan muncul di sini.</p>
+          </article>
+        </div>
+
+        <article v-if="scannerData.current?.pages?.length" class="panel adf-pages-panel">
+          <div class="panel-head">
+            <div><h3>Pemeriksaan per halaman</h3><p>Kartu merah adalah halaman yang terdeteksi blank.</p></div>
+            <span class="badge gray">{{scannerData.current.pages.length}} halaman</span>
+          </div>
+          <div class="adf-page-list">
+            <article v-for="page in scannerData.current.pages" :key="page.number" :class="{blank:page.is_blank}">
+              <img :src="page.preview_url" :alt="'Preview halaman '+page.number" loading="lazy">
+              <div><b>Halaman {{page.number}}</b><span>{{page.is_blank?'BLANK':'BERISI'}}</span><small>Dark pixel {{Number(page.dark_ratio).toFixed(3)}}%</small></div>
+            </article>
+          </div>
+        </article>
+
+        <article v-if="scannerData.jobs.length" class="panel adf-history-panel">
+          <div class="panel-head"><div><h3>Riwayat scan</h3><p>Pilih sesi untuk melihat hasilnya kembali.</p></div></div>
+          <div class="adf-history-list">
+            <button v-for="job in scannerData.jobs" :key="job.id" type="button" :class="{active:scannerData.current?.id===job.id}" @click="selectAdfJob(job)">
+              <span><b>{{new Date(job.created_at).toLocaleString('id-ID')}}</b><small>{{job.source}}</small></span>
+              <span><b>{{job.total_sheets||job.captured_pages||0}} lembar</b><small :class="job.blank_pages?'has-blank':''">{{job.blank_pages||0}} blank · {{scanStatusLabel(job.status)}}</small></span>
+            </button>
+          </div>
+        </article>
+      </section>
+
       <section v-if="view==='connections'" class="content marketplace-settings">
         <div class="toolbar connection-toolbar">
 <div>
@@ -913,13 +1182,13 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </section>
 
       <div v-if="queueWidgetVisible" class="printer-queue-widget">
-        <button v-if="!queuePanelOpen" class="printer-queue-fab" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
+        <button v-if="!queuePanelOpen" class="printer-queue-fab" :class="{'has-incident':unacknowledgedPrinterIncidents().length}" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
           <span class="printer-queue-fab-icon" aria-hidden="true">&#128424;</span>
           <span class="printer-queue-fab-copy">
-            <b>{{queueWidgetCount}} job aktif</b>
-            <small>{{queueWidgetPrinterSummary}}</small>
+            <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+(queueData.spooler?.length||0))+' job aktif'}}</b>
+            <small>{{unacknowledgedPrinterIncidents().length?'Segera periksa printer':queueWidgetPrinterSummary}}</small>
           </span>
-          <span class="printer-queue-fab-count">{{queueWidgetCount}}</span>
+          <span class="printer-queue-fab-count">{{unacknowledgedPrinterIncidents().length||(queueWidgetAppJobs.length+(queueData.spooler?.length||0))}}</span>
         </button>
 
         <button v-if="queuePanelOpen" class="printer-queue-scrim" type="button" aria-label="Tutup panel Printer Job" @click="closeQueuePanel"></button>
@@ -939,6 +1208,29 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             <div><strong>{{queueData.spooler?.length||0}}</strong><span>Windows spooler</span></div>
           </div>
 
+          <div v-if="(queueData.incidents||[]).length" class="printer-queue-section printer-incident-section">
+            <h3>Masalah aktif</h3>
+            <div class="printer-incidents">
+              <article v-for="incident in (queueData.incidents||[])" :key="incident.id" class="printer-incident-card" :class="{acknowledged:incident.acknowledged_at}">
+                <div class="printer-incident-card-head">
+                  <span class="status-icon" aria-hidden="true">!</span>
+                  <div>
+                    <b>{{incident.title}}</b>
+                    <small>{{incident.printer||'Komputer host'}} · {{incident.createdText}}</small>
+                  </div>
+                  <span class="badge" :class="incident.acknowledged_at?'gray':'red'">{{incident.acknowledged_at?'Diperiksa':'Perlu tindakan'}}</span>
+                </div>
+                <p v-if="incident.order_sn||incident.original_name" class="printer-incident-document">{{incident.order_sn||incident.original_name}}</p>
+                <p class="printer-incident-message">{{incident.technical_message}}</p>
+                <p class="printer-incident-guidance"><b>Yang perlu dicek:</b> {{incident.guidance}}</p>
+                <div class="printer-queue-job-actions">
+                  <button v-if="incident.print_job_id" type="button" :disabled="!!queueActionKey" @click="retryIncident(incident)">Coba lagi</button>
+                  <button v-if="!incident.acknowledged_at" class="ghost" type="button" :disabled="!!queueActionKey" @click="acknowledgeIncident(incident)">Sudah diperiksa</button>
+                </div>
+              </article>
+            </div>
+          </div>
+
           <div class="printer-queue-section">
             <h3>Printer aktif / tujuan</h3>
             <div class="printer-queue-printers">
@@ -946,9 +1238,9 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <span class="dot" :class="printer.active?'online':'danger'"></span>
                 <div>
                   <b>{{printer.name}}</b>
-                  <small>{{printer.active?printer.status:'Offline'}} · {{printer.queue_count||0}} di spooler</small>
+                  <small>{{printer.status}} · {{printer.queue_count||0}} di spooler</small>
                 </div>
-                <span class="badge" :class="printer.active?'green':'red'">{{printer.active?'Aktif':'Offline'}}</span>
+                <span class="badge" :class="printer.active?'green':'red'">{{printer.active?'Aktif':'Masalah'}}</span>
               </article>
             </div>
           </div>
@@ -981,6 +1273,13 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <small>{{job.printer}}</small>
                 </div>
                 <span class="badge blue">{{job.status||'Queued'}}</span>
+                <div v-if="job.print_job_id&&spoolerMoveTargets(job).length" class="printer-queue-move">
+                  <select v-model="job.move_printer" :disabled="!!queueActionKey" aria-label="Printer tujuan" @focus="beginQueueMoveSelection" @change="endQueueMoveSelection" @blur="endQueueMoveSelection">
+                    <option value="">Pilih printer tujuan…</option>
+                    <option v-for="printer in spoolerMoveTargets(job)" :key="printer.name" :value="printer.name">{{printer.name}}</option>
+                  </select>
+                  <button type="button" :disabled="!!queueActionKey||!job.move_printer" @click="moveSpoolerJob(job)">Pindah</button>
+                </div>
                 <div class="printer-queue-job-actions">
                   <button class="ghost" type="button" :disabled="!!queueActionKey" @click="spoolerAction(job,'pause')">Pause</button>
                   <button class="ghost" type="button" :disabled="!!queueActionKey" @click="spoolerAction(job,'resume')">Resume</button>
@@ -1137,7 +1436,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=75">
+<script src="assets/app.js?v=105">
 </script>
 </body>
 </html>

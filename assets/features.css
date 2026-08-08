@@ -92,12 +92,14 @@
 @media(max-width:620px){.search-toolbar{margin-top:-10px;padding:10px 0}}
 
 .printer-queue-widget{position:relative;z-index:80}
-.printer-queue-fab{position:fixed;right:24px;bottom:24px;z-index:82;display:grid;grid-template-columns:38px minmax(0,1fr) 30px;align-items:center;gap:10px;width:min(320px,calc(100vw - 32px));padding:11px 12px;background:#173d2b;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:16px;box-shadow:0 16px 40px rgba(15,39,28,.28);text-align:left}
+.printer-queue-fab{position:fixed;right:24px;bottom:24px;z-index:82;display:grid;grid-template-columns:1fr;place-items:center;gap:0;width:58px;height:58px;padding:8px;background:#173d2b;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:15px;box-shadow:0 16px 40px rgba(15,39,28,.28);text-align:left}
 .printer-queue-fab:hover{transform:translateY(-2px)}
-.printer-queue-fab-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#d8ec5e;color:#173322;font-size:20px}
-.printer-queue-fab-copy{min-width:0}.printer-queue-fab-copy b,.printer-queue-fab-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.printer-queue-fab.has-incident{background:#a72f2f;box-shadow:0 16px 42px rgba(167,47,47,.4);animation:printer-alert-pulse 1.6s ease-in-out infinite}
+.printer-queue-fab.has-incident .printer-queue-fab-icon,.printer-queue-fab.has-incident .printer-queue-fab-count{background:#fff0e9;color:#8f2525}
+.printer-queue-fab-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:10px;background:#d8ec5e;color:#173322;font-size:21px}
+.printer-queue-fab-copy{display:none}.printer-queue-fab-copy b,.printer-queue-fab-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .printer-queue-fab-copy b{font-size:12px}.printer-queue-fab-copy small{margin-top:3px;color:#bcd0c4;font-size:9px;font-weight:500}
-.printer-queue-fab-count{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;background:rgba(255,255,255,.12);font-size:11px;font-weight:800}
+.printer-queue-fab-count{position:absolute;top:-7px;right:-7px;width:auto;min-width:23px;height:23px;padding:0 6px;display:grid;place-items:center;border:2px solid #fff;border-radius:99px;background:#d8ec5e;color:#173322;font-size:10px;font-weight:800;box-shadow:0 4px 10px rgba(15,39,28,.2)}
 .printer-queue-scrim{position:fixed;inset:0;z-index:80;width:100%;height:100%;padding:0;border:0;border-radius:0;background:rgba(13,27,19,.28);backdrop-filter:blur(2px)}
 .printer-queue-scrim:hover{transform:none;filter:none}
 .printer-queue-drawer{position:fixed;z-index:81;top:0;right:0;width:min(420px,100vw);height:100dvh;padding:24px;background:#f5f7f4;border-left:1px solid var(--line);box-shadow:-24px 0 60px rgba(21,38,28,.18);overflow-y:auto;transform:translateX(105%);visibility:hidden;transition:transform .24s ease,visibility .24s}
@@ -116,17 +118,20 @@
 .printer-queue-jobs .printer-queue-job{align-items:flex-start;flex-wrap:wrap}
 .printer-queue-jobs .printer-queue-job-name{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.45;color:var(--ink)}
 .printer-queue-job>.badge{flex:0 0 auto}
+.printer-queue-move{display:grid!important;grid-template-columns:minmax(0,1fr) auto;flex:0 0 100%!important;gap:6px;padding-top:4px}.printer-queue-move select{min-width:0;padding:7px 9px;font-size:9px}.printer-queue-move button{padding:7px 12px;font-size:9px}
 .printer-queue-job-actions{display:flex;flex:0 0 100%!important;gap:6px;padding-top:2px}
 .printer-queue-job-actions button{flex:1;padding:7px 8px;font-size:9px}
 .printer-queue-empty{margin:0;padding:20px 12px;border:1px dashed var(--line);border-radius:12px;background:#fff;color:var(--muted);font-size:10px;text-align:center}
+.printer-incident-banner{display:flex;align-items:center;gap:12px;margin:14px 24px 0;padding:13px 15px;border:1px solid #e9a4a4;border-radius:14px;background:#fff1f0;color:#7c2020;box-shadow:0 8px 26px rgba(126,32,32,.1)}
+.printer-incident-banner>div{min-width:0;flex:1}.printer-incident-banner b,.printer-incident-banner span{display:block}.printer-incident-banner b{font-size:12px}.printer-incident-banner span{margin-top:3px;font-size:10px;overflow-wrap:anywhere}.printer-incident-banner button{flex:0 0 auto;padding:8px 11px;font-size:9px}.printer-incident-banner-icon,.printer-incident-card .status-icon{display:grid;place-items:center;flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:#b63535;color:#fff;font-weight:900}
+.printer-incidents{display:grid;gap:10px}.printer-incident-card{padding:13px;border:1px solid #e5a8a8;border-radius:13px;background:#fff8f7}.printer-incident-card.acknowledged{border-color:var(--line);background:#fff}.printer-incident-card-head{display:flex;align-items:flex-start;gap:9px}.printer-incident-card-head>div{min-width:0;flex:1}.printer-incident-card-head b,.printer-incident-card-head small{display:block}.printer-incident-card-head b{font-size:11px}.printer-incident-card-head small{margin-top:3px;color:var(--muted);font-size:9px}.printer-incident-card-head .badge{flex:0 0 auto}.printer-incident-document,.printer-incident-message,.printer-incident-guidance{margin:9px 0 0;font-size:9px;line-height:1.5;overflow-wrap:anywhere}.printer-incident-document{font-weight:700}.printer-incident-message{padding:8px;border-radius:8px;background:#f5eeee;color:#713333;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.printer-incident-guidance{color:var(--ink)}
+@keyframes printer-alert-pulse{50%{transform:scale(1.05);box-shadow:0 18px 48px rgba(167,47,47,.52)}}
 @media(max-width:620px){
- .printer-queue-fab{right:16px;bottom:16px;width:58px;height:58px;display:grid;grid-template-columns:1fr;place-items:center;gap:0;padding:8px;border-radius:15px}
- .printer-queue-fab-icon{width:42px;height:42px;border-radius:10px;font-size:21px}
- .printer-queue-fab-copy{display:none}
- .printer-queue-fab-count{position:absolute;top:-7px;right:-7px;width:auto;min-width:23px;height:23px;padding:0 6px;border:2px solid #fff;border-radius:99px;background:#d8ec5e;color:#173322;font-size:10px;box-shadow:0 4px 10px rgba(15,39,28,.2)}
+ .printer-queue-fab{right:16px;bottom:16px}
  .printer-queue-drawer{padding:19px 16px}
+ .printer-incident-banner{align-items:flex-start;flex-wrap:wrap;margin:10px 14px 0}.printer-incident-banner>div{flex-basis:calc(100% - 44px)}.printer-incident-banner button{flex:1}
 }
-@media(prefers-reduced-motion:reduce){.printer-queue-drawer{transition:none}.printer-queue-fab{transition:none}}
+@media(prefers-reduced-motion:reduce){.printer-queue-drawer{transition:none}.printer-queue-fab{transition:none}.printer-queue-fab.has-incident{animation:none}}
 .delete-list-move{transition:transform .32s cubic-bezier(.22,1,.36,1)}
 .delete-list-leave-active{transition:opacity .26s ease,transform .26s cubic-bezier(.4,0,1,1),filter .26s ease}
 .delete-list-leave-to{opacity:0;transform:translateX(18px) scale(.97);filter:blur(2px)}

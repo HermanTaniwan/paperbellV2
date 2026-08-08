@@ -1,0 +1,257 @@
+/* Paperbell theme — Fresh / Vermillion / Sunshine / Clean */
+:root {
+  --fresh: #f7f5e6;
+  --vermillion: #333a56;
+  --sunshine: #52658f;
+  --clean: #e8e8e8;
+  --ink: var(--vermillion);
+  --muted: #737786;
+  --line: #d9dce3;
+  --paper: #f7f7f3;
+  --white: #fff;
+  --green: var(--sunshine);
+  --green2: #e9edf5;
+  --amber: #847248;
+  --amber2: var(--fresh);
+  --red: #995a68;
+  --shadow: 0 12px 36px rgba(51, 58, 86, .11);
+}
+
+body {
+  background:
+    radial-gradient(circle at 92% 4%, rgba(82, 101, 143, .12), transparent 25rem),
+    radial-gradient(circle at 38% 100%, rgba(247, 245, 230, .9), transparent 28rem),
+    var(--paper);
+}
+
+aside {
+  background: var(--vermillion);
+  color: var(--fresh);
+  border-right: 1px solid #293047;
+}
+
+.brand span,
+.aside-foot,
+.aside-foot small {
+  color: #c5cada;
+}
+
+.brand-mark,
+.printer-queue-fab-icon,
+.printer-queue-fab-count {
+  background: var(--fresh);
+  color: var(--vermillion);
+  box-shadow: inset 0 0 0 1px #dedbc9;
+}
+
+nav button { color: #cbd0de; }
+nav button.active { background: var(--sunshine); color: #fff; }
+nav button:hover { background: #414b6b; color: #fff; }
+.aside-foot { border-top-color: #4b536e; }
+
+header { background: rgba(255, 255, 255, .9); }
+
+.hero {
+  color: var(--fresh);
+  background: linear-gradient(
+    120deg,
+    var(--vermillion) 0%,
+    var(--sunshine) 46%,
+    var(--clean) 74%,
+    var(--fresh) 100%
+  );
+  border: 1px solid #cfd3dc;
+}
+
+.hero p { color: #e2e5ed; }
+.eyebrow { color: var(--sunshine); }
+.hero .eyebrow { color: var(--fresh); }
+
+.hero button,
+button,
+.upload-button {
+  background: var(--sunshine);
+  color: #fff;
+}
+
+button:hover,
+.upload-button:hover {
+  background: #45577e;
+  filter: none;
+}
+
+.hero button {
+  background: var(--fresh);
+  color: var(--vermillion);
+}
+
+.hero button:hover { background: #eae7d5; }
+
+.print-all-order-button {
+  background: var(--fresh);
+  color: var(--vermillion);
+  border-color: #dcd8c2;
+  box-shadow: 0 3px 9px rgba(51, 58, 86, .1);
+}
+
+.print-all-order-button:hover { background: #eae7d5; }
+
+.danger-button {
+  background: #f4e4e7;
+  color: #87515d;
+  border-color: #dfc3c9;
+}
+
+.danger-button:hover,
+.toast.error {
+  background: #e8cfd4;
+  color: #743f4b;
+}
+
+.ghost,
+.icon-button,
+.quick-actions button,
+.credential-box,
+.order-items-list article,
+.analytics-summary,
+.finance-summary > div,
+.finance-chart-card,
+.pool-count div {
+  background: #fafafa;
+  color: var(--vermillion);
+}
+
+.stats article:nth-child(4n + 1) { border-top: 3px solid var(--fresh); }
+.stats article:nth-child(4n + 2) { border-top: 3px solid var(--vermillion); }
+.stats article:nth-child(4n + 3) { border-top: 3px solid var(--sunshine); }
+.stats article:nth-child(4n + 4) { border-top: 3px solid var(--clean); }
+
+.quick-actions button:nth-child(4n + 1) { border-left: 4px solid var(--fresh); }
+.quick-actions button:nth-child(4n + 2) { border-left: 4px solid var(--vermillion); }
+.quick-actions button:nth-child(4n + 3) { border-left: 4px solid var(--sunshine); }
+.quick-actions button:nth-child(4n + 4) { border-left: 4px solid var(--clean); }
+
+.filters button.active,
+.analytics-presets button.active,
+.toggle.on,
+.paper-order-filters button.active {
+  background: #dfe4ef;
+  color: var(--vermillion);
+}
+
+.badge.green,
+.finance-summary > div.payout,
+.settings-note,
+.sync-result-box {
+  background: #e8edf6;
+  color: #435578;
+  border-color: #cbd4e5;
+}
+
+.badge.amber,
+.sync-result-box.warning,
+.order-group-head .customer-note-text {
+  background: var(--fresh);
+  color: #75663f;
+  border-color: #ded8b9;
+}
+
+.badge.red,
+.alert.error,
+.connection-error {
+  background: #f4e4e7;
+  color: #87515d;
+  border-color: #dfc3c9;
+}
+
+.badge.blue { background: #e1e6f0; color: var(--sunshine); }
+.badge.gray,
+.toggle:not(.on) { background: var(--clean); color: var(--vermillion); }
+.badge.green { border-left: 3px solid var(--sunshine); }
+.badge.amber { border-left: 3px solid var(--fresh); }
+.badge.blue { border-left: 3px solid var(--clean); }
+
+.toast,
+.printer-queue-fab { background: var(--vermillion); }
+
+.login-shell {
+  background:
+    radial-gradient(circle at 18% 12%, var(--clean) 0, transparent 34%),
+    radial-gradient(circle at 85% 86%, var(--fresh) 0, transparent 32%),
+    var(--paper);
+}
+
+.login-card input:focus,
+.form-row input:focus,
+.form-stack input:focus,
+.form-stack select:focus,
+.form-stack textarea:focus,
+.credential-grid input:focus,
+.credential-grid select:focus,
+.analytics-range input:focus {
+  border-color: var(--sunshine);
+  box-shadow: 0 0 0 3px rgba(82, 101, 143, .2);
+}
+
+tbody tr:hover,
+.mapping-pdf-results button:hover,
+.manual-order-suggestions button:hover { background: #f5f6f8; }
+
+.order-resi-panel {
+  background: #e1e6f0;
+  border-bottom-color: #cbd4e3;
+}
+
+.finance-payout-track i {
+  background: linear-gradient(90deg, var(--clean), var(--sunshine));
+}
+
+.finance-payout-line,
+.finance-payout-point { stroke: var(--sunshine); }
+
+.finance-chart-head strong,
+.finance-summary .payout strong,
+.finance-month-title b,
+.text-success,
+.link,
+.customer-history-link,
+.copy-url { color: var(--sunshine); }
+
+/* High-contrast interactive states */
+button:not(:disabled):not(.printer-queue-scrim):hover,
+.upload-button:hover {
+  background: var(--vermillion);
+  color: var(--fresh);
+  border-color: var(--vermillion);
+  filter: none;
+}
+
+.printer-queue-scrim,
+.printer-queue-scrim:hover {
+  background: rgba(51, 58, 86, .22);
+  color: transparent;
+  border: 0;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  filter: none;
+  transform: none;
+}
+
+button.link:not(:disabled):hover,
+button.customer-history-link:not(:disabled):hover,
+button.copy-url:not(:disabled):hover,
+button.pdf-link:not(:disabled):hover {
+  background: transparent;
+  color: var(--vermillion);
+  border-color: transparent;
+}
+
+button:focus-visible,
+.upload-button:focus-visible {
+  outline: 3px solid rgba(82, 101, 143, .32);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+}
