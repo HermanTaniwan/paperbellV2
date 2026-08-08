@@ -47,6 +47,17 @@ function runProcess(array $command, string $failureMessage): string
     return $stdout;
 }
 
+function printerSpoolerJobIds(string $printer): array
+{
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); @(Get-PrintJob -PrinterName \$p -ErrorAction Stop | Select-Object -ExpandProperty ID) | ConvertTo-Json -Compress";
+    $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
+    $raw = runProcess(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded], 'Status Windows spooler tidak dapat dibaca.');
+    $decoded = json_decode(trim($raw), true);
+    if (is_int($decoded)) return [$decoded];
+    return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
+}
+
 function prepareLabelPdf(array $job): string
 {
     global $root, $config;
@@ -109,6 +120,7 @@ do {
             $printSettings = labelPrintSettings((string)$job['printer']);
         }
 
+        try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
         runProcess([
             $sumatra,
             '-print-to',
@@ -119,6 +131,19 @@ do {
             '-exit-on-print',
             $printPath,
         ], 'Gagal menjalankan SumatraPDF.');
+
+        $spoolerJobId = null;
+        for ($spoolerAttempt = 0; $spoolerAttempt < 5 && $spoolerJobId === null; $spoolerAttempt++) {
+            try {
+                $spoolerAfter = printerSpoolerJobIds((string)$job['printer']);
+                $newIds = array_values(array_diff($spoolerAfter, $spoolerBefore));
+                if ($newIds) $spoolerJobId = max($newIds);
+            } catch (Throwable $spoolerError) {
+                logLine('Korelasi spooler setelah print gagal: '.$spoolerError->getMessage());
+                break;
+            }
+            if ($spoolerJobId === null) usleep(200000);
+        }
 
         // Windows now owns the submitted job. Drop the cached spooler snapshot
         // so the web widget can show it on its very next refresh.
@@ -132,8 +157,8 @@ do {
         }
 
         $db->beginTransaction();
-        $done = $db->prepare("UPDATE print_jobs SET status='completed',message='Dikirim ke printer',completed_at=?,error='' WHERE id=? AND status='processing'");
-        $done->execute([time(), $job['id']]);
+        $done = $db->prepare("UPDATE print_jobs SET status='submitted',message=?,completed_at=?,submitted_at=?,spooler_job_id=?,error='' WHERE id=? AND status='processing'");
+        $submittedAt=time();$done->execute([$spoolerJobId===null?'Diserahkan ke Windows spooler':'Diserahkan ke Windows spooler #'.$spoolerJobId,$submittedAt,$submittedAt,$spoolerJobId,$job['id']]);
         if ($job['job_type'] === 'product' && $job['order_process_id']) {
             $tokens = array_map('strtolower', array_map('trim', explode(',', (string)$job['print_settings'])));
             if (in_array('odd', $tokens, true)) {
@@ -149,7 +174,7 @@ do {
             $mark->execute([time(), $job['order_sn']]);
         }
         $db->commit();
-        logLine("Job #{$job['id']} completed: {$job['printer']}");
+        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']}");
     } catch (Throwable $e) {
         try {
             if ($db->inTransaction()) $db->rollBack();

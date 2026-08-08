@@ -21,6 +21,11 @@ return [
         'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: 'EPSON L3210 Series',
         'python' => getenv('PAPERBELL_PYTHON_PATH') ?: 'C:/Users/Herman Taniwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe',
     ],
+    'scanner' => [
+        // WFScanner's Python 3.11 environment already contains pytwain, Pillow, and pywin32.
+        'python' => getenv('PAPERBELL_SCANNER_PYTHON_PATH') ?: 'C:/Users/Herman Taniwan/AppData/Local/Programs/Python/Python311/python.exe',
+        'default_source' => getenv('PAPERBELL_SCANNER_SOURCE') ?: 'EPSON WF-C5710/C5790 Series',
+    ],
     'mapping' => [
         'spreadsheet_id' => getenv('PAPERBELL_MAPPING_SHEET_ID') ?: '1eXwQ_H8ofVroEYlK5X90bvlT66f5a8Q5tnVtTAKNHy4',
         'gid' => getenv('PAPERBELL_MAPPING_SHEET_GID') ?: '0',

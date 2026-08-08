@@ -18,7 +18,7 @@ final class PrintService
         $cached=$this->readInstalledCache();
         if($cached!==null && (int)($cached['saved_at']??0)>=time()-60)
             return $this->installedCache=$cached['printers'];
-        $script = "Get-Printer | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress";
+        $script = "\$printers=@(Get-CimInstance Win32_Printer -ErrorAction Stop | Where-Object { -not \$_.WorkOffline -and ([int]\$_.PrinterStatus -notin 6,7) } | Select-Object -ExpandProperty Name); ConvertTo-Json -InputObject \$printers -Compress";
         $command = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' . escapeshellarg($script);
         $output = shell_exec($command);
         if (!is_string($output) || trim($output) === '')
@@ -62,6 +62,15 @@ final class PrintService
 
     public function configuredPrinters(): array { return $this->printerSettings()['visible']; }
     public function defaultLabelPrinter(): string { return $this->printerSettings()['default_label_printer']; }
+    public function labelPrinters(): array
+    {
+        $printers=$this->configuredPrinters();$default=$this->defaultLabelPrinter();
+        if($default!==''&&in_array($default,$printers,true)){
+            $printers=array_values(array_filter($printers,fn($printer)=>(string)$printer!==$default));
+            array_unshift($printers,$default);
+        }
+        return$printers;
+    }
 
     public function savePrinterSettings(array $input): array
     {
@@ -90,7 +99,7 @@ final class PrintService
     {
         $orderSns=array_values(array_unique(array_filter(array_map('strval',$orderSns))));if(!$orderSns)return[];
         $marks=implode(',',array_fill(0,count($orderSns),'?'));
-        $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);
+        $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,printed_at FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);
         $mappingByKey=[];$mappingById=[];
         foreach($this->db->query('SELECT * FROM data_mappings')->fetchAll() as $mapping){$mappingById[(string)$mapping['id']]=$mapping;$key=$this->norm((string)$mapping['sku_id']);if($key!=='')$mappingByKey[$key]=$mapping;}
         foreach($this->db->query('SELECT alias_key,mapping_id FROM mapping_aliases')->fetchAll() as $alias){$mapping=$mappingById[(string)$alias['mapping_id']]??null;if($mapping)$mappingByKey[$this->norm((string)$alias['alias_key'])]=$mapping;}
@@ -107,7 +116,7 @@ final class PrintService
             $inventoryKeys=array_values(array_unique(array_filter([$this->norm((string)$line['item_key']),$this->norm((string)($mapping['sku_id']??''))])));
             foreach($inventoryKeys as $inventoryKey)if(array_key_exists($inventoryKey,$inventory)){$inventoryQty=$inventory[$inventoryKey];break;}
             $requiredQty=max(1,(int)$line['qty']);
-            $ready=$mapping!==null&&is_file((string)$mapping['file_path']);$defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
+            $ready=$mapping!==null&&is_file((string)$mapping['file_path']);$defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
         }
         return$result;
     }
@@ -168,12 +177,13 @@ final class PrintService
         return $items;
     }
 
-    public function queueMappingFile(int $mappingId,string $printer,string $user,array $input=[]): array
+    public function queueMappingFile(int $mappingId,string $printer,string $user,array $input=[],string $jobType='manual',string $reference=''): array
     {
+        if(!in_array($jobType,['manual','stock'],true))throw new InvalidArgumentException('Jenis job mapping tidak valid.');
         if($mappingId<=0)throw new InvalidArgumentException('Pilih PDF dari Data Mapping terlebih dahulu.');$stmt=$this->db->prepare('SELECT * FROM data_mappings WHERE id=?');$stmt->execute([$mappingId]);$mapping=$stmt->fetch();
         if(!$mapping)throw new RuntimeException('Data Mapping tidak ditemukan. Silakan pilih ulang setelah sinkronisasi.');$file=(string)$mapping['file_path'];if(!is_file($file)||strtolower(pathinfo($file,PATHINFO_EXTENSION))!=='pdf')throw new RuntimeException('File PDF pada Data Mapping tidak ditemukan.');
         $printer=trim($printer!==''?$printer:$this->resolveMappedPrinter((string)$mapping['printer']));if($printer===''||!in_array($printer,$this->configuredPrinters(),true))throw new RuntimeException('Printer tidak tersedia atau dinonaktifkan.');
-        $mapping['printer']=$printer;$options=$this->normalizePrintOptions($mapping,$input);$copies=(int)$options['copies'];$id=$this->insertJob('manual','',null,$file,$printer,$this->productSettings($mapping,$copies,$options),$copies,$user);
+        $mapping['printer']=$printer;$options=$this->normalizePrintOptions($mapping,$input);$copies=(int)$options['copies'];$id=$this->insertJob($jobType,$reference,null,$file,$printer,$this->productSettings($mapping,$copies,$options),$copies,$user);
         return['ok'=>true,'id'=>$id,'copies'=>$copies,'printer'=>$printer,'options'=>$options];
     }
 
@@ -205,7 +215,7 @@ final class PrintService
         $rows=[];foreach($this->db->query('SELECT setting_key,setting_value FROM printer_settings')->fetchAll() as $row)$rows[(string)$row['setting_key']]=$row['setting_value'];return $rows;
     }
 
-    private function resolveMappedPrinter(string $printer): string
+    public function resolveMappedPrinter(string $printer): string
     {
         $settings=$this->printerSettings();$name=trim($printer);
         if(stripos($name,'brother')!==false&&$settings['override_brother']!=='')return $settings['override_brother'];

@@ -39,6 +39,11 @@ final class MarketplaceLabelService
         $path='/fulfillment/202309/packages/'.rawurlencode($packageId).'/shipping_documents';
         try{$json=$this->tiktokJson('GET',$path,['document_type'=>'SHIPPING_LABEL_AND_PACKING_SLIP','document_size'=>'A6','document_format'=>'PDF'],$appKey,$secret,$shopCipher,(string)$auth['access_token']);}
         catch(Throwable $e){$json=$this->tiktokJson('GET',$path,['document_type'=>'SHIPPING_LABEL','document_size'=>'A6','document_format'=>'PDF'],$appKey,$secret,$shopCipher,(string)$auth['access_token']);}
+        if($this->trackingNumber==='')$this->trackingNumber=$this->findFirst($json,['tracking_number','trackingNumber','tracking_id','trackingId','waybill_number','waybillNumber']);
+        if($this->trackingNumber===''){
+            try{$package=$this->tiktokJson('GET','/fulfillment/202309/packages/'.rawurlencode($packageId),[],$appKey,$secret,$shopCipher,(string)$auth['access_token']);$this->trackingNumber=$this->findFirst($package,['tracking_number','trackingNumber','tracking_id','trackingId','waybill_number','waybillNumber']);}
+            catch(Throwable){}
+        }
         $base64=$this->findFirst($json,['file_base64']);if($base64!==''){$decoded=base64_decode($base64,true);if($decoded===false)throw new RuntimeException('Base64 label TikTok tidak valid.');return $decoded;}
         $url=$this->findFirst($json,['doc_url','download_url','file_url','document_url','shipping_document_url','url']);if($url==='')throw new RuntimeException('Respons TikTok tidak berisi URL atau data PDF.');
         return $this->download($url);

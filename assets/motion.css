@@ -1,0 +1,314 @@
+/*
+ * Paperbell motion layer
+ * Small, purposeful animations that add feedback without slowing down daily work.
+ */
+
+:root {
+  --motion-fast: 160ms;
+  --motion-base: 260ms;
+  --motion-slow: 520ms;
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+  --motion-soft: cubic-bezier(.4, 0, .2, 1);
+}
+
+/* View changes */
+.content {
+  animation: view-enter var(--motion-slow) var(--motion-ease) both;
+}
+
+.content > .toolbar,
+.content > .hero,
+.content > .stats,
+.content > .analytics-panel,
+.content > .panel-grid,
+.content > .feature-grid,
+.content > .table-card,
+.content > .order-groups,
+.content > .labels-split,
+.content > .document-grid {
+  animation: section-rise 440ms var(--motion-ease) both;
+}
+
+.content > :nth-child(2) { animation-delay: 45ms; }
+.content > :nth-child(3) { animation-delay: 90ms; }
+.content > :nth-child(4) { animation-delay: 135ms; }
+.content > :nth-child(n + 5) { animation-delay: 170ms; }
+
+/* Hero and brand accents */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -80%;
+  left: -25%;
+  width: 42%;
+  height: 260%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .11), transparent);
+  transform: rotate(18deg) translateX(-180%);
+  animation: hero-glint 1.1s 260ms var(--motion-ease) both;
+  pointer-events: none;
+}
+
+.brand-mark {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) ease;
+}
+
+.brand:hover .brand-mark,
+.login-card:hover .brand-mark {
+  transform: rotate(-4deg) scale(1.05);
+  box-shadow: 4px 5px 0 rgba(82, 101, 143, .17);
+}
+
+/* Navigation and controls */
+nav button {
+  transition:
+    color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    transform var(--motion-base) var(--motion-ease);
+}
+
+nav button span {
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+nav button:hover span,
+nav button.active span {
+  transform: translateX(3px) scale(1.08);
+}
+
+button,
+.upload-button,
+.google-sheet-link {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+button:not(:disabled):not(.link):not(.customer-history-link):not(.copy-url):not(.pdf-link):not(.printer-queue-scrim):active,
+.upload-button:active,
+.google-sheet-link:active {
+  transform: translateY(1px) scale(.98);
+}
+
+.quick-actions button > span:first-child {
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.quick-actions button:hover > span:first-child {
+  transform: rotate(-7deg) scale(1.14);
+}
+
+/* Cards and rows */
+.stats article,
+.panel,
+.table-card,
+.printer-status-card,
+.finance-month,
+  .metric-line-card,
+.inline-print-item {
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) ease,
+    border-color var(--motion-base) ease;
+}
+
+.stats article:hover,
+.panel-grid > .panel:hover,
+.feature-grid > .panel:hover,
+.printer-status-card:hover,
+.finance-month:hover,
+.metric-line-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(82, 101, 143, .3);
+  box-shadow: 0 13px 28px rgba(51, 58, 86, .09);
+}
+
+.stats article {
+  animation: stat-pop 460ms var(--motion-ease) both;
+}
+
+.stats article:nth-child(2) { animation-delay: 60ms; }
+.stats article:nth-child(3) { animation-delay: 120ms; }
+.stats article:nth-child(4) { animation-delay: 180ms; }
+
+tbody tr {
+  transition:
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+tbody tr:hover {
+  transform: translateX(2px);
+}
+
+.order-group {
+  animation: card-enter 380ms var(--motion-ease) both;
+}
+
+.order-group:nth-child(2) { animation-delay: 45ms; }
+.order-group:nth-child(3) { animation-delay: 90ms; }
+.order-group:nth-child(4) { animation-delay: 135ms; }
+.order-group:nth-child(n + 5) { animation-delay: 170ms; }
+
+/* Data visualisations */
+.analytics-bar {
+  transform-origin: bottom;
+  animation: bar-grow 620ms var(--motion-ease) both;
+}
+
+.analytics-day:nth-child(2n) .analytics-bar { animation-delay: 35ms; }
+.analytics-day:nth-child(3n) .analytics-bar { animation-delay: 70ms; }
+
+.finance-payout-track i {
+  transform-origin: left;
+  animation: progress-grow 700ms var(--motion-ease) both;
+}
+
+.metric-line {
+  animation: chart-line-draw 900ms var(--motion-ease) both;
+}
+
+.metric-point {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: point-pop 320ms 520ms var(--motion-ease) both;
+}
+
+/* Status, feedback, and overlays */
+.dot.online {
+  animation: online-breathe 2.4s ease-in-out infinite;
+}
+
+.toast {
+  animation: toast-in 360ms var(--motion-ease) both;
+}
+
+.page-status {
+  animation: notice-in 300ms var(--motion-ease) both;
+}
+
+.modal-backdrop,
+.barcode-backdrop {
+  animation: backdrop-in 180ms ease both;
+}
+
+.modal-card,
+.barcode-modal {
+  animation: modal-in 320ms var(--motion-ease) both;
+}
+
+.suggestions,
+.manual-order-suggestions,
+.metric-tooltip {
+  transform-origin: top;
+  animation: popover-in 200ms var(--motion-ease) both;
+}
+
+.printer-queue-fab {
+  animation: fab-arrive 520ms 180ms var(--motion-ease) both;
+}
+
+@keyframes view-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes section-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stat-pop {
+  from { opacity: 0; transform: translateY(12px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hero-glint {
+  from { transform: rotate(18deg) translateX(-180%); }
+  to { transform: rotate(18deg) translateX(430%); }
+}
+
+@keyframes bar-grow {
+  from { opacity: .45; transform: scaleY(.04); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes progress-grow {
+  from { transform: scaleX(.03); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes chart-line-draw {
+  from { stroke-dasharray: 1000; stroke-dashoffset: 1000; opacity: .25; }
+  to { stroke-dasharray: 1000; stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes point-pop {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes online-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(109, 191, 146, .18); }
+  50% { box-shadow: 0 0 0 6px rgba(109, 191, 146, .07); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(22px) scale(.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes notice-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(18px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fab-arrive {
+  from { opacity: 0; transform: translateY(18px) scale(.84); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: .01ms !important;
+  }
+
+  .hero::after { display: none; }
+}

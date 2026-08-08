@@ -8,8 +8,10 @@ require __DIR__ . '/src/Database.php';
 header('Content-Type: text/plain; charset=utf-8');
 try {
     $mysql = new PDO(sprintf('mysql:host=%s;port=%d;charset=utf8mb4',$config['mysql']['host'],$config['mysql']['port']),$config['mysql']['username'],$config['mysql']['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
-    $schema = file_get_contents(__DIR__ . '/database/schema.sql');
-    foreach (array_filter(array_map('trim', preg_split('/;\s*(?:\r?\n|$)/', $schema))) as $statement) $mysql->exec($statement);
+    foreach (['schema.sql','shopee_shop_stats_seed.sql','shopee_shop_stats_daily_seed.sql'] as $sqlFile) {
+        $sql = file_get_contents(__DIR__ . '/database/' . $sqlFile);
+        foreach (array_filter(array_map('trim', preg_split('/;\s*(?:\r?\n|$)/', (string)$sql))) as $statement) $mysql->exec($statement);
+    }
     $db = Database::mysql($config['mysql']);
     echo "Paperbell Web siap.\n";
     echo "Database MySQL: {$config['mysql']['database']}\n";
