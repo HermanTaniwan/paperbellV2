@@ -486,11 +486,11 @@
   .labels-list table > tr,
   .labels-list tbody tr {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: 28px minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "check order status"
-      "check resi pdf"
-      "actions actions actions";
+      "check order qty status"
+      "check resi resi pdf"
+      "actions actions actions actions";
     gap: 5px 8px;
     align-items: start;
     padding: 12px;
@@ -526,12 +526,13 @@
 
   .labels-list table > tr > td:nth-child(1), .labels-list tbody td:nth-child(1) { grid-area: check; padding-top: 2px; }
   .labels-list table > tr > td:nth-child(2), .labels-list tbody td:nth-child(2) { grid-area: order; min-width: 0; }
-  .labels-list table > tr > td:nth-child(3), .labels-list tbody td:nth-child(3) { grid-area: resi; min-width: 0; }
-  .labels-list table > tr > td:nth-child(4),
-  .labels-list tbody td:nth-child(4) { display: none; }
-  .labels-list table > tr > td:nth-child(5), .labels-list tbody td:nth-child(5) { grid-area: pdf; justify-self: end; }
-  .labels-list table > tr > td:nth-child(6), .labels-list tbody td:nth-child(6) { grid-area: status; }
-  .labels-list table > tr > td:nth-child(7), .labels-list tbody td:nth-child(7) { grid-area: actions; }
+  .labels-list table > tr > td:nth-child(3), .labels-list tbody td:nth-child(3) { grid-area: qty; }
+  .labels-list table > tr > td:nth-child(4), .labels-list tbody td:nth-child(4) { grid-area: resi; min-width: 0; }
+  .labels-list table > tr > td:nth-child(5),
+  .labels-list tbody td:nth-child(5) { display: none; }
+  .labels-list table > tr > td:nth-child(6), .labels-list tbody td:nth-child(6) { grid-area: pdf; justify-self: end; }
+  .labels-list table > tr > td:nth-child(7), .labels-list tbody td:nth-child(7) { grid-area: status; }
+  .labels-list table > tr > td:nth-child(8), .labels-list tbody td:nth-child(8) { grid-area: actions; }
 
   .labels-list tbody td:nth-child(2) b,
   .labels-list .tracking-number {
@@ -541,11 +542,18 @@
     white-space: nowrap;
   }
 
-  .labels-list table > tr > td:nth-child(5) .link,
-  .labels-list tbody td:nth-child(5) .link {
+  .labels-list table > tr > td:nth-child(6) .link,
+  .labels-list tbody td:nth-child(6) .link {
     min-height: 28px;
     padding: 4px 6px;
     font-size: 9px;
+  }
+
+  .labels-list .label-item-qty::before {
+    content: "Item: ";
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 600;
   }
 
   .labels-list td.actions {

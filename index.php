@@ -720,6 +720,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <input type="checkbox" @change="selectPage($event.target.checked)">
 </th>
 <th>Order</th>
+<th>Jumlah Item</th>
 <th>No. Resi</th>
 <th>Dibuat</th>
 <th>PDF</th>
@@ -729,10 +730,10 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </thead>
 <tbody is="vue:transition-group" name="delete-list">
 <tr v-if="loading" key="labels-loading" class="labels-loading-row">
-<td colspan="7" class="empty">Memuat label…</td>
+<td colspan="8" class="empty">Memuat label…</td>
 </tr>
 <tr v-else-if="!pageData.items.length" key="labels-empty" class="labels-empty-row">
-<td colspan="7" class="empty">{{filter==='unprinted'?'Tidak ada resi yang belum dicetak.':filter==='printed'?'Belum ada resi yang sudah dicetak.':filter==='cancelled'?'Tidak ada resi yang dibatalkan.':'Tidak ada resi yang tersedia.'}}</td>
+<td colspan="8" class="empty">{{filter==='unprinted'?'Tidak ada resi yang belum dicetak.':filter==='printed'?'Belum ada resi yang sudah dicetak.':filter==='cancelled'?'Tidak ada resi yang dibatalkan.':'Tidak ada resi yang tersedia.'}}</td>
 </tr>
 <tr v-for="row in pageData.items" :key="row.order_sn" :class="{'is-status-changing':row.statusChanging,'is-previewing':labelPreview?.order_sn===row.order_sn}" @click="openLabelRow(row,$event)">
 <td>
@@ -742,6 +743,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
 </td>
+<td class="label-item-qty"><b>{{number(row.item_qty)}}</b><small>pcs</small></td>
 <td><b class="tracking-number">{{row.tracking_number||'Belum tersedia'}}</b><small v-if="!row.tracking_number" class="badge amber">Nomor resi belum tersedia</small></td>
 <td>{{row.createdText}}</td>
 <td>

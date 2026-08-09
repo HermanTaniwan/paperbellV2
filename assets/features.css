@@ -80,6 +80,7 @@
 .label-global-printer select{min-width:210px;height:36px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);padding:0 9px;font-size:10px}
 .label-toolbar-button{padding:8px 12px;border-radius:9px;font-size:11px;line-height:1.2;white-space:nowrap}
 .tracking-number{font-size:10px;overflow-wrap:anywhere}
+.label-item-qty b{font-size:13px}.label-item-qty small{margin-left:3px;color:var(--muted);font-size:9px}
 @media(max-width:700px){.label-global-printer{width:100%}.label-global-printer select{flex:1;min-width:0}}
 .order-tracking-number{margin-top:5px!important;color:var(--green)!important}
 .order-tracking-number b{font-size:10px}
