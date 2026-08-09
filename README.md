@@ -59,6 +59,8 @@ Random Pages dan pembacaan XLSX memakai Python host. Path default sudah diarahka
 
 Pada detail order, setiap item memiliki **Pengaturan cetak item** untuk memilih range halaman, semua/ganjil/genap, simplex/duplex, ukuran kertas, copies total, dan printer tujuan. Nilai awal mengikuti mapping produk × qty order dan dapat dioverride sebelum cetak per item maupun cetak seluruh order. Seperti desktop, ganjil/genap selalu memakai simplex; B5 memakai aturan printer khusus.
 
+Untuk cetak produk melalui Brother, print worker menyelaraskan ukuran kertas driver Windows dengan ukuran job A4/A5/A6/B5 sebelum mengirim ke Tray 1, lalu mengembalikan konfigurasi driver sebelumnya. Resi Brother tetap memakai A6 melalui MP Tray.
+
 Login web saat ini nonaktif. Untuk mengaktifkannya kembali, set `PAPERBELL_AUTH_ENABLED=true`, lalu atur `PAPERBELL_WEB_USER` dan `PAPERBELL_WEB_PASSWORD`. Konfigurasi database dan path ada di `config.php`.
 
 Paperbell memakai MariaDB/MySQL XAMPP standar di port `3306`. Database `paperbell` berada bersama database XAMPP lain, sedangkan backup migrasi dari server lama `3307` disimpan di `storage/backups`. File mapping produk tersimpan di tabel `data_mappings` dan `mapping_aliases`.

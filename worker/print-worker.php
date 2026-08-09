@@ -58,6 +58,58 @@ function printerSpoolerJobIds(string $printer): array
     return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
 }
 
+function powershellEncoded(string $script, string $failureMessage): string
+{
+    $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
+    return runProcess([
+        'powershell.exe',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-EncodedCommand',
+        $encoded,
+    ], $failureMessage);
+}
+
+function paperSizeFromPrintSettings(string $settings): ?string
+{
+    if (!preg_match('/(?:^|,)paper=(A4|A5|A6|B5)(?:,|$)/i', $settings, $match)) return null;
+    return strtoupper($match[1]);
+}
+
+function printerPaperSize(string $printer): string
+{
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); (Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString()";
+    return trim(powershellEncoded($script, 'Konfigurasi ukuran kertas printer tidak dapat dibaca.'));
+}
+
+function setPrinterPaperSize(string $printer, string $paper): void
+{
+    if (!in_array($paper, ['A4', 'A5', 'A6', 'B5'], true)) {
+        throw new InvalidArgumentException('Ukuran kertas printer tidak didukung: ' . $paper);
+    }
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); Set-PrintConfiguration -PrinterName \$p -PaperSize {$paper} -ErrorAction Stop; \$actual=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); if (\$actual -ne '{$paper}') { throw \"Ukuran printer tetap \$actual, bukan {$paper}.\" }";
+    powershellEncoded($script, 'Konfigurasi ukuran kertas printer tidak dapat diubah.');
+}
+
+function applyBrotherProductPaperSize(array $job, string $printSettings): ?string
+{
+    if (($job['job_type'] ?? '') !== 'product' || stripos((string)($job['printer'] ?? ''), 'Brother') === false) return null;
+    $paper = paperSizeFromPrintSettings($printSettings);
+    if ($paper === null) return null;
+
+    $printer = (string)$job['printer'];
+    $previous = printerPaperSize($printer);
+    if (strcasecmp($previous, $paper) !== 0) {
+        setPrinterPaperSize($printer, $paper);
+        logLine("Job #{$job['id']} ukuran driver Brother diubah sementara: {$previous} -> {$paper}");
+    }
+    return $previous;
+}
+
 function prepareLabelPdf(array $job): string
 {
     global $root, $config;
@@ -94,6 +146,7 @@ $db = connectDatabase();
 do {
     $job = null;
     $preparedLabelPath = null;
+    $temporaryPaperSize = null;
     try {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
@@ -119,6 +172,8 @@ do {
             $printPath = $preparedLabelPath;
             $printSettings = labelPrintSettings((string)$job['printer']);
         }
+
+        $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
 
         try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
         runProcess([
@@ -197,6 +252,17 @@ do {
         }
         logLine('ERROR: ' . $e->getMessage());
     } finally {
+        if ($temporaryPaperSize !== null && is_array($job) && isset($job['printer'])) {
+            try {
+                $currentPaperSize = printerPaperSize((string)$job['printer']);
+                if (strcasecmp($currentPaperSize, $temporaryPaperSize) !== 0) {
+                    setPrinterPaperSize((string)$job['printer'], $temporaryPaperSize);
+                    logLine("Job #{$job['id']} ukuran driver Brother dikembalikan: {$currentPaperSize} -> {$temporaryPaperSize}");
+                }
+            } catch (Throwable $restoreError) {
+                logLine('Ukuran driver Brother gagal dikembalikan: ' . $restoreError->getMessage());
+            }
+        }
         if ($preparedLabelPath !== null && is_file($preparedLabelPath)) @unlink($preparedLabelPath);
     }
     if ($once) break;

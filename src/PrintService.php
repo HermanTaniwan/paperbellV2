@@ -234,7 +234,7 @@ final class PrintService
 
     private function productSettings(array $mapping,int $copies,array $options=[]): string
     {
-        $o=$this->normalizePrintOptions($mapping,$options);$from=$o['page_from'];$to=$o['page_to'];$range=$to<=0?"{$from}-":($to===$from?(string)$from:"{$from}-{$to}");$parts=[$range];if($o['parity']!=='all')$parts[]=$o['parity'];$parts[]=$o['duplex'];$parts[]='noscale';$printer=strtoupper((string)$mapping['printer']);if(str_contains($printer,'WF'))$parts[]='bin=7';if(in_array($o['paper'],['A5','A6'],true))$parts[]='paper='.$o['paper'];elseif($o['paper']==='B5')$parts[]=str_contains($printer,'BROTHER')?'paper=B5':'paperkind=13';if($copies>1)$parts[]="{$copies}x";return implode(',',$parts);
+        $o=$this->normalizePrintOptions($mapping,$options);$from=$o['page_from'];$to=$o['page_to'];$range=$to<=0?"{$from}-":($to===$from?(string)$from:"{$from}-{$to}");$parts=[$range];if($o['parity']!=='all')$parts[]=$o['parity'];$parts[]=$o['duplex'];$parts[]='noscale';$printer=strtoupper((string)$mapping['printer']);if(str_contains($printer,'WF'))$parts[]='bin=7';if(in_array($o['paper'],['A4','A5','A6'],true))$parts[]='paper='.$o['paper'];elseif($o['paper']==='B5')$parts[]=str_contains($printer,'BROTHER')?'paper=B5':'paperkind=13';if($copies>1)$parts[]="{$copies}x";return implode(',',$parts);
     }
 
     private function labelSettings(string $printer): string
