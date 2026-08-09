@@ -58,8 +58,23 @@ CREATE TABLE IF NOT EXISTS print_jobs (
   print_settings VARCHAR(500) NOT NULL, copies INT NOT NULL DEFAULT 1,
   status VARCHAR(30) NOT NULL DEFAULT 'queued', message TEXT NOT NULL, error TEXT NOT NULL,
   created_by VARCHAR(100) NOT NULL DEFAULT '', created_at BIGINT NOT NULL, started_at BIGINT NULL,
-  completed_at BIGINT NULL, attempts INT NOT NULL DEFAULT 0,
+  completed_at BIGINT NULL, submitted_at BIGINT NULL, spooler_job_id INT NULL, attempts INT NOT NULL DEFAULT 0,
   INDEX ix_print_jobs_status(status,id), INDEX ix_print_jobs_order(order_sn)
+) ENGINE=InnoDB;
+ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS submitted_at BIGINT NULL AFTER completed_at;
+ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS spooler_job_id INT NULL AFTER submitted_at;
+
+CREATE TABLE IF NOT EXISTS printer_incidents (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  incident_key CHAR(64) NOT NULL, active_key CHAR(64) NULL,
+  incident_type VARCHAR(50) NOT NULL, severity VARCHAR(20) NOT NULL DEFAULT 'error',
+  printer VARCHAR(255) NOT NULL DEFAULT '', print_job_id BIGINT NULL, spooler_job_id INT NULL,
+  title VARCHAR(255) NOT NULL, technical_message TEXT NOT NULL, guidance TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending', observed_count INT NOT NULL DEFAULT 1,
+  healthy_count INT NOT NULL DEFAULT 0, acknowledged_at BIGINT NULL, acknowledged_by VARCHAR(100) NOT NULL DEFAULT '',
+  host_notified_at BIGINT NULL, first_seen_at BIGINT NOT NULL, last_seen_at BIGINT NOT NULL, resolved_at BIGINT NULL,
+  UNIQUE KEY uq_printer_incident_active(active_key),
+  INDEX ix_printer_incidents_status(status,last_seen_at), INDEX ix_printer_incidents_job(print_job_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS manual_pdfs (
@@ -121,6 +136,107 @@ CREATE TABLE IF NOT EXISTS shopee_escrow_details (
   INDEX ix_shopee_escrow_synced(synced_at)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS shopee_shop_stats_monthly (
+  month_start DATE PRIMARY KEY,
+  month_end DATE NOT NULL,
+  order_status VARCHAR(50) NOT NULL DEFAULT 'Pesanan Dibuat',
+  source_file VARCHAR(255) NOT NULL,
+  sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  orders_count INT NOT NULL DEFAULT 0,
+  aov DECIMAL(18,2) NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  visitors INT NOT NULL DEFAULT 0,
+  conversion_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  cancelled_orders INT NOT NULL DEFAULT 0,
+  cancelled_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  returned_orders INT NOT NULL DEFAULT 0,
+  returned_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  buyers INT NOT NULL DEFAULT 0,
+  new_buyers INT NOT NULL DEFAULT 0,
+  existing_buyers INT NOT NULL DEFAULT 0,
+  potential_buyers INT NOT NULL DEFAULT 0,
+  repeat_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  product_page_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  live_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  video_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  affiliate_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  ads_attributed_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  ads_name VARCHAR(255) NOT NULL DEFAULT '',
+  ads_spend DECIMAL(18,2) NOT NULL DEFAULT 0,
+  ads_roas DECIMAL(12,4) NOT NULL DEFAULT 0,
+  ads_impressions INT NOT NULL DEFAULT 0,
+  ads_orders DECIMAL(12,2) NOT NULL DEFAULT 0,
+  ads_conversion_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  imported_at BIGINT NOT NULL,
+  INDEX ix_shopee_shop_stats_period(month_end)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS shopee_shop_stats_daily (
+  stat_date DATE PRIMARY KEY,
+  month_start DATE NOT NULL,
+  source_file VARCHAR(255) NOT NULL,
+  sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  orders_count INT NOT NULL DEFAULT 0,
+  aov DECIMAL(18,2) NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  visitors INT NOT NULL DEFAULT 0,
+  conversion_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  cancelled_orders INT NOT NULL DEFAULT 0,
+  cancelled_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  returned_orders INT NOT NULL DEFAULT 0,
+  returned_sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  buyers INT NOT NULL DEFAULT 0,
+  new_buyers INT NOT NULL DEFAULT 0,
+  existing_buyers INT NOT NULL DEFAULT 0,
+  potential_buyers INT NOT NULL DEFAULT 0,
+  repeat_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  imported_at BIGINT NOT NULL,
+  INDEX ix_shopee_shop_daily_month(month_start),
+  CONSTRAINT fk_shopee_shop_daily_month FOREIGN KEY(month_start) REFERENCES shopee_shop_stats_monthly(month_start) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS shopee_shop_stats_products (
+  month_start DATE NOT NULL,
+  product_code VARCHAR(50) NOT NULL,
+  product_name VARCHAR(255) NOT NULL,
+  sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  sales_share DECIMAL(9,6) NOT NULL DEFAULT 0,
+  orders_attributed DECIMAL(12,2) NOT NULL DEFAULT 0,
+  units INT NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  conversion_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  aov DECIMAL(18,2) NOT NULL DEFAULT 0,
+  rank_order INT NOT NULL DEFAULT 0,
+  PRIMARY KEY(month_start,product_code),
+  INDEX ix_shopee_shop_products_rank(month_start,rank_order),
+  CONSTRAINT fk_shopee_shop_products_month FOREIGN KEY(month_start) REFERENCES shopee_shop_stats_monthly(month_start) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS shopee_shop_stats_traffic_sources (
+  month_start DATE NOT NULL,
+  source_name VARCHAR(100) NOT NULL,
+  sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  sales_share DECIMAL(9,6) NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  orders_attributed DECIMAL(12,2) NOT NULL DEFAULT 0,
+  conversion_rate DECIMAL(9,6) NOT NULL DEFAULT 0,
+  aov DECIMAL(18,2) NOT NULL DEFAULT 0,
+  rank_order INT NOT NULL DEFAULT 0,
+  PRIMARY KEY(month_start,source_name),
+  INDEX ix_shopee_shop_traffic_rank(month_start,rank_order),
+  CONSTRAINT fk_shopee_shop_traffic_month FOREIGN KEY(month_start) REFERENCES shopee_shop_stats_monthly(month_start) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS shopee_shop_stats_attribution (
+  month_start DATE NOT NULL,
+  channel_name VARCHAR(100) NOT NULL,
+  sales DECIMAL(18,2) NOT NULL DEFAULT 0,
+  rank_order INT NOT NULL DEFAULT 0,
+  PRIMARY KEY(month_start,channel_name),
+  INDEX ix_shopee_shop_attribution_rank(month_start,rank_order),
+  CONSTRAINT fk_shopee_shop_attribution_month FOREIGN KEY(month_start) REFERENCES shopee_shop_stats_monthly(month_start) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS sync_runs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   provider VARCHAR(30) NOT NULL,
@@ -131,4 +247,12 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   started_at BIGINT NOT NULL,
   completed_at BIGINT NULL,
   INDEX ix_sync_runs_started(started_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS label_fetch_jobs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, order_sn VARCHAR(100) NOT NULL, provider VARCHAR(30) NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'queued', message TEXT NOT NULL, error TEXT NOT NULL,
+  created_by VARCHAR(100) NOT NULL DEFAULT '', created_at BIGINT NOT NULL, available_at BIGINT NOT NULL,
+  started_at BIGINT NULL, completed_at BIGINT NULL, attempts INT NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_label_fetch_order(order_sn), INDEX ix_label_fetch_queue(status,available_at,id)
 ) ENGINE=InnoDB;
