@@ -128,16 +128,78 @@ function prepareLabelPdf(array $job): string
     return $output;
 }
 
+function applyLabelPaperSize(array $job): ?string
+{
+    global $root;
+    if (($job['job_type'] ?? '') !== 'label') return null;
+
+    $printer = (string)$job['printer'];
+    $backup = $root . '/storage/print-labels/print-ticket-job-' . (int)$job['id'] . '.xml';
+    $replacement = '<psf:Feature name="psk:PageMediaSize"><psf:Option name="psk:CustomMediaSize"><psf:ScoredProperty name="psk:MediaSizeWidth"><psf:Value xsi:type="xsd:integer">105000</psf:Value></psf:ScoredProperty><psf:ScoredProperty name="psk:MediaSizeHeight"><psf:Value xsi:type="xsd:integer">182000</psf:Value></psf:ScoredProperty></psf:Option></psf:Feature>';
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $backup64 = base64_encode(mb_convert_encoding($backup, 'UTF-16LE', 'UTF-8'));
+    $replacement64 = base64_encode(mb_convert_encoding($replacement, 'UTF-16LE', 'UTF-8'));
+    $script = strtr(<<<'POWERSHELL'
+$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__PRINTER64__'))
+$backup=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__BACKUP64__'))
+$replacement=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__REPLACEMENT64__'))
+$cfg=Get-PrintConfiguration -PrinterName $p -ErrorAction Stop
+[IO.File]::WriteAllText($backup,$cfg.PrintTicketXml,[Text.UTF8Encoding]::new($false))
+try {
+    $custom=[regex]::Replace($cfg.PrintTicketXml,'<psf:Feature name="psk:PageMediaSize">.*?</psf:Feature>',$replacement,[Text.RegularExpressions.RegexOptions]::Singleline)
+    if ($custom -eq $cfg.PrintTicketXml) { throw 'Fitur PageMediaSize tidak ditemukan.' }
+    Set-PrintConfiguration -PrinterName $p -PrintTicketXml $custom -ErrorAction Stop
+    [xml]$actual=(Get-PrintConfiguration -PrinterName $p -ErrorAction Stop).PrintTicketXml
+    $ns=[Xml.XmlNamespaceManager]::new($actual.NameTable)
+    $ns.AddNamespace('psf','http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework')
+    $w=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeWidth']/psf:Value",$ns)
+    $h=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeHeight']/psf:Value",$ns)
+    if ($null -eq $w -or $null -eq $h -or $w.InnerText -ne '105000' -or $h.InnerText -ne '182000') {
+        throw 'Driver menolak ukuran custom 105 x 182 mm.'
+    }
+} catch {
+    Set-PrintConfiguration -PrinterName $p -PrintTicketXml $cfg.PrintTicketXml -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+    throw
+}
+POWERSHELL, [
+        '__PRINTER64__' => $printer64,
+        '__BACKUP64__' => $backup64,
+        '__REPLACEMENT64__' => $replacement64,
+    ]);
+    powershellEncoded($script, 'Ukuran custom 105 x 182 mm tidak dapat diterapkan ke printer label.');
+    logLine("Job #{$job['id']} ukuran driver label diubah sementara ke 105 x 182 mm");
+    return $backup;
+}
+
+function restoreLabelPrintTicket(string $printer, string $backup): void
+{
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $backup64 = base64_encode(mb_convert_encoding($backup, 'UTF-16LE', 'UTF-8'));
+    $script = strtr(<<<'POWERSHELL'
+$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__PRINTER64__'))
+$backup=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__BACKUP64__'))
+if (-not (Test-Path -LiteralPath $backup)) { throw 'Backup PrintTicket tidak ditemukan.' }
+$ticket=[IO.File]::ReadAllText($backup)
+Set-PrintConfiguration -PrinterName $p -PrintTicketXml $ticket -ErrorAction Stop
+Remove-Item -LiteralPath $backup -Force
+POWERSHELL, [
+        '__PRINTER64__' => $printer64,
+        '__BACKUP64__' => $backup64,
+    ]);
+    powershellEncoded($script, 'Konfigurasi printer label sebelumnya tidak dapat dikembalikan.');
+}
+
 function labelPrintSettings(string $printer): string
 {
-    $parts = ['1-', 'simplex', 'noscale'];
+    $parts = ['1-', 'simplex', 'monochrome', 'noscale'];
     if (stripos($printer, 'Brother DCP') !== false) {
         $parts[] = 'bin=258'; // MP Tray, sama dengan aplikasi desktop.
     } elseif (stripos($printer, 'WF') !== false) {
         $parts[] = 'bin=261'; // Rear Paper Feed, sama dengan aplikasi desktop.
     }
-    $parts[] = 'monochrome';
-    $parts[] = 'paper=A6';
+    // Jangan paksa A6: resi sudah disiapkan sebagai 105 x 182 mm dan driver
+    // label memakai ukuran custom yang sama.
     return implode(',', $parts);
 }
 
@@ -147,6 +209,7 @@ do {
     $job = null;
     $preparedLabelPath = null;
     $temporaryPaperSize = null;
+    $temporaryLabelPrintTicket = null;
     try {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
@@ -171,6 +234,7 @@ do {
             $preparedLabelPath = prepareLabelPdf($job);
             $printPath = $preparedLabelPath;
             $printSettings = labelPrintSettings((string)$job['printer']);
+            $temporaryLabelPrintTicket = applyLabelPaperSize($job);
         }
 
         $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
@@ -252,6 +316,14 @@ do {
         }
         logLine('ERROR: ' . $e->getMessage());
     } finally {
+        if ($temporaryLabelPrintTicket !== null && is_array($job) && isset($job['printer'])) {
+            try {
+                restoreLabelPrintTicket((string)$job['printer'], $temporaryLabelPrintTicket);
+                logLine("Job #{$job['id']} konfigurasi driver label sebelumnya dikembalikan");
+            } catch (Throwable $restoreError) {
+                logLine('Konfigurasi driver label gagal dikembalikan: ' . $restoreError->getMessage());
+            }
+        }
         if ($temporaryPaperSize !== null && is_array($job) && isset($job['printer'])) {
             try {
                 $currentPaperSize = printerPaperSize((string)$job['printer']);

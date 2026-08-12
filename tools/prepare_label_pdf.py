@@ -1,50 +1,207 @@
+import io
 import sys
+from pathlib import Path
 
+import pdfplumber
 from pypdf import PdfReader, PdfWriter, Transformation
+from pypdf._page import PageObject
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
 
 
-# Shipping labels are placed on A6 and kept at the top-left, matching the
-# desktop application's layout. 80% keeps the label comfortably inside the
-# printer margins while making text and barcodes noticeably easier to read.
-A6_WIDTH_POINTS = 105 / 25.4 * 72
-A6_HEIGHT_POINTS = 148 / 25.4 * 72
+MM_TO_POINTS = 72 / 25.4
+PAPER_WIDTH_POINTS = 105 * MM_TO_POINTS
+PAPER_HEIGHT_POINTS = 182 * MM_TO_POINTS
+REFERENCE_A6_HEIGHT_POINTS = 148 * MM_TO_POINTS
 LABEL_SCALE = 0.72
-LABEL_RIGHT_SHIFT_POINTS = 5 / 25.4 * 72
+LABEL_RIGHT_SHIFT_POINTS = 5 * MM_TO_POINTS
+TOP_MARGIN_POINTS = 2 * MM_TO_POINTS
+PAGE_GAP_POINTS = 1.5 * MM_TO_POINTS
+PROMO_BOTTOM_POINTS = 2 * MM_TO_POINTS
+PROMO_GAP_POINTS = 0
+CONTENT_PADDING_POINTS = 0.25 * MM_TO_POINTS
+CONTINUATION_NOISE_LIMIT_POINTS = 7 * MM_TO_POINTS
+PROMO_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "label-unboxing.jpeg"
+
+
+def color_is_white(color: object) -> bool:
+    if color is None:
+        return False
+    if isinstance(color, (int, float)):
+        return float(color) >= 0.98
+    if isinstance(color, (list, tuple)):
+        values = [float(value) for value in color]
+        if len(values) == 4:  # CMYK white contains no ink.
+            return all(value <= 0.02 for value in values)
+        return bool(values) and all(value >= 0.98 for value in values)
+    return False
+
+
+def object_is_visible(object_type: str, item: dict) -> bool:
+    if object_type in ("char", "image"):
+        return True
+    if object_type == "line":
+        return item.get("stroke", True) is not False and not color_is_white(
+            item.get("stroking_color")
+        )
+    if object_type in ("rect", "curve"):
+        fill_visible = item.get("fill", False) and not color_is_white(
+            item.get("non_stroking_color")
+        )
+        stroke_visible = item.get("stroke", False) and not color_is_white(
+            item.get("stroking_color")
+        )
+        return fill_visible or stroke_visible
+    return True
+
+
+def page_content_height(page: pdfplumber.page.Page, page_height: float) -> float:
+    """Return the visible content height measured down from the top edge."""
+    bottoms = []
+    for object_type in ("char", "line", "rect", "curve", "image"):
+        for item in page.objects.get(object_type, []):
+            if not object_is_visible(object_type, item):
+                continue
+            bottom = item.get("bottom")
+            if bottom is not None:
+                bottoms.append(float(bottom))
+    if not bottoms:
+        return 0
+    return min(page_height, max(bottoms) + CONTENT_PADDING_POINTS)
+
+
+def top_crop(source_page: PageObject, crop_height: float) -> PageObject:
+    """Create a page containing only the top crop, preserving vector quality."""
+    source_width = float(source_page.mediabox.width)
+    source_height = float(source_page.mediabox.height)
+    cropped_page = PageObject.create_blank_page(width=source_width, height=crop_height)
+    cropped_page.merge_transformed_page(
+        source_page,
+        Transformation().translate(0, crop_height - source_height),
+        expand=False,
+    )
+    return cropped_page
+
+
+def promo_image_and_aspect() -> tuple[ImageReader, float]:
+    if not PROMO_IMAGE.is_file():
+        raise RuntimeError(f"Gambar pemberitahuan unboxing tidak ditemukan: {PROMO_IMAGE}")
+
+    image = ImageReader(str(PROMO_IMAGE))
+    image_width, image_height = image.getSize()
+    if image_width <= 0 or image_height <= 0:
+        raise RuntimeError("Ukuran gambar pemberitahuan unboxing tidak valid")
+
+    return image, image_height / image_width
+
+
+def promo_overlay(
+    image: ImageReader,
+    rendered_x: float,
+    rendered_y: float,
+    rendered_width: float,
+    rendered_height: float,
+) -> PageObject:
+    stream = io.BytesIO()
+    overlay_canvas = canvas.Canvas(stream, pagesize=(PAPER_WIDTH_POINTS, PAPER_HEIGHT_POINTS))
+    overlay_canvas.drawImage(
+        image,
+        rendered_x,
+        rendered_y,
+        width=rendered_width,
+        height=rendered_height,
+        preserveAspectRatio=True,
+        mask="auto",
+    )
+    overlay_canvas.save()
+    stream.seek(0)
+    return PdfReader(stream).pages[0]
 
 
 def prepare_label(source_path: str, output_path: str) -> None:
     reader = PdfReader(source_path)
     if reader.is_encrypted:
         raise RuntimeError("PDF label terenkripsi tidak didukung")
-
-    writer = PdfWriter()
-    for source_page in reader.pages:
-        if source_page.rotation:
-            source_page.transfer_rotation_to_content()
-
-        source_width = float(source_page.mediabox.width)
-        source_height = float(source_page.mediabox.height)
-        if source_width <= 0 or source_height <= 0:
-            raise RuntimeError("Ukuran halaman PDF label tidak valid")
-
-        fit = min(A6_WIDTH_POINTS / source_width, A6_HEIGHT_POINTS / source_height)
-        scale = fit * LABEL_SCALE
-        rendered_width = source_width * scale
-        rendered_height = source_height * scale
-        # Most desktop printers have an unprintable strip along the left edge.
-        # Keep the label near the top, but move it 5 mm right so barcodes and
-        # text do not start at x=0. Clamp the shift for unusually wide PDFs.
-        horizontal_space = max(0, A6_WIDTH_POINTS - rendered_width)
-        left_offset = min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
-        top_offset = A6_HEIGHT_POINTS - rendered_height
-
-        target_page = writer.add_blank_page(A6_WIDTH_POINTS, A6_HEIGHT_POINTS)
-        transform = Transformation().scale(scale, scale).translate(left_offset, top_offset)
-        target_page.merge_transformed_page(source_page, transform, expand=False)
-
-    if not writer.pages:
+    if not reader.pages:
         raise RuntimeError("PDF label tidak memiliki halaman")
+    if len(reader.pages) > 2:
+        raise RuntimeError("PDF label lebih dari 2 halaman; tidak aman digabung otomatis")
 
+    promo_image, promo_aspect = promo_image_and_aspect()
+    crop_heights = []
+    with pdfplumber.open(source_path) as layout_pdf:
+        for index, source_page in enumerate(reader.pages):
+            if source_page.rotation:
+                # Rotated marketplace labels are uncommon. Keeping the complete
+                # page avoids accidentally clipping content in a different axis.
+                source_page.transfer_rotation_to_content()
+                content_height = float(source_page.mediabox.height)
+            else:
+                source_height = float(source_page.mediabox.height)
+                content_height = page_content_height(layout_pdf.pages[index], source_height)
+
+            if index > 0 and content_height <= CONTINUATION_NOISE_LIMIT_POINTS:
+                continue
+            crop_heights.append((source_page, max(content_height, CONTENT_PADDING_POINTS)))
+
+    if not crop_heights:
+        raise RuntimeError("PDF label tidak memiliki konten yang dapat dicetak")
+
+    max_source_width = max(float(page.mediabox.width) for page, _ in crop_heights)
+    max_source_height = max(float(page.mediabox.height) for page, _ in crop_heights)
+    reference_fit = min(
+        PAPER_WIDTH_POINTS / max_source_width,
+        REFERENCE_A6_HEIGHT_POINTS / max_source_height,
+    )
+    base_scale = reference_fit * LABEL_SCALE
+
+    label_top = PAPER_HEIGHT_POINTS - TOP_MARGIN_POINTS
+    gaps_height = PAGE_GAP_POINTS * max(0, len(crop_heights) - 1)
+    available_combined_height = label_top - PROMO_BOTTOM_POINTS - PROMO_GAP_POINTS - gaps_height
+    if available_combined_height <= 0:
+        raise RuntimeError("Ruang resi habis oleh gambar pemberitahuan unboxing")
+
+    total_source_height = sum(height for _, height in crop_heights)
+    # Banner mengikuti lebar resi setelah diperkecil. Karena tinggi banner juga
+    # ikut berubah bersama skala, masukkan rasio banner dalam perhitungan fit.
+    combined_source_height = total_source_height + (max_source_width * promo_aspect)
+    scale = min(base_scale, available_combined_height / combined_source_height)
+    if scale <= 0:
+        raise RuntimeError("Skala gabungan resi tidak valid")
+
+    output_page = PageObject.create_blank_page(
+        width=PAPER_WIDTH_POINTS,
+        height=PAPER_HEIGHT_POINTS,
+    )
+    cursor_top = label_top
+    for index, (source_page, crop_height) in enumerate(crop_heights):
+        cropped_page = top_crop(source_page, crop_height)
+        rendered_width = float(cropped_page.mediabox.width) * scale
+        rendered_height = crop_height * scale
+        horizontal_space = max(0, PAPER_WIDTH_POINTS - rendered_width)
+        left_offset = min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
+        bottom_offset = cursor_top - rendered_height
+        output_page.merge_transformed_page(
+            cropped_page,
+            Transformation().scale(scale, scale).translate(left_offset, bottom_offset),
+            expand=False,
+        )
+        cursor_top = bottom_offset
+        if index < len(crop_heights) - 1:
+            cursor_top -= PAGE_GAP_POINTS
+
+    promo_width = max_source_width * scale
+    promo_height = promo_width * promo_aspect
+    promo_x = min(LABEL_RIGHT_SHIFT_POINTS, max(0, PAPER_WIDTH_POINTS - promo_width))
+    promo_y = cursor_top - PROMO_GAP_POINTS - promo_height
+    if promo_y < PROMO_BOTTOM_POINTS - 0.1:
+        raise RuntimeError("Gabungan resi dan gambar melebihi tinggi kertas 182 mm")
+    promo_y = max(PROMO_BOTTOM_POINTS, promo_y)
+    output_page.merge_page(
+        promo_overlay(promo_image, promo_x, promo_y, promo_width, promo_height)
+    )
+    writer = PdfWriter()
+    writer.add_page(output_page)
     with open(output_path, "wb") as output:
         writer.write(output)
 

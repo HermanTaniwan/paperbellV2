@@ -242,7 +242,6 @@ final class PrintService
         $parts=['1-','simplex','noscale'];
         if(stripos($printer,'Brother DCP')!==false)$parts[]='bin=258';
         elseif(stripos($printer,'WF')!==false)$parts[]='bin=261';
-        $parts[]='monochrome';$parts[]='paper=A6';
         return implode(',',$parts);
     }
 
