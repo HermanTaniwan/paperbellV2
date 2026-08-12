@@ -15,7 +15,7 @@ $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
 $watchdogTrigger = New-ScheduledTaskTrigger `
     -Once `
     -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5) `
+    -RepetitionInterval (New-TimeSpan -Minutes 1) `
     -RepetitionDuration (New-TimeSpan -Days 3650)
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet `
@@ -31,7 +31,7 @@ Register-ScheduledTask `
     -Trigger @($logonTrigger, $watchdogTrigger) `
     -Principal $principal `
     -Settings $settings `
-    -Description 'Menjalankan Paperbell saat login dan memeriksa MariaDB serta worker setiap 5 menit.' `
+    -Description 'Menjalankan Paperbell saat login dan memeriksa MariaDB serta worker setiap 1 menit.' `
     -Force | Out-Null
 
 Start-ScheduledTask -TaskName $taskName

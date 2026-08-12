@@ -151,7 +151,7 @@ final class PrintQueueService
             $guidance=$type==='file_missing'?'Pastikan file PDF masih ada dan storage dapat dibaca, lalu klik Coba lagi.':($type==='sumatra_failed'?'Periksa path SumatraPDF dan printer tujuan, lalu klik Coba lagi.':'Periksa pesan teknis, koneksi printer, dan antrean Windows sebelum mencoba lagi.');
             $signals[]=$this->signal($type,(string)$job['printer'],(int)$job['id'],null,'Job cetak gagal',$message,$guidance);
         }
-        if(!$worker['online'])$signals[]=$this->signal('worker_offline','',null,null,'Print worker tidak aktif','Heartbeat terakhir: '.$worker['text'],'Jalankan kembali task Paperbell Auto Start dan pastikan Apache serta MariaDB aktif.','critical');
+        if(!$worker['online'])$signals[]=$this->signal('worker_offline','',null,null,'Print worker tidak aktif','Heartbeat terakhir: '.$worker['text'],'Paperbell mencoba mengaktifkan worker otomatis setiap 1 menit. Jika pesan ini tetap muncul, periksa task Paperbell Auto Start serta MariaDB.','critical',90);
 
         if($spooler['available']){
             foreach($spooler['printers'] as $printer){

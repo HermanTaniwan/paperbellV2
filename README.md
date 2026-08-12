@@ -16,7 +16,7 @@ Supaya Apache, MySQL, dan print worker otomatis aktif lagi setelah Windows resta
 powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1
 ```
 
-Task **Paperbell Auto Start** berjalan saat pengguna Windows yang memasangnya login. Mode ini diperlukan agar worker dapat memakai printer dan konfigurasi SumatraPDF milik pengguna tersebut.
+Task **Paperbell Auto Start** berjalan saat pengguna Windows yang memasangnya login dan memeriksa ulang worker setiap 1 menit. Mode ini diperlukan agar worker dapat memakai printer dan konfigurasi SumatraPDF milik pengguna tersebut. Alarm worker offline ditahan 90 detik agar watchdog sempat memulihkannya otomatis sebelum meminta tindakan pengguna.
 
 ## Ketahanan MariaDB dan backup
 
