@@ -261,6 +261,8 @@ do {
     $preparedLabelPath = null;
     $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
+    $processingStartedAt = 0.0;
+    $timings = ['prepare' => 0, 'pre_spooler' => 0, 'sumatra' => 0, 'correlate' => 0];
     try {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
@@ -275,6 +277,7 @@ do {
         $claim = $db->prepare("UPDATE print_jobs SET status='processing',message='Mengirim ke printer',started_at=?,attempts=attempts+1 WHERE id=? AND status='queued'");
         $claim->execute([time(), $job['id']]);
         $db->commit();
+        $processingStartedAt = microtime(true);
 
         if (!is_file($sumatra)) throw new RuntimeException('SumatraPDF tidak ditemukan.');
         if (!is_file($job['file_path'])) throw new RuntimeException('File PDF tidak ditemukan: ' . $job['file_path']);
@@ -282,7 +285,9 @@ do {
         $printPath = (string)$job['file_path'];
         $printSettings = (string)$job['print_settings'];
         if ($job['job_type'] === 'label') {
+            $stageStartedAt = microtime(true);
             $preparedLabelPath = prepareLabelPdf($job);
+            $timings['prepare'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
             $printPath = $preparedLabelPath;
             $printSettings = labelPrintSettings((string)$job['printer']);
             $temporaryLabelPrintTicket = applyLabelPaperSize($job);
@@ -290,7 +295,10 @@ do {
 
         $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
 
+        $stageStartedAt = microtime(true);
         try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
+        $timings['pre_spooler'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
+        $stageStartedAt = microtime(true);
         runProcess([
             $sumatra,
             '-print-to',
@@ -298,11 +306,12 @@ do {
             '-print-settings',
             $printSettings,
             '-silent',
-            '-exit-on-print',
             $printPath,
         ], 'Gagal menjalankan SumatraPDF.');
+        $timings['sumatra'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
 
         $spoolerJobId = null;
+        $stageStartedAt = microtime(true);
         for ($spoolerAttempt = 0; $spoolerAttempt < 5 && $spoolerJobId === null; $spoolerAttempt++) {
             try {
                 $spoolerAfter = printerSpoolerJobIds((string)$job['printer']);
@@ -314,6 +323,7 @@ do {
             }
             if ($spoolerJobId === null) usleep(200000);
         }
+        $timings['correlate'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
 
         // Windows now owns the submitted job. Drop the cached spooler snapshot
         // so the web widget can show it on its very next refresh.
@@ -344,7 +354,8 @@ do {
             $mark->execute([time(), $job['order_sn']]);
         }
         $db->commit();
-        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']}");
+        $totalMs = $processingStartedAt > 0 ? (int)round((microtime(true) - $processingStartedAt) * 1000) : 0;
+        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']} [prepare={$timings['prepare']}ms, pre_spooler={$timings['pre_spooler']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
     } catch (Throwable $e) {
         try {
             if ($db->inTransaction()) $db->rollBack();

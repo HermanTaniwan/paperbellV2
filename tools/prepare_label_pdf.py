@@ -1,8 +1,8 @@
 import io
 import sys
 from pathlib import Path
+from typing import Any
 
-import pdfplumber
 from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf._page import PageObject
 from reportlab.lib.utils import ImageReader
@@ -57,7 +57,7 @@ def object_is_visible(object_type: str, item: dict) -> bool:
     return True
 
 
-def page_content_height(page: pdfplumber.page.Page, page_height: float) -> float:
+def page_content_height(page: Any, page_height: float) -> float:
     """Return the visible content height measured down from the top edge."""
     bottoms = []
     for object_type in ("char", "line", "rect", "curve", "image"):
@@ -151,20 +151,31 @@ def prepare_label(
 
     promo_image, promo_aspect = promo_image_and_aspect()
     crop_heights = []
-    with pdfplumber.open(source_path) as layout_pdf:
-        for index, source_page in enumerate(reader.pages):
-            if source_page.rotation:
-                # Rotated marketplace labels are uncommon. Keeping the complete
-                # page avoids accidentally clipping content in a different axis.
-                source_page.transfer_rotation_to_content()
-                content_height = float(source_page.mediabox.height)
-            else:
-                source_height = float(source_page.mediabox.height)
-                content_height = page_content_height(layout_pdf.pages[index], source_height)
+    if len(reader.pages) == 1:
+        # A single-page marketplace label already uses an A6-sized page and
+        # needs no continuation trimming. Avoiding pdfplumber here removes the
+        # dominant startup/parsing cost from the common print path.
+        source_page = reader.pages[0]
+        if source_page.rotation:
+            source_page.transfer_rotation_to_content()
+        crop_heights.append((source_page, float(source_page.mediabox.height)))
+    else:
+        import pdfplumber
 
-            if index > 0 and content_height <= CONTINUATION_NOISE_LIMIT_POINTS:
-                continue
-            crop_heights.append((source_page, max(content_height, CONTENT_PADDING_POINTS)))
+        with pdfplumber.open(source_path) as layout_pdf:
+            for index, source_page in enumerate(reader.pages):
+                if source_page.rotation:
+                    # Rotated marketplace labels are uncommon. Keeping the complete
+                    # page avoids accidentally clipping content in a different axis.
+                    source_page.transfer_rotation_to_content()
+                    content_height = float(source_page.mediabox.height)
+                else:
+                    source_height = float(source_page.mediabox.height)
+                    content_height = page_content_height(layout_pdf.pages[index], source_height)
+
+                if index > 0 and content_height <= CONTINUATION_NOISE_LIMIT_POINTS:
+                    continue
+                crop_heights.append((source_page, max(content_height, CONTENT_PADDING_POINTS)))
 
     if not crop_heights:
         raise RuntimeError("PDF label tidak memiliki konten yang dapat dicetak")
