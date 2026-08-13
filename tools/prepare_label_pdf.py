@@ -1,8 +1,10 @@
 import io
+import math
 import sys
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageChops
 from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf._page import PageObject
 from reportlab.lib.utils import ImageReader
@@ -25,6 +27,7 @@ PROMO_BOTTOM_POINTS = 2 * MM_TO_POINTS
 PROMO_GAP_POINTS = 0
 CONTENT_PADDING_POINTS = 0.25 * MM_TO_POINTS
 CONTINUATION_NOISE_LIMIT_POINTS = 7 * MM_TO_POINTS
+PROMO_WHITE_THRESHOLD = 18
 PROMO_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "label-unboxing.jpeg"
 
 
@@ -74,6 +77,53 @@ def page_content_height(page: Any, page_height: float) -> float:
     return min(page_height, max(bottoms) + CONTENT_PADDING_POINTS)
 
 
+def multiply_pdf_matrices(left: list[float], right: list[float]) -> list[float]:
+    """Multiply two six-value PDF transformation matrices."""
+    return [
+        left[0] * right[0] + left[1] * right[2],
+        left[0] * right[1] + left[1] * right[3],
+        left[2] * right[0] + left[3] * right[2],
+        left[2] * right[1] + left[3] * right[3],
+        left[4] * right[0] + left[5] * right[2] + right[4],
+        left[4] * right[1] + left[5] * right[3] + right[5],
+    ]
+
+
+def fast_text_content_height(page: PageObject) -> float:
+    """Estimate visible content depth using pypdf's lightweight text visitor.
+
+    Marketplace labels end with a text footer. Reading its transformed baseline
+    avoids retaining the unused bottom of a one-page A6 document without the
+    substantially slower pdfplumber layout pass.
+    """
+    page_height = float(page.mediabox.height)
+    bottoms: list[float] = []
+
+    def visit_text(
+        text: str,
+        current_matrix: list[float],
+        text_matrix: list[float],
+        _font: Any,
+        font_size: float,
+    ) -> None:
+        if not text.strip():
+            return
+        matrix = multiply_pdf_matrices(text_matrix, current_matrix)
+        vertical_scale = math.hypot(matrix[2], matrix[3])
+        if vertical_scale <= 0:
+            return
+        # The transformed origin lies near the glyph baseline. Half the scaled
+        # font size is a conservative estimate of the descender below it.
+        bottom = page_height - matrix[5] + (float(font_size) * vertical_scale * 0.5)
+        if 0 <= bottom <= page_height:
+            bottoms.append(bottom)
+
+    page.extract_text(visitor_text=visit_text)
+    if not bottoms:
+        return page_height
+    return min(page_height, max(bottoms) + CONTENT_PADDING_POINTS)
+
+
 def top_crop(source_page: PageObject, crop_height: float) -> PageObject:
     """Create a page containing only the top crop, preserving vector quality."""
     source_width = float(source_page.mediabox.width)
@@ -91,8 +141,20 @@ def promo_image_and_aspect() -> tuple[ImageReader, float]:
     if not PROMO_IMAGE.is_file():
         raise RuntimeError(f"Gambar pemberitahuan unboxing tidak ditemukan: {PROMO_IMAGE}")
 
-    image = ImageReader(str(PROMO_IMAGE))
-    image_width, image_height = image.getSize()
+    with Image.open(PROMO_IMAGE) as source:
+        bitmap = source.convert("RGB")
+    white = Image.new("RGB", bitmap.size, "white")
+    difference = ImageChops.difference(bitmap, white).convert("L")
+    content_box = difference.point(
+        lambda value: 255 if value > PROMO_WHITE_THRESHOLD else 0
+    ).getbbox()
+    if content_box and content_box[1] > 0:
+        # Only trim the top: this is the edge that must touch the end of the
+        # resi. Preserve the original horizontal alignment and bottom artwork.
+        bitmap = bitmap.crop((0, content_box[1], bitmap.width, bitmap.height))
+
+    image = ImageReader(bitmap)
+    image_width, image_height = bitmap.size
     if image_width <= 0 or image_height <= 0:
         raise RuntimeError("Ukuran gambar pemberitahuan unboxing tidak valid")
 
@@ -157,13 +219,10 @@ def prepare_label(
     promo_image, promo_aspect = promo_image_and_aspect()
     crop_heights = []
     if len(reader.pages) == 1:
-        # A single-page marketplace label already uses an A6-sized page and
-        # needs no continuation trimming. Avoiding pdfplumber here removes the
-        # dominant startup/parsing cost from the common print path.
         source_page = reader.pages[0]
         if source_page.rotation:
             source_page.transfer_rotation_to_content()
-        crop_heights.append((source_page, float(source_page.mediabox.height)))
+        crop_heights.append((source_page, fast_text_content_height(source_page)))
     else:
         import pdfplumber
 
