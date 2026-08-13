@@ -295,8 +295,16 @@ do {
 
         $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
 
+        $fastL3210Label = $job['job_type'] === 'label' && stripos((string)$job['printer'], 'L3210') !== false;
         $stageStartedAt = microtime(true);
-        try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
+        if ($fastL3210Label) {
+            // Printer ini hanya diproses oleh satu worker. ID spooler terbesar
+            // setelah submission adalah job baru, jadi snapshot awal 0,5 detik
+            // dapat dilewati agar perangkat mulai merespons dalam <5 detik.
+            $spoolerBefore = [];
+        } else {
+            try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
+        }
         $timings['pre_spooler'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $stageStartedAt = microtime(true);
         runProcess([
