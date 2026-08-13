@@ -14,6 +14,8 @@ PAPER_WIDTH_POINTS = 105 * MM_TO_POINTS
 PAPER_HEIGHT_POINTS = 182 * MM_TO_POINTS
 LETTER_WIDTH_POINTS = 215.9 * MM_TO_POINTS
 LETTER_HEIGHT_POINTS = 279.4 * MM_TO_POINTS
+B6_WIDTH_POINTS = 128.02 * MM_TO_POINTS
+B6_HEIGHT_POINTS = 182.12 * MM_TO_POINTS
 REFERENCE_A6_HEIGHT_POINTS = 148 * MM_TO_POINTS
 LABEL_SCALE = 0.72
 LABEL_RIGHT_SHIFT_POINTS = 5 * MM_TO_POINTS
@@ -130,14 +132,17 @@ def prepare_label(
 ) -> None:
     if top_margin_mm < 0 or top_margin_mm >= 20:
         raise ValueError("Margin atas harus antara 0 dan kurang dari 20 mm")
-    if driver_page_mode not in ("custom", "letter"):
-        raise ValueError("Mode halaman driver harus custom atau letter")
+    if driver_page_mode not in ("custom", "letter", "b6"):
+        raise ValueError("Mode halaman driver harus custom, letter, atau b6")
 
     output_width = PAPER_WIDTH_POINTS
     output_height = PAPER_HEIGHT_POINTS
     if driver_page_mode == "letter":
         output_width = LETTER_WIDTH_POINTS
         output_height = LETTER_HEIGHT_POINTS
+    elif driver_page_mode == "b6":
+        output_width = B6_WIDTH_POINTS
+        output_height = B6_HEIGHT_POINTS
     physical_left = max(0, (output_width - PAPER_WIDTH_POINTS) / 2)
     physical_bottom = output_height - PAPER_HEIGHT_POINTS
 
@@ -260,7 +265,7 @@ def prepare_label(
 if __name__ == "__main__":
     if len(sys.argv) not in (3, 4, 5):
         raise SystemExit(
-            "usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm] [custom|letter]"
+            "usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm] [custom|letter|b6]"
         )
     prepare_label(
         sys.argv[1],

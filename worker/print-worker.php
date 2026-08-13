@@ -78,17 +78,6 @@ function readableProcessError(string $rawError, string $fallback): string
     return $fallback;
 }
 
-function latestPrinterSpoolerJobId(string $printer, string $document): ?int
-{
-    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
-    $document64 = base64_encode(mb_convert_encoding($document, 'UTF-16LE', 'UTF-8'));
-    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); \$d=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$document64}')); Get-PrintJob -PrinterName \$p -ErrorAction Stop | Where-Object { \$_.Document -eq \$d } | Sort-Object ID -Descending | Select-Object -First 1 -ExpandProperty ID";
-    $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
-    $raw = runProcess(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded], 'Status Windows spooler tidak dapat dibaca.');
-    $id = (int)trim($raw);
-    return $id > 0 ? $id : null;
-}
-
 function powershellEncoded(string $script, string $failureMessage): string
 {
     $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
@@ -186,7 +175,7 @@ function prepareLabelPdf(array $job): string
     $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
     $topMarginMm = $isL3210 ? '4' : '2';
-    $driverPageMode = $isL3210 ? 'letter' : 'custom';
+    $driverPageMode = $isL3210 ? 'b6' : 'custom';
     runProcess([
         (string)($config['printing']['python'] ?? 'python'),
         $root . '/tools/prepare_label_pdf.py',
@@ -197,7 +186,7 @@ function prepareLabelPdf(array $job): string
     ], 'Python penyiapan label tidak dapat dijalankan.');
     if (!is_file($output)) throw new RuntimeException('PDF label siap cetak tidak terbentuk.');
     if ($isL3210) {
-        logLine("Job #{$job['id']} memakai halaman driver Letter dengan area label 105 x 182 mm dipusatkan horizontal untuk L3210");
+        logLine("Job #{$job['id']} memakai halaman driver B6 dengan area label 105 x 182 mm dipusatkan horizontal untuk L3210");
     }
     return $output;
 }
@@ -279,7 +268,7 @@ function labelPrintSettings(string $printer): string
 {
     $parts = ['1-', 'simplex', 'monochrome', 'noscale'];
     if (stripos($printer, 'L3210') !== false) {
-        $parts[] = 'paper=Letter';
+        $parts[] = 'paperkind=88'; // B6 JIS 128 x 182 mm, ukuran native terdekat.
     } elseif (stripos($printer, 'Brother DCP') !== false) {
         $parts[] = 'bin=258'; // MP Tray, sama dengan aplikasi desktop.
     } elseif (stripos($printer, 'WF') !== false) {
@@ -345,18 +334,11 @@ do {
         ], 'Gagal menjalankan SumatraPDF.');
         $timings['sumatra'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
 
+        // Jangan menahan worker untuk membaca ulang WMI/Get-PrintJob. Pada host
+        // ini korelasi ID dapat memakan lebih dari 60 detik setelah printer
+        // sudah mulai bekerja. Widget spooler tetap membaca antrean terpisah.
         $spoolerJobId = null;
-        $stageStartedAt = microtime(true);
-        for ($spoolerAttempt = 0; $spoolerAttempt < 5 && $spoolerJobId === null; $spoolerAttempt++) {
-            try {
-                $spoolerJobId = latestPrinterSpoolerJobId((string)$job['printer'], basename($printPath));
-            } catch (Throwable $spoolerError) {
-                logLine('Korelasi spooler setelah print gagal: '.$spoolerError->getMessage());
-                break;
-            }
-            if ($spoolerJobId === null) usleep(200000);
-        }
-        $timings['correlate'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
+        $timings['correlate'] = 0;
 
         // Windows now owns the submitted job. Drop the cached spooler snapshot
         // so the web widget can show it on its very next refresh.
