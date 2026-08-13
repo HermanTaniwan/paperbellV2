@@ -96,4 +96,12 @@ if (-not $labelWorker) {
         -WorkingDirectory $root -WindowStyle Hidden
 }
 
+$spoolerWatchdogScript = Join-Path $root 'worker\print-spooler-watchdog.ps1'
+$spoolerWatchdog = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*print-spooler-watchdog.ps1*' }
+if (-not $spoolerWatchdog) {
+    Start-Process -FilePath 'powershell.exe' `
+        -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$spoolerWatchdogScript`"" `
+        -WorkingDirectory $root -WindowStyle Hidden
+}
+
 Write-Host 'Paperbell Web aktif di http://app.paperbell.id/' -ForegroundColor Green
