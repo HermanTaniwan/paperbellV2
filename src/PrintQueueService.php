@@ -132,7 +132,7 @@ final class PrintQueueService
 
     private function activeIncidents():array
     {
-        $rows=$this->db->query("SELECT i.*,p.order_sn,p.original_name FROM printer_incidents i LEFT JOIN (SELECT j.*,m.original_name FROM print_jobs j LEFT JOIN manual_pdfs m ON j.job_type IN ('manual','random') AND j.file_path=m.file_path) p ON p.id=i.print_job_id WHERE i.status='active' ORDER BY (i.acknowledged_at IS NULL) DESC,i.last_seen_at DESC,i.id DESC")->fetchAll();
+        $rows=$this->db->query("SELECT i.*,p.order_sn,p.original_name FROM printer_incidents i LEFT JOIN (SELECT j.*,m.original_name FROM print_jobs j LEFT JOIN manual_pdfs m ON j.job_type IN ('manual','random') AND j.file_path=m.file_path) p ON p.id=i.print_job_id WHERE i.status='active' AND i.acknowledged_at IS NULL ORDER BY i.last_seen_at DESC,i.id DESC")->fetchAll();
         foreach($rows as &$row){
             $row['createdText']=date('d M Y H:i:s',(int)$row['first_seen_at']);
             $row['acknowledged_at']=(int)($row['acknowledged_at']??0);
