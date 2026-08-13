@@ -149,7 +149,7 @@ function prepareLabelPdf(array $job): string
     }
     $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
-    $topMarginMm = $isL3210 ? '8' : '2';
+    $topMarginMm = $isL3210 ? '4' : '2';
     $driverPageMode = $isL3210 ? 'letter' : 'custom';
     runProcess([
         (string)($config['printing']['python'] ?? 'python'),
@@ -161,7 +161,7 @@ function prepareLabelPdf(array $job): string
     ], 'Python penyiapan label tidak dapat dijalankan.');
     if (!is_file($output)) throw new RuntimeException('PDF label siap cetak tidak terbentuk.');
     if ($isL3210) {
-        logLine("Job #{$job['id']} memakai halaman driver Letter dengan area fisik label 105 x 182 mm untuk L3210");
+        logLine("Job #{$job['id']} memakai halaman driver Letter dengan area label 105 x 182 mm dipusatkan horizontal untuk L3210");
     }
     return $output;
 }

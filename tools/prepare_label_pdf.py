@@ -138,6 +138,7 @@ def prepare_label(
     if driver_page_mode == "letter":
         output_width = LETTER_WIDTH_POINTS
         output_height = LETTER_HEIGHT_POINTS
+    physical_left = max(0, (output_width - PAPER_WIDTH_POINTS) / 2)
     physical_bottom = output_height - PAPER_HEIGHT_POINTS
 
     reader = PdfReader(source_path)
@@ -206,7 +207,7 @@ def prepare_label(
         rendered_width = float(cropped_page.mediabox.width) * scale
         rendered_height = crop_height * scale
         horizontal_space = max(0, PAPER_WIDTH_POINTS - rendered_width)
-        left_offset = min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
+        left_offset = physical_left + min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
         bottom_offset = cursor_top - rendered_height
         output_page.merge_transformed_page(
             cropped_page,
@@ -219,7 +220,10 @@ def prepare_label(
 
     promo_width = max_source_width * scale
     promo_height = promo_width * promo_aspect
-    promo_x = min(LABEL_RIGHT_SHIFT_POINTS, max(0, PAPER_WIDTH_POINTS - promo_width))
+    promo_x = physical_left + min(
+        LABEL_RIGHT_SHIFT_POINTS,
+        max(0, PAPER_WIDTH_POINTS - promo_width),
+    )
     promo_y = cursor_top - PROMO_GAP_POINTS - promo_height
     promo_bottom = physical_bottom + PROMO_BOTTOM_POINTS
     if promo_y < promo_bottom - 0.1:
