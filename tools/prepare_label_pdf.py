@@ -15,7 +15,7 @@ PAPER_HEIGHT_POINTS = 182 * MM_TO_POINTS
 REFERENCE_A6_HEIGHT_POINTS = 148 * MM_TO_POINTS
 LABEL_SCALE = 0.72
 LABEL_RIGHT_SHIFT_POINTS = 5 * MM_TO_POINTS
-TOP_MARGIN_POINTS = 2 * MM_TO_POINTS
+DEFAULT_TOP_MARGIN_MM = 2
 PAGE_GAP_POINTS = 1.5 * MM_TO_POINTS
 PROMO_BOTTOM_POINTS = 2 * MM_TO_POINTS
 PROMO_GAP_POINTS = 0
@@ -118,7 +118,10 @@ def promo_overlay(
     return PdfReader(stream).pages[0]
 
 
-def prepare_label(source_path: str, output_path: str) -> None:
+def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEFAULT_TOP_MARGIN_MM) -> None:
+    if top_margin_mm < 0 or top_margin_mm >= 20:
+        raise ValueError("Margin atas harus antara 0 dan kurang dari 20 mm")
+
     reader = PdfReader(source_path)
     if reader.is_encrypted:
         raise RuntimeError("PDF label terenkripsi tidak didukung")
@@ -155,7 +158,7 @@ def prepare_label(source_path: str, output_path: str) -> None:
     )
     base_scale = reference_fit * LABEL_SCALE
 
-    label_top = PAPER_HEIGHT_POINTS - TOP_MARGIN_POINTS
+    label_top = PAPER_HEIGHT_POINTS - (top_margin_mm * MM_TO_POINTS)
     gaps_height = PAGE_GAP_POINTS * max(0, len(crop_heights) - 1)
     available_combined_height = label_top - PROMO_BOTTOM_POINTS - PROMO_GAP_POINTS - gaps_height
     if available_combined_height <= 0:
@@ -207,6 +210,6 @@ def prepare_label(source_path: str, output_path: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        raise SystemExit("usage: prepare_label_pdf.py source.pdf output.pdf")
-    prepare_label(sys.argv[1], sys.argv[2])
+    if len(sys.argv) not in (3, 4):
+        raise SystemExit("usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm]")
+    prepare_label(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) == 4 else DEFAULT_TOP_MARGIN_MM)

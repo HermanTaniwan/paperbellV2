@@ -148,11 +148,13 @@ function prepareLabelPdf(array $job): string
         throw new RuntimeException('Folder sementara cetak label tidak dapat dibuat.');
     }
     $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
+    $topMarginMm = stripos((string)($job['printer'] ?? ''), 'L3210') !== false ? '4' : '2';
     runProcess([
         (string)($config['printing']['python'] ?? 'python'),
         $root . '/tools/prepare_label_pdf.py',
         (string)$job['file_path'],
         $output,
+        $topMarginMm,
     ], 'Python penyiapan label tidak dapat dijalankan.');
     if (!is_file($output)) throw new RuntimeException('PDF label siap cetak tidak terbentuk.');
     return $output;
