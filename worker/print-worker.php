@@ -8,6 +8,7 @@ $config = require $root . '/config.php';
 require $root . '/src/Database.php';
 $sumatra = $config['printing']['sumatra'];
 $once = in_array('--once', $argv, true);
+$brotherPaperSizeCache = [];
 
 function logLine(string $message): void
 {
@@ -77,15 +78,15 @@ function readableProcessError(string $rawError, string $fallback): string
     return $fallback;
 }
 
-function printerSpoolerJobIds(string $printer): array
+function latestPrinterSpoolerJobId(string $printer, string $document): ?int
 {
     $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
-    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); @(Get-PrintJob -PrinterName \$p -ErrorAction Stop | Select-Object -ExpandProperty ID) | ConvertTo-Json -Compress";
+    $document64 = base64_encode(mb_convert_encoding($document, 'UTF-16LE', 'UTF-8'));
+    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); \$d=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$document64}')); Get-PrintJob -PrinterName \$p -ErrorAction Stop | Where-Object { \$_.Document -eq \$d } | Sort-Object ID -Descending | Select-Object -First 1 -ExpandProperty ID";
     $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
     $raw = runProcess(['powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded], 'Status Windows spooler tidak dapat dibaca.');
-    $decoded = json_decode(trim($raw), true);
-    if (is_int($decoded)) return [$decoded];
-    return is_array($decoded) ? array_values(array_map('intval', $decoded)) : [];
+    $id = (int)trim($raw);
+    return $id > 0 ? $id : null;
 }
 
 function powershellEncoded(string $script, string $failureMessage): string
@@ -117,7 +118,7 @@ function printerPaperSize(string $printer): string
 
 function setPrinterPaperSize(string $printer, string $paper): void
 {
-    if (!in_array($paper, ['A4', 'A5', 'A6', 'B5'], true)) {
+    if (!in_array($paper, ['A4', 'A5', 'A6', 'B5', 'Letter'], true)) {
         throw new InvalidArgumentException('Ukuran kertas printer tidak didukung: ' . $paper);
     }
     $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
@@ -127,17 +128,52 @@ function setPrinterPaperSize(string $printer, string $paper): void
 
 function applyBrotherProductPaperSize(array $job, string $printSettings): ?string
 {
+    global $brotherPaperSizeCache;
     if (($job['job_type'] ?? '') !== 'product' || stripos((string)($job['printer'] ?? ''), 'Brother') === false) return null;
     $paper = paperSizeFromPrintSettings($printSettings);
     if ($paper === null) return null;
 
     $printer = (string)$job['printer'];
-    $previous = printerPaperSize($printer);
-    if (strcasecmp($previous, $paper) !== 0) {
+    if (array_key_exists($printer, $brotherPaperSizeCache)) {
+        $previous = (string)$brotherPaperSizeCache[$printer];
+        if (strcasecmp($previous, $paper) === 0) return null;
         setPrinterPaperSize($printer, $paper);
-        logLine("Job #{$job['id']} ukuran driver Brother diubah sementara: {$previous} -> {$paper}");
+        $brotherPaperSizeCache[$printer] = $paper;
+        logLine("Job #{$job['id']} ukuran driver Brother diubah dari cache: {$previous} -> {$paper}");
+        return $previous;
     }
+
+    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
+    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); \$previous=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); \$changed=\$false; if (\$previous -ne '{$paper}') { Set-PrintConfiguration -PrinterName \$p -PaperSize {$paper} -ErrorAction Stop; \$actual=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); if (\$actual -ne '{$paper}') { throw \"Ukuran printer tetap \$actual, bukan {$paper}.\" }; \$changed=\$true }; [pscustomobject]@{previous=\$previous;changed=\$changed} | ConvertTo-Json -Compress";
+    $result = json_decode(trim(powershellEncoded($script, 'Konfigurasi ukuran kertas Brother tidak dapat disiapkan.')), true);
+    if (!is_array($result) || !isset($result['previous'], $result['changed'])) {
+        throw new RuntimeException('Respons konfigurasi ukuran kertas Brother tidak valid.');
+    }
+    $previous = (string)$result['previous'];
+    $brotherPaperSizeCache[$printer] = (bool)$result['changed'] ? $paper : $previous;
+    if (!(bool)$result['changed']) return null;
+    logLine("Job #{$job['id']} ukuran driver Brother diubah sementara: {$previous} -> {$paper}");
     return $previous;
+}
+
+function warmBrotherPaperSizeCache(PDO $db): void
+{
+    global $brotherPaperSizeCache;
+    try {
+        $raw = (string)($db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn() ?: '');
+        $printers = json_decode($raw, true);
+        if (!is_array($printers)) return;
+        foreach ($printers as $printer) {
+            $printer = (string)$printer;
+            if (stripos($printer, 'Brother') === false) continue;
+            $startedAt = microtime(true);
+            $brotherPaperSizeCache[$printer] = printerPaperSize($printer);
+            $elapsedMs = (int)round((microtime(true) - $startedAt) * 1000);
+            logLine("Cache ukuran driver Brother siap: {$printer}={$brotherPaperSizeCache[$printer]} ({$elapsedMs}ms saat startup)");
+        }
+    } catch (Throwable $error) {
+        logLine('Cache ukuran driver Brother tidak dapat dipanaskan: ' . $error->getMessage());
+    }
 }
 
 function prepareLabelPdf(array $job): string
@@ -255,6 +291,7 @@ function labelPrintSettings(string $printer): string
 }
 
 $db = connectDatabase();
+warmBrotherPaperSizeCache($db);
 
 do {
     $job = null;
@@ -262,7 +299,7 @@ do {
     $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
     $processingStartedAt = 0.0;
-    $timings = ['prepare' => 0, 'pre_spooler' => 0, 'sumatra' => 0, 'correlate' => 0];
+    $timings = ['prepare' => 0, 'driver' => 0, 'sumatra' => 0, 'correlate' => 0];
     try {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
@@ -293,19 +330,9 @@ do {
             $temporaryLabelPrintTicket = applyLabelPaperSize($job);
         }
 
-        $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
-
-        $fastL3210Label = $job['job_type'] === 'label' && stripos((string)$job['printer'], 'L3210') !== false;
         $stageStartedAt = microtime(true);
-        if ($fastL3210Label) {
-            // Printer ini hanya diproses oleh satu worker. ID spooler terbesar
-            // setelah submission adalah job baru, jadi snapshot awal 0,5 detik
-            // dapat dilewati agar perangkat mulai merespons dalam <5 detik.
-            $spoolerBefore = [];
-        } else {
-            try {$spoolerBefore = printerSpoolerJobIds((string)$job['printer']);} catch (Throwable $spoolerError) {logLine('Korelasi spooler sebelum print gagal: '.$spoolerError->getMessage());$spoolerBefore=[];}
-        }
-        $timings['pre_spooler'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
+        $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
+        $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $stageStartedAt = microtime(true);
         runProcess([
             $sumatra,
@@ -322,9 +349,7 @@ do {
         $stageStartedAt = microtime(true);
         for ($spoolerAttempt = 0; $spoolerAttempt < 5 && $spoolerJobId === null; $spoolerAttempt++) {
             try {
-                $spoolerAfter = printerSpoolerJobIds((string)$job['printer']);
-                $newIds = array_values(array_diff($spoolerAfter, $spoolerBefore));
-                if ($newIds) $spoolerJobId = max($newIds);
+                $spoolerJobId = latestPrinterSpoolerJobId((string)$job['printer'], basename($printPath));
             } catch (Throwable $spoolerError) {
                 logLine('Korelasi spooler setelah print gagal: '.$spoolerError->getMessage());
                 break;
@@ -363,7 +388,7 @@ do {
         }
         $db->commit();
         $totalMs = $processingStartedAt > 0 ? (int)round((microtime(true) - $processingStartedAt) * 1000) : 0;
-        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']} [prepare={$timings['prepare']}ms, pre_spooler={$timings['pre_spooler']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
+        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']} [prepare={$timings['prepare']}ms, driver={$timings['driver']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
     } catch (Throwable $e) {
         try {
             if ($db->inTransaction()) $db->rollBack();
@@ -396,12 +421,11 @@ do {
         }
         if ($temporaryPaperSize !== null && is_array($job) && isset($job['printer'])) {
             try {
-                $currentPaperSize = printerPaperSize((string)$job['printer']);
-                if (strcasecmp($currentPaperSize, $temporaryPaperSize) !== 0) {
-                    setPrinterPaperSize((string)$job['printer'], $temporaryPaperSize);
-                    logLine("Job #{$job['id']} ukuran driver Brother dikembalikan: {$currentPaperSize} -> {$temporaryPaperSize}");
-                }
+                setPrinterPaperSize((string)$job['printer'], $temporaryPaperSize);
+                $brotherPaperSizeCache[(string)$job['printer']] = $temporaryPaperSize;
+                logLine("Job #{$job['id']} ukuran driver Brother dikembalikan ke {$temporaryPaperSize}");
             } catch (Throwable $restoreError) {
+                unset($brotherPaperSizeCache[(string)$job['printer']]);
                 logLine('Ukuran driver Brother gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
