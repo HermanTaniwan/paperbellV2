@@ -149,7 +149,7 @@ function prepareLabelPdf(array $job): string
     }
     $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
-    $topMarginMm = $isL3210 ? '4' : '2';
+    $topMarginMm = $isL3210 ? '8' : '2';
     $driverPageMode = $isL3210 ? 'letter' : 'custom';
     runProcess([
         (string)($config['printing']['python'] ?? 'python'),
