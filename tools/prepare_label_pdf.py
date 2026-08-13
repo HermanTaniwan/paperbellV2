@@ -12,6 +12,8 @@ from reportlab.pdfgen import canvas
 MM_TO_POINTS = 72 / 25.4
 PAPER_WIDTH_POINTS = 105 * MM_TO_POINTS
 PAPER_HEIGHT_POINTS = 182 * MM_TO_POINTS
+LETTER_WIDTH_POINTS = 215.9 * MM_TO_POINTS
+LETTER_HEIGHT_POINTS = 279.4 * MM_TO_POINTS
 REFERENCE_A6_HEIGHT_POINTS = 148 * MM_TO_POINTS
 LABEL_SCALE = 0.72
 LABEL_RIGHT_SHIFT_POINTS = 5 * MM_TO_POINTS
@@ -101,9 +103,11 @@ def promo_overlay(
     rendered_y: float,
     rendered_width: float,
     rendered_height: float,
+    page_width: float,
+    page_height: float,
 ) -> PageObject:
     stream = io.BytesIO()
-    overlay_canvas = canvas.Canvas(stream, pagesize=(PAPER_WIDTH_POINTS, PAPER_HEIGHT_POINTS))
+    overlay_canvas = canvas.Canvas(stream, pagesize=(page_width, page_height))
     overlay_canvas.drawImage(
         image,
         rendered_x,
@@ -118,9 +122,23 @@ def promo_overlay(
     return PdfReader(stream).pages[0]
 
 
-def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEFAULT_TOP_MARGIN_MM) -> None:
+def prepare_label(
+    source_path: str,
+    output_path: str,
+    top_margin_mm: float = DEFAULT_TOP_MARGIN_MM,
+    driver_page_mode: str = "custom",
+) -> None:
     if top_margin_mm < 0 or top_margin_mm >= 20:
         raise ValueError("Margin atas harus antara 0 dan kurang dari 20 mm")
+    if driver_page_mode not in ("custom", "letter"):
+        raise ValueError("Mode halaman driver harus custom atau letter")
+
+    output_width = PAPER_WIDTH_POINTS
+    output_height = PAPER_HEIGHT_POINTS
+    if driver_page_mode == "letter":
+        output_width = LETTER_WIDTH_POINTS
+        output_height = LETTER_HEIGHT_POINTS
+    physical_bottom = output_height - PAPER_HEIGHT_POINTS
 
     reader = PdfReader(source_path)
     if reader.is_encrypted:
@@ -158,9 +176,15 @@ def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEF
     )
     base_scale = reference_fit * LABEL_SCALE
 
-    label_top = PAPER_HEIGHT_POINTS - (top_margin_mm * MM_TO_POINTS)
+    label_top = output_height - (top_margin_mm * MM_TO_POINTS)
     gaps_height = PAGE_GAP_POINTS * max(0, len(crop_heights) - 1)
-    available_combined_height = label_top - PROMO_BOTTOM_POINTS - PROMO_GAP_POINTS - gaps_height
+    available_combined_height = (
+        label_top
+        - physical_bottom
+        - PROMO_BOTTOM_POINTS
+        - PROMO_GAP_POINTS
+        - gaps_height
+    )
     if available_combined_height <= 0:
         raise RuntimeError("Ruang resi habis oleh gambar pemberitahuan unboxing")
 
@@ -173,8 +197,8 @@ def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEF
         raise RuntimeError("Skala gabungan resi tidak valid")
 
     output_page = PageObject.create_blank_page(
-        width=PAPER_WIDTH_POINTS,
-        height=PAPER_HEIGHT_POINTS,
+        width=output_width,
+        height=output_height,
     )
     cursor_top = label_top
     for index, (source_page, crop_height) in enumerate(crop_heights):
@@ -197,11 +221,20 @@ def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEF
     promo_height = promo_width * promo_aspect
     promo_x = min(LABEL_RIGHT_SHIFT_POINTS, max(0, PAPER_WIDTH_POINTS - promo_width))
     promo_y = cursor_top - PROMO_GAP_POINTS - promo_height
-    if promo_y < PROMO_BOTTOM_POINTS - 0.1:
+    promo_bottom = physical_bottom + PROMO_BOTTOM_POINTS
+    if promo_y < promo_bottom - 0.1:
         raise RuntimeError("Gabungan resi dan gambar melebihi tinggi kertas 182 mm")
-    promo_y = max(PROMO_BOTTOM_POINTS, promo_y)
+    promo_y = max(promo_bottom, promo_y)
     output_page.merge_page(
-        promo_overlay(promo_image, promo_x, promo_y, promo_width, promo_height)
+        promo_overlay(
+            promo_image,
+            promo_x,
+            promo_y,
+            promo_width,
+            promo_height,
+            output_width,
+            output_height,
+        )
     )
     writer = PdfWriter()
     writer.add_page(output_page)
@@ -210,6 +243,13 @@ def prepare_label(source_path: str, output_path: str, top_margin_mm: float = DEF
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (3, 4):
-        raise SystemExit("usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm]")
-    prepare_label(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) == 4 else DEFAULT_TOP_MARGIN_MM)
+    if len(sys.argv) not in (3, 4, 5):
+        raise SystemExit(
+            "usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm] [custom|letter]"
+        )
+    prepare_label(
+        sys.argv[1],
+        sys.argv[2],
+        float(sys.argv[3]) if len(sys.argv) >= 4 else DEFAULT_TOP_MARGIN_MM,
+        sys.argv[4] if len(sys.argv) == 5 else "custom",
+    )

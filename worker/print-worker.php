@@ -148,15 +148,21 @@ function prepareLabelPdf(array $job): string
         throw new RuntimeException('Folder sementara cetak label tidak dapat dibuat.');
     }
     $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
-    $topMarginMm = stripos((string)($job['printer'] ?? ''), 'L3210') !== false ? '4' : '2';
+    $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
+    $topMarginMm = $isL3210 ? '4' : '2';
+    $driverPageMode = $isL3210 ? 'letter' : 'custom';
     runProcess([
         (string)($config['printing']['python'] ?? 'python'),
         $root . '/tools/prepare_label_pdf.py',
         (string)$job['file_path'],
         $output,
         $topMarginMm,
+        $driverPageMode,
     ], 'Python penyiapan label tidak dapat dijalankan.');
     if (!is_file($output)) throw new RuntimeException('PDF label siap cetak tidak terbentuk.');
+    if ($isL3210) {
+        logLine("Job #{$job['id']} memakai halaman driver Letter dengan area fisik label 105 x 182 mm untuk L3210");
+    }
     return $output;
 }
 
@@ -164,6 +170,10 @@ function applyLabelPaperSize(array $job): ?string
 {
     global $root;
     if (($job['job_type'] ?? '') !== 'label') return null;
+    // Epson L3210 menyimpan ukuran Letter lagi di snapshot DEVMODE privat.
+    // Mengganti PageMediaSize XML saja membuat driver menerima dua ukuran
+    // berbeda dan meraster halaman dengan offset horizontal yang salah.
+    if (stripos((string)($job['printer'] ?? ''), 'L3210') !== false) return null;
 
     $printer = (string)$job['printer'];
     $backup = $root . '/storage/print-labels/print-ticket-job-' . (int)$job['id'] . '.xml';
@@ -232,7 +242,9 @@ POWERSHELL, [
 function labelPrintSettings(string $printer): string
 {
     $parts = ['1-', 'simplex', 'monochrome', 'noscale'];
-    if (stripos($printer, 'Brother DCP') !== false) {
+    if (stripos($printer, 'L3210') !== false) {
+        $parts[] = 'paper=Letter';
+    } elseif (stripos($printer, 'Brother DCP') !== false) {
         $parts[] = 'bin=258'; // MP Tray, sama dengan aplikasi desktop.
     } elseif (stripos($printer, 'WF') !== false) {
         $parts[] = 'bin=261'; // Rear Paper Feed, sama dengan aplikasi desktop.
