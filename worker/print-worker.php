@@ -43,8 +43,38 @@ function runProcess(array $command, string $failureMessage): string
     fclose($pipes[1]);
     fclose($pipes[2]);
     $exit = proc_close($process);
-    if ($exit !== 0) throw new RuntimeException(trim($stderr ?: $stdout ?: "Process exit {$exit}"));
+    if ($exit !== 0) {
+        $rawError = trim($stderr ?: $stdout);
+        throw new RuntimeException(readableProcessError($rawError, $failureMessage . " (exit {$exit})"));
+    }
     return $stdout;
+}
+
+function readableProcessError(string $rawError, string $fallback): string
+{
+    if ($rawError === '') return $fallback;
+    if (!str_contains($rawError, '#< CLIXML')) return $rawError;
+
+    $xmlStart = strpos($rawError, '<Objs');
+    if ($xmlStart === false) return $fallback;
+
+    $previous = libxml_use_internal_errors(true);
+    $xml = simplexml_load_string(substr($rawError, $xmlStart));
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if ($xml === false) return $fallback;
+
+    $messages = $xml->xpath('//*[local-name()="S"][@S="Error"]') ?: [];
+    foreach ($messages as $message) {
+        $decoded = preg_replace_callback('/_x([0-9a-fA-F]{4})_/', static function (array $match): string {
+            return mb_convert_encoding(pack('n', hexdec($match[1])), 'UTF-8', 'UTF-16BE');
+        }, html_entity_decode((string)$message, ENT_QUOTES | ENT_XML1, 'UTF-8'));
+        foreach (preg_split('/\R/', (string)$decoded) ?: [] as $line) {
+            $line = trim($line);
+            if ($line !== '') return $line;
+        }
+    }
+    return $fallback;
 }
 
 function printerSpoolerJobIds(string $printer): array
@@ -152,8 +182,15 @@ try {
     [xml]$actual=(Get-PrintConfiguration -PrinterName $p -ErrorAction Stop).PrintTicketXml
     $ns=[Xml.XmlNamespaceManager]::new($actual.NameTable)
     $ns.AddNamespace('psf','http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework')
-    $w=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeWidth']/psf:Value",$ns)
-    $h=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeHeight']/psf:Value",$ns)
+    $media=$actual.SelectSingleNode("//psf:Feature[@name='psk:PageMediaSize']",$ns)
+    $w=$null
+    $h=$null
+    if ($null -ne $media) {
+        $w=$media.SelectSingleNode(".//psf:ScoredProperty[@name='psk:MediaSizeWidth']/psf:Value",$ns)
+        $h=$media.SelectSingleNode(".//psf:ScoredProperty[@name='psk:MediaSizeHeight']/psf:Value",$ns)
+    }
+    if ($null -eq $w) { $w=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeWidth']/psf:Value",$ns) }
+    if ($null -eq $h) { $h=$actual.SelectSingleNode("//psf:ParameterInit[@name='psk:PageMediaSizeMediaSizeHeight']/psf:Value",$ns) }
     if ($null -eq $w -or $null -eq $h -or $w.InnerText -ne '105000' -or $h.InnerText -ne '182000') {
         throw 'Driver menolak ukuran custom 105 x 182 mm.'
     }
