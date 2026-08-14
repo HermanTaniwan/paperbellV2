@@ -34,6 +34,29 @@ function connectDatabase(): PDO
     }
 }
 
+function recoverInterruptedJobs(PDO $db): void
+{
+    $db->beginTransaction();
+    try {
+        $safe = $db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer (pemulihan otomatis)',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE status='processing' AND message='Menyiapkan dokumen'");
+        $safe->execute();
+        $requeued = $safe->rowCount();
+
+        // Once submission to Windows has started, automatically retrying could
+        // print a duplicate if the previous worker died after handing off data.
+        $uncertain = $db->prepare("UPDATE print_jobs SET status='failed',message='Perlu diperiksa sebelum dicetak ulang',error='Worker terputus saat mengirim ke Windows. Periksa antrean printer sebelum menggunakan Coba lagi.',completed_at=? WHERE status='processing'");
+        $uncertain->execute([time()]);
+        $flagged = $uncertain->rowCount();
+        $db->commit();
+
+        if ($requeued > 0) logLine("Pemulihan startup: {$requeued} job aman dikembalikan ke antrean.");
+        if ($flagged > 0) logLine("Pemulihan startup: {$flagged} job ditandai perlu diperiksa untuk mencegah cetak duplikat.");
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
+    }
+}
+
 function runProcess(array $command, string $failureMessage): string
 {
     $pipes = [];
@@ -294,6 +317,7 @@ function labelPrintSettings(string $printer): string
 }
 
 $db = connectDatabase();
+recoverInterruptedJobs($db);
 warmBrotherPaperSizeCache($db);
 
 do {
@@ -315,7 +339,7 @@ do {
             usleep(500000);
             continue;
         }
-        $claim = $db->prepare("UPDATE print_jobs SET status='processing',message='Mengirim ke printer',started_at=?,attempts=attempts+1 WHERE id=? AND status='queued'");
+        $claim = $db->prepare("UPDATE print_jobs SET status='processing',message='Menyiapkan dokumen',started_at=?,attempts=attempts+1 WHERE id=? AND status='queued'");
         $claim->execute([time(), $job['id']]);
         $db->commit();
         $processingStartedAt = microtime(true);
@@ -345,6 +369,8 @@ do {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
         }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
+        $submitting = $db->prepare("UPDATE print_jobs SET message='Mengirim ke Windows spooler' WHERE id=? AND status='processing'");
+        $submitting->execute([$job['id']]);
         $stageStartedAt = microtime(true);
         runProcess([
             $sumatra,
