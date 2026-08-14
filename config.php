@@ -19,6 +19,7 @@ return [
     'printing' => [
         'sumatra' => getenv('PAPERBELL_SUMATRA_PATH') ?: ((getenv('LOCALAPPDATA') ?: '') . '/SumatraPDF/SumatraPDF.exe'),
         'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: 'EPSON L3210 Series',
+        'brother_b5_printer' => getenv('PAPERBELL_BROTHER_B5_PRINTER') ?: 'Brother DCP-T830DW B5',
         'python' => getenv('PAPERBELL_PYTHON_PATH') ?: 'C:/Users/Herman Taniwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe',
     ],
     'scanner' => [

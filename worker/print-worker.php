@@ -98,6 +98,20 @@ function paperSizeFromPrintSettings(string $settings): ?string
     return strtoupper($match[1]);
 }
 
+function printPrinterForJob(array $job, string $printSettings): string
+{
+    global $config;
+    $requested = trim((string)($job['printer'] ?? ''));
+    $brotherB5 = trim((string)($config['printing']['brother_b5_printer'] ?? ''));
+    if (($job['job_type'] ?? '') === 'label'
+        || $brotherB5 === ''
+        || stripos($requested, 'Brother') === false
+        || paperSizeFromPrintSettings($printSettings) !== 'B5') {
+        return $requested;
+    }
+    return $brotherB5;
+}
+
 function printerPaperSize(string $printer): string
 {
     $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
@@ -287,6 +301,7 @@ do {
     $preparedLabelPath = null;
     $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
+    $printPrinter = null;
     $processingStartedAt = 0.0;
     $timings = ['prepare' => 0, 'driver' => 0, 'sumatra' => 0, 'correlate' => 0];
     try {
@@ -310,6 +325,7 @@ do {
 
         $printPath = (string)$job['file_path'];
         $printSettings = (string)$job['print_settings'];
+        $printPrinter = (string)$job['printer'];
         if ($job['job_type'] === 'label') {
             $stageStartedAt = microtime(true);
             $preparedLabelPath = prepareLabelPdf($job);
@@ -319,14 +335,21 @@ do {
             $temporaryLabelPrintTicket = applyLabelPaperSize($job);
         }
 
+        $printPrinter = printPrinterForJob($job, $printSettings);
+        if ($printPrinter !== (string)$job['printer']) {
+            logLine("Job #{$job['id']} dialihkan ke profil Brother B5: {$printPrinter}");
+        }
+
         $stageStartedAt = microtime(true);
-        $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
+        if ($printPrinter === (string)$job['printer']) {
+            $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
+        }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $stageStartedAt = microtime(true);
         runProcess([
             $sumatra,
             '-print-to',
-            $job['printer'],
+            $printPrinter,
             '-print-settings',
             $printSettings,
             '-silent',
@@ -370,7 +393,7 @@ do {
         }
         $db->commit();
         $totalMs = $processingStartedAt > 0 ? (int)round((microtime(true) - $processingStartedAt) * 1000) : 0;
-        logLine("Job #{$job['id']} submitted to Windows: {$job['printer']} [prepare={$timings['prepare']}ms, driver={$timings['driver']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
+        logLine("Job #{$job['id']} submitted to Windows: {$printPrinter} [prepare={$timings['prepare']}ms, driver={$timings['driver']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
     } catch (Throwable $e) {
         try {
             if ($db->inTransaction()) $db->rollBack();
@@ -401,13 +424,13 @@ do {
                 logLine('Konfigurasi driver label gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
-        if ($temporaryPaperSize !== null && is_array($job) && isset($job['printer'])) {
+        if ($temporaryPaperSize !== null && $printPrinter !== null) {
             try {
-                setPrinterPaperSize((string)$job['printer'], $temporaryPaperSize);
-                $brotherPaperSizeCache[(string)$job['printer']] = $temporaryPaperSize;
+                setPrinterPaperSize($printPrinter, $temporaryPaperSize);
+                $brotherPaperSizeCache[$printPrinter] = $temporaryPaperSize;
                 logLine("Job #{$job['id']} ukuran driver Brother dikembalikan ke {$temporaryPaperSize}");
             } catch (Throwable $restoreError) {
-                unset($brotherPaperSizeCache[(string)$job['printer']]);
+                unset($brotherPaperSizeCache[$printPrinter]);
                 logLine('Ukuran driver Brother gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
