@@ -9,6 +9,7 @@ date_default_timezone_set($config['app']['timezone']);
 require $root.'/src/Database.php';
 require $root.'/src/OAuthVault.php';
 require $root.'/src/MarketplaceOAuthService.php';
+require $root.'/src/LabelPdfPreparer.php';
 require $root.'/src/MarketplaceLabelService.php';
 $once=in_array('--once',$argv,true);
 
@@ -32,7 +33,8 @@ function labelService(PDO $db):MarketplaceLabelService
 {
     global $config,$root;
     $oauth=new MarketplaceOAuthService($db,new OAuthVault($config['oauth']['key_file']),$config['oauth']);
-    return new MarketplaceLabelService($db,$oauth,$root.'/storage/labels');
+    $preparer=new LabelPdfPreparer($config['printing'],$root);
+    return new MarketplaceLabelService($db,$oauth,$root.'/storage/labels',$preparer,(string)$config['printing']['default_label_printer']);
 }
 
 $db=labelDatabase();
@@ -56,9 +58,11 @@ do{
         $claim->execute([time(),$job['id']]);$db->commit();
 
         $result=$labels->fetch((string)$job['order_sn']);
-        $done=$db->prepare("UPDATE label_fetch_jobs SET status='completed',message='PDF resi berhasil diambil',error='',completed_at=? WHERE id=? AND status='processing'");
-        $done->execute([time(),$job['id']]);
-        labelLog('Resi '.$job['order_sn'].' tersimpan ('.(int)($result['bytes']??0).' bytes)');
+        $prepared=(bool)($result['prepared_label']??false);$preparationError=trim((string)($result['preparation_error']??''));
+        $message=$prepared?'PDF resi dan file siap cetak berhasil dibuat':'PDF resi berhasil diambil; file siap cetak akan dibuat saat diperlukan';
+        $done=$db->prepare("UPDATE label_fetch_jobs SET status='completed',message=?,error=?,completed_at=? WHERE id=? AND status='processing'");
+        $done->execute([$message,$prepared?'':mb_substr($preparationError,0,1500),time(),$job['id']]);
+        labelLog('Resi '.$job['order_sn'].' tersimpan ('.(int)($result['bytes']??0).' bytes, persiapan '.(int)($result['preparation_ms']??0).'ms'.($prepared?', siap cetak':', fallback saat cetak').')');
     }catch(Throwable $e){
         try{if($db->inTransaction())$db->rollBack();}catch(Throwable){}
         if($e instanceof PDOException){Database::resetMysql();$db=labelDatabase();$labels=labelService($db);}

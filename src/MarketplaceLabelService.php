@@ -5,7 +5,7 @@ final class MarketplaceLabelService
 {
     private string $trackingNumber='';
 
-    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth,private string $storageDir)
+    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth,private string $storageDir,private ?LabelPdfPreparer $labelPreparer=null,private string $prepreparePrinter='EPSON L3210 Series')
     {
         if(!is_dir($storageDir)&&!mkdir($storageDir,0770,true)&&!is_dir($storageDir))throw new RuntimeException('Folder label tidak dapat dibuat.');
     }
@@ -25,7 +25,14 @@ final class MarketplaceLabelService
         if(!rename($tmp,$path)){@unlink($tmp);throw new RuntimeException('PDF label gagal dipindahkan ke penyimpanan final.');}
         $upsert=$this->db->prepare('INSERT INTO order_resi(order_sn,pdf_path,tracking_number,fetched_at,resi_printed,resi_printed_at) VALUES(?,?,?,?,0,NULL) ON DUPLICATE KEY UPDATE pdf_path=VALUES(pdf_path),tracking_number=IF(VALUES(tracking_number)=\'\',tracking_number,VALUES(tracking_number)),fetched_at=VALUES(fetched_at)');
         $upsert->execute([$orderSn,$path,$this->trackingNumber,time()]);
-        return ['ok'=>true,'order_sn'=>$orderSn,'provider'=>str_starts_with(strtoupper($orderSn),'TIKTOK:')?'tiktok':'shopee','tracking_number'=>$this->trackingNumber,'bytes'=>strlen($bytes),'fetched_at'=>time(),'reused_existing'=>$reusedExisting,'message'=>$reusedExisting?'Paket sudah dikirim; PDF tersimpan digunakan kembali.':'PDF berhasil diambil dari marketplace.'];
+        $prepared=false;$preparationMs=0;$preparationError='';
+        if($this->labelPreparer!==null){
+            $started=microtime(true);
+            try{$this->labelPreparer->prepare($path,$this->prepreparePrinter);$prepared=true;}
+            catch(Throwable $error){$preparationError=$error->getMessage();}
+            $preparationMs=(int)round((microtime(true)-$started)*1000);
+        }
+        return ['ok'=>true,'order_sn'=>$orderSn,'provider'=>str_starts_with(strtoupper($orderSn),'TIKTOK:')?'tiktok':'shopee','tracking_number'=>$this->trackingNumber,'bytes'=>strlen($bytes),'fetched_at'=>time(),'reused_existing'=>$reusedExisting,'prepared_label'=>$prepared,'preparation_ms'=>$preparationMs,'preparation_error'=>$preparationError,'message'=>$reusedExisting?'Paket sudah dikirim; PDF tersimpan digunakan kembali.':'PDF berhasil diambil dari marketplace.'];
     }
 
     private function fetchTikTok(string $orderSn,string $rawJson): string

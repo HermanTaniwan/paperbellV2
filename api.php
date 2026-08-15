@@ -10,6 +10,7 @@ require __DIR__ . '/src/Database.php';
 require __DIR__ . '/src/PrintService.php';
 require __DIR__ . '/src/OAuthVault.php';
 require __DIR__ . '/src/MarketplaceOAuthService.php';
+require __DIR__ . '/src/LabelPdfPreparer.php';
 require __DIR__ . '/src/MarketplaceLabelService.php';
 require __DIR__ . '/src/MarketplaceOrderSyncService.php';
 require __DIR__ . '/src/ShopeeEscrowService.php';
@@ -159,7 +160,8 @@ try {
     $mysql = Database::mysql($config['mysql']);
     $printing = new PrintService($mysql,$config['printing']['default_label_printer']);
     $oauth = new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']);
-    $labels = new MarketplaceLabelService($mysql,$oauth,__DIR__.'/storage/labels');
+    $labelPreparer = new LabelPdfPreparer($config['printing'],__DIR__);
+    $labels = new MarketplaceLabelService($mysql,$oauth,__DIR__.'/storage/labels',$labelPreparer,(string)$config['printing']['default_label_printer']);
     $marketSync = new MarketplaceOrderSyncService($mysql,$oauth);
     $shopeeEscrow = new ShopeeEscrowService($mysql,$oauth);
     $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__);

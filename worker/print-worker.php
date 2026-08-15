@@ -6,7 +6,9 @@ if (PHP_SAPI !== 'cli') exit(1);
 $root = dirname(__DIR__);
 $config = require $root . '/config.php';
 require $root . '/src/Database.php';
+require $root . '/src/LabelPdfPreparer.php';
 $sumatra = $config['printing']['sumatra'];
+$labelPreparer = new LabelPdfPreparer($config['printing'],$root);
 $once = in_array('--once', $argv, true);
 $brotherPaperSizeCache = [];
 
@@ -204,28 +206,13 @@ function warmBrotherPaperSizeCache(PDO $db): void
 
 function prepareLabelPdf(array $job): string
 {
-    global $root, $config;
-    $dir = $root . '/storage/print-labels';
-    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-        throw new RuntimeException('Folder sementara cetak label tidak dapat dibuat.');
-    }
-    $output = $dir . '/label_job_' . (int)$job['id'] . '.pdf';
+    global $labelPreparer;
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
-    $topMarginMm = $isL3210 ? '4' : '2';
-    $driverPageMode = $isL3210 ? 'b6' : 'custom';
-    runProcess([
-        (string)($config['printing']['python'] ?? 'python'),
-        $root . '/tools/prepare_label_pdf.py',
-        (string)$job['file_path'],
-        $output,
-        $topMarginMm,
-        $driverPageMode,
-    ], 'Python penyiapan label tidak dapat dijalankan.');
-    if (!is_file($output)) throw new RuntimeException('PDF label siap cetak tidak terbentuk.');
+    $result=$labelPreparer->prepare((string)$job['file_path'],(string)$job['printer']);
     if ($isL3210) {
-        logLine("Job #{$job['id']} memakai halaman driver B6 dengan area label 105 x 182 mm dipusatkan horizontal untuk L3210");
+        logLine("Job #{$job['id']} memakai cache ".($result['cached']?'siap':'baru')." B6 dengan area label 105 x 182 mm untuk L3210");
     }
-    return $output;
+    return (string)$result['path'];
 }
 
 function applyLabelPaperSize(array $job): ?string
@@ -460,7 +447,6 @@ do {
                 logLine('Ukuran driver Brother gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
-        if ($preparedLabelPath !== null && is_file($preparedLabelPath)) @unlink($preparedLabelPath);
     }
     if ($once) break;
 } while (true);
