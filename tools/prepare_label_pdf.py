@@ -124,14 +124,16 @@ def fast_text_content_height(page: PageObject) -> float:
     return min(page_height, max(bottoms) + CONTENT_PADDING_POINTS)
 
 
-def top_crop(source_page: PageObject, crop_height: float) -> PageObject:
-    """Create a page containing only the top crop, preserving vector quality."""
+def vertical_crop(
+    source_page: PageObject, top_offset: float, crop_height: float
+) -> PageObject:
+    """Create a top-referenced vertical slice, preserving vector quality."""
     source_width = float(source_page.mediabox.width)
     source_height = float(source_page.mediabox.height)
     cropped_page = PageObject.create_blank_page(width=source_width, height=crop_height)
     cropped_page.merge_transformed_page(
         source_page,
-        Transformation().translate(0, crop_height - source_height),
+        Transformation().translate(0, crop_height - source_height + top_offset),
         expand=False,
     )
     return cropped_page
@@ -253,45 +255,67 @@ def prepare_label(
     base_scale = reference_fit * LABEL_SCALE
 
     label_top = output_height - (top_margin_mm * MM_TO_POINTS)
-    gaps_height = PAGE_GAP_POINTS * max(0, len(crop_heights) - 1)
-    available_combined_height = (
-        label_top
-        - physical_bottom
-        - PROMO_BOTTOM_POINTS
-        - PROMO_GAP_POINTS
-        - gaps_height
-    )
-    if available_combined_height <= 0:
-        raise RuntimeError("Ruang resi habis oleh gambar pemberitahuan unboxing")
-
-    total_source_height = sum(height for _, height in crop_heights)
-    # Banner mengikuti lebar resi setelah diperkecil. Karena tinggi banner juga
-    # ikut berubah bersama skala, masukkan rasio banner dalam perhitungan fit.
-    combined_source_height = total_source_height + (max_source_width * promo_aspect)
-    scale = min(base_scale, available_combined_height / combined_source_height)
+    scale = base_scale
     if scale <= 0:
         raise RuntimeError("Skala gabungan resi tidak valid")
 
-    output_page = PageObject.create_blank_page(
-        width=output_width,
-        height=output_height,
-    )
+    page_bottom = physical_bottom + PROMO_BOTTOM_POINTS
+    if label_top <= page_bottom:
+        raise RuntimeError("Area cetak resi tidak valid")
+
+    output_pages: list[PageObject] = []
+
+    def new_output_page() -> PageObject:
+        page = PageObject.create_blank_page(width=output_width, height=output_height)
+        output_pages.append(page)
+        return page
+
+    output_page = new_output_page()
     cursor_top = label_top
     for index, (source_page, crop_height) in enumerate(crop_heights):
-        cropped_page = top_crop(source_page, crop_height)
-        rendered_width = float(cropped_page.mediabox.width) * scale
-        rendered_height = crop_height * scale
-        horizontal_space = max(0, PAPER_WIDTH_POINTS - rendered_width)
-        left_offset = physical_left + min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
-        bottom_offset = cursor_top - rendered_height
-        output_page.merge_transformed_page(
-            cropped_page,
-            Transformation().scale(scale, scale).translate(left_offset, bottom_offset),
-            expand=False,
-        )
-        cursor_top = bottom_offset
+        full_page_height = label_top - page_bottom
+        remaining_page_height = cursor_top - page_bottom
+        rendered_crop_height = crop_height * scale
+        if (
+            rendered_crop_height <= full_page_height
+            and rendered_crop_height > remaining_page_height
+        ):
+            output_page = new_output_page()
+            cursor_top = label_top
+
+        consumed_height = 0.0
+        while consumed_height < crop_height - 0.01:
+            available_height = cursor_top - page_bottom
+            if available_height <= 0.01:
+                output_page = new_output_page()
+                cursor_top = label_top
+                available_height = cursor_top - page_bottom
+
+            slice_height = min(crop_height - consumed_height, available_height / scale)
+            cropped_page = vertical_crop(source_page, consumed_height, slice_height)
+            rendered_width = float(cropped_page.mediabox.width) * scale
+            rendered_height = slice_height * scale
+            horizontal_space = max(0, PAPER_WIDTH_POINTS - rendered_width)
+            left_offset = physical_left + min(LABEL_RIGHT_SHIFT_POINTS, horizontal_space)
+            bottom_offset = cursor_top - rendered_height
+            output_page.merge_transformed_page(
+                cropped_page,
+                Transformation().scale(scale, scale).translate(left_offset, bottom_offset),
+                expand=False,
+            )
+            cursor_top = bottom_offset
+            consumed_height += slice_height
+
+            if consumed_height < crop_height - 0.01:
+                output_page = new_output_page()
+                cursor_top = label_top
+
         if index < len(crop_heights) - 1:
-            cursor_top -= PAGE_GAP_POINTS
+            if cursor_top - PAGE_GAP_POINTS <= page_bottom:
+                output_page = new_output_page()
+                cursor_top = label_top
+            else:
+                cursor_top -= PAGE_GAP_POINTS
 
     promo_width = max_source_width * scale
     promo_height = promo_width * promo_aspect
@@ -300,10 +324,12 @@ def prepare_label(
         max(0, PAPER_WIDTH_POINTS - promo_width),
     )
     promo_y = cursor_top - PROMO_GAP_POINTS - promo_height
-    promo_bottom = physical_bottom + PROMO_BOTTOM_POINTS
-    if promo_y < promo_bottom - 0.1:
-        raise RuntimeError("Gabungan resi dan gambar melebihi tinggi kertas 182 mm")
-    promo_y = max(promo_bottom, promo_y)
+    if promo_y < page_bottom - 0.1:
+        output_page = new_output_page()
+        promo_y = label_top - promo_height
+    if promo_y < page_bottom - 0.1:
+        raise RuntimeError("Gambar pemberitahuan unboxing melebihi tinggi kertas 182 mm")
+    promo_y = max(page_bottom, promo_y)
     output_page.merge_page(
         promo_overlay(
             promo_image,
@@ -316,7 +342,8 @@ def prepare_label(
         )
     )
     writer = PdfWriter()
-    writer.add_page(output_page)
+    for output_page in output_pages:
+        writer.add_page(output_page)
     with open(output_path, "wb") as output:
         writer.write(output)
 
