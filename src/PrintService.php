@@ -12,11 +12,11 @@ final class PrintService
         $this->installedCacheFile = dirname(__DIR__) . '/storage/printer-list-cache.json';
     }
 
-    public function installedPrinters(): array
+    public function installedPrinters(bool $refresh = false): array
     {
-        if($this->installedCache!==null)return $this->installedCache;
+        if($this->installedCache!==null&&!$refresh)return $this->installedCache;
         $cached=$this->readInstalledCache();
-        if($cached!==null && (int)($cached['saved_at']??0)>=time()-60)
+        if($cached!==null&&!$refresh)
             return $this->installedCache=$cached['printers'];
         $script = "\$printers=@(Get-CimInstance Win32_Printer -ErrorAction Stop | Where-Object { -not \$_.WorkOffline -and ([int]\$_.PrinterStatus -notin 6,7) } | Select-Object -ExpandProperty Name); ConvertTo-Json -InputObject \$printers -Compress";
         $command = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' . escapeshellarg($script);
@@ -44,10 +44,10 @@ final class PrintService
         @file_put_contents($this->installedCacheFile,json_encode(['saved_at'=>time(),'printers'=>$printers],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);
     }
 
-    public function printerSettings(): array
+    public function printerSettings(bool $refreshInstalled = false): array
     {
-        if($this->settingsCache!==null)return $this->settingsCache;
-        $installed=$this->installedPrinters();$saved=$this->settingRows();
+        if($this->settingsCache!==null&&!$refreshInstalled)return $this->settingsCache;
+        $installed=$this->installedPrinters($refreshInstalled);$saved=$this->settingRows();
         $visible=json_decode((string)($saved['visible_printers']??''),true);
         if(!is_array($visible))$visible=$installed;
         $visible=array_values(array_filter($visible,fn($p)=>in_array((string)$p,$installed,true)));

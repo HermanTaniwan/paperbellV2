@@ -471,7 +471,7 @@ try {
         respond(['ok'=>true,'order_sn'=>$orderSn,'items'=>count($ids)]);
     }
     if ($action === 'print_label') { $input=body();$id=$printing->queueLabel(trim((string)($input['order_sn']??'')),trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user']);respond(['ok'=>true,'id'=>$id]); }
-    if ($action === 'printer_settings') respond($printing->printerSettings());
+    if ($action === 'printer_settings') respond($printing->printerSettings(true));
     if ($action === 'save_printer_settings') { $input=body();respond(['ok'=>true,'settings'=>$printing->savePrinterSettings($input)]); }
 
     if ($action === 'toggle_packaged') {
