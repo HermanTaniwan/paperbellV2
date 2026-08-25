@@ -13,8 +13,10 @@ CREATE TABLE IF NOT EXISTS order_process (
   model_sku VARCHAR(255) NOT NULL DEFAULT '', item_sku VARCHAR(255) NOT NULL DEFAULT '', item_name TEXT NOT NULL, model_name TEXT NOT NULL,
   qty INT NOT NULL DEFAULT 0, status VARCHAR(80) NOT NULL DEFAULT '', create_time BIGINT NOT NULL DEFAULT 0, saved_at BIGINT NOT NULL DEFAULT 0,
   printed TINYINT(1) NOT NULL DEFAULT 0, printed_odd TINYINT(1) NOT NULL DEFAULT 0, printed_even TINYINT(1) NOT NULL DEFAULT 0, printed_at BIGINT NULL,
-  UNIQUE KEY uq_order_line(order_sn,order_item_id), INDEX ix_lines_order(order_sn), INDEX ix_lines_item(item_key)
+  UNIQUE KEY uq_order_line(order_sn,order_item_id), INDEX ix_lines_order(order_sn), INDEX ix_lines_item(item_key),
+  INDEX ix_lines_order_printed_at(order_sn,printed,printed_at)
 ) ENGINE=InnoDB;
+ALTER TABLE order_process ADD INDEX IF NOT EXISTS ix_lines_order_printed_at(order_sn,printed,printed_at);
 CREATE TABLE IF NOT EXISTS order_resi (
   order_sn VARCHAR(100) PRIMARY KEY, pdf_path TEXT NOT NULL, tracking_number VARCHAR(150) NOT NULL DEFAULT '', fetched_at BIGINT NULL,
   resi_printed TINYINT(1) NOT NULL DEFAULT 0, resi_printed_at BIGINT NULL
