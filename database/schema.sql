@@ -6,8 +6,16 @@ CREATE TABLE IF NOT EXISTS orders (
   order_sn VARCHAR(100) PRIMARY KEY, status VARCHAR(80) NOT NULL DEFAULT '', create_time BIGINT NOT NULL DEFAULT 0,
   update_time BIGINT NOT NULL DEFAULT 0, buyer_username VARCHAR(255) NOT NULL DEFAULT '', raw_json LONGTEXT NOT NULL,
   packaged TINYINT(1) NOT NULL DEFAULT 0, packaged_at BIGINT NULL,
-  INDEX ix_orders_created(create_time), INDEX ix_orders_status(status), INDEX ix_orders_buyer(buyer_username)
+  print_line_count INT NOT NULL DEFAULT 0, print_item_qty BIGINT NOT NULL DEFAULT 0,
+  unprinted_lines INT NOT NULL DEFAULT 0, last_printed_at BIGINT NULL,
+  INDEX ix_orders_created(create_time), INDEX ix_orders_status(status), INDEX ix_orders_buyer(buyer_username),
+  INDEX ix_orders_print_summary(unprinted_lines,last_printed_at,create_time)
 ) ENGINE=InnoDB;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_line_count INT NOT NULL DEFAULT 0 AFTER packaged_at;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS print_item_qty BIGINT NOT NULL DEFAULT 0 AFTER print_line_count;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS unprinted_lines INT NOT NULL DEFAULT 0 AFTER print_item_qty;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_printed_at BIGINT NULL AFTER unprinted_lines;
+ALTER TABLE orders ADD INDEX IF NOT EXISTS ix_orders_print_summary(unprinted_lines,last_printed_at,create_time);
 CREATE TABLE IF NOT EXISTS order_process (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, order_sn VARCHAR(100) NOT NULL, order_item_id VARCHAR(150) NOT NULL, item_key VARCHAR(255) NOT NULL DEFAULT '',
   model_sku VARCHAR(255) NOT NULL DEFAULT '', item_sku VARCHAR(255) NOT NULL DEFAULT '', item_name TEXT NOT NULL, model_name TEXT NOT NULL,
@@ -17,6 +25,7 @@ CREATE TABLE IF NOT EXISTS order_process (
   INDEX ix_lines_order_printed_at(order_sn,printed,printed_at)
 ) ENGINE=InnoDB;
 ALTER TABLE order_process ADD INDEX IF NOT EXISTS ix_lines_order_printed_at(order_sn,printed,printed_at);
+UPDATE orders o LEFT JOIN (SELECT order_sn,COUNT(*) line_count,COALESCE(SUM(qty),0) item_qty,SUM(printed=0) pending,MAX(printed_at) printed_at FROM order_process GROUP BY order_sn) s ON s.order_sn=o.order_sn SET o.print_line_count=COALESCE(s.line_count,0),o.print_item_qty=COALESCE(s.item_qty,0),o.unprinted_lines=COALESCE(s.pending,0),o.last_printed_at=s.printed_at;
 CREATE TABLE IF NOT EXISTS order_resi (
   order_sn VARCHAR(100) PRIMARY KEY, pdf_path TEXT NOT NULL, tracking_number VARCHAR(150) NOT NULL DEFAULT '', fetched_at BIGINT NULL,
   resi_printed TINYINT(1) NOT NULL DEFAULT 0, resi_printed_at BIGINT NULL

@@ -18,6 +18,12 @@ function logLine(string $message): void
     file_put_contents($root . '/storage/print-worker.log', '[' . date('c') . "] {$message}\n", FILE_APPEND | LOCK_EX);
 }
 
+function refreshOrderPrintSummary(PDO $db,string $orderSn): void
+{
+    $stmt=$db->prepare('UPDATE orders o LEFT JOIN (SELECT order_sn,COUNT(*) line_count,COALESCE(SUM(qty),0) item_qty,SUM(printed=0) pending,MAX(printed_at) printed_at FROM order_process WHERE order_sn=? GROUP BY order_sn) s ON s.order_sn=o.order_sn SET o.print_line_count=COALESCE(s.line_count,0),o.print_item_qty=COALESCE(s.item_qty,0),o.unprinted_lines=COALESCE(s.pending,0),o.last_printed_at=s.printed_at WHERE o.order_sn=?');
+    $stmt->execute([$orderSn,$orderSn]);
+}
+
 function connectDatabase(): PDO
 {
     global $config;
@@ -400,6 +406,7 @@ do {
                 $mark = $db->prepare('UPDATE order_process SET printed=1,printed_odd=1,printed_even=1,printed_at=? WHERE id=?');
             }
             $mark->execute([time(), $job['order_process_id']]);
+            refreshOrderPrintSummary($db,(string)$job['order_sn']);
         } elseif ($job['job_type'] === 'label') {
             $mark = $db->prepare('UPDATE order_resi SET resi_printed=1,resi_printed_at=? WHERE order_sn=?');
             $mark->execute([time(), $job['order_sn']]);

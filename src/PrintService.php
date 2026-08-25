@@ -6,10 +6,14 @@ final class PrintService
     private ?array $installedCache = null;
     private ?array $settingsCache = null;
     private string $installedCacheFile;
+    private string $orderMappingCacheFile;
+    private string $fileAvailabilityCacheFile;
 
     public function __construct(private PDO $db, private string $fallbackLabelPrinter = 'EPSON L3210 Series')
     {
         $this->installedCacheFile = dirname(__DIR__) . '/storage/printer-list-cache.json';
+        $this->orderMappingCacheFile = dirname(__DIR__) . '/storage/order-mapping-cache.json';
+        $this->fileAvailabilityCacheFile = dirname(__DIR__) . '/storage/order-file-availability-cache.json';
     }
 
     public function installedPrinters(bool $refresh = false): array
@@ -42,6 +46,27 @@ final class PrintService
     private function writeInstalledCache(array $printers): void
     {
         @file_put_contents($this->installedCacheFile,json_encode(['saved_at'=>time(),'printers'=>$printers],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);
+    }
+
+    private function orderMappingCache(): array
+    {
+        if(is_file($this->orderMappingCacheFile)){$cached=json_decode((string)@file_get_contents($this->orderMappingCacheFile),true);if(is_array($cached)&&is_array($cached['by_key']??null))return$cached['by_key'];}
+        $mappingByKey=[];$mappingById=[];
+        foreach($this->db->query('SELECT * FROM data_mappings')->fetchAll() as $mapping){$mappingById[(string)$mapping['id']]=$mapping;$key=$this->norm((string)$mapping['sku_id']);if($key!=='')$mappingByKey[$key]=$mapping;}
+        foreach($this->db->query('SELECT alias_key,mapping_id FROM mapping_aliases')->fetchAll() as $alias){$mapping=$mappingById[(string)$alias['mapping_id']]??null;if($mapping)$mappingByKey[$this->norm((string)$alias['alias_key'])]=$mapping;}
+        @file_put_contents($this->orderMappingCacheFile,json_encode(['saved_at'=>time(),'by_key'=>$mappingByKey],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);
+        return$mappingByKey;
+    }
+
+    private function fileAvailabilityCache(): array
+    {
+        if(!is_file($this->fileAvailabilityCacheFile))return[];$cached=json_decode((string)@file_get_contents($this->fileAvailabilityCacheFile),true);
+        return is_array($cached)&&is_array($cached['paths']??null)?$cached['paths']:[];
+    }
+
+    private function writeFileAvailabilityCache(array $paths): void
+    {
+        @file_put_contents($this->fileAvailabilityCacheFile,json_encode(['saved_at'=>time(),'paths'=>$paths],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);
     }
 
     public function printerSettings(bool $refreshInstalled = false): array
@@ -99,25 +124,27 @@ final class PrintService
     {
         $orderSns=array_values(array_unique(array_filter(array_map('strval',$orderSns))));if(!$orderSns)return[];
         $marks=implode(',',array_fill(0,count($orderSns),'?'));
-        $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,printed_at FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);
-        $mappingByKey=[];$mappingById=[];
-        foreach($this->db->query('SELECT * FROM data_mappings')->fetchAll() as $mapping){$mappingById[(string)$mapping['id']]=$mapping;$key=$this->norm((string)$mapping['sku_id']);if($key!=='')$mappingByKey[$key]=$mapping;}
-        foreach($this->db->query('SELECT alias_key,mapping_id FROM mapping_aliases')->fetchAll() as $alias){$mapping=$mappingById[(string)$alias['mapping_id']]??null;if($mapping)$mappingByKey[$this->norm((string)$alias['alias_key'])]=$mapping;}
-        $inventory=[];
-        foreach($this->db->query('SELECT item_key,qty FROM product_inventory')->fetchAll() as $stock)$inventory[$this->norm((string)$stock['item_key'])]=(int)$stock['qty'];
+        $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,printed_at FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);$lines=$stmt->fetchAll();
+        $mappingByKey=$this->orderMappingCache();$resolved=[];$inventoryCandidates=[];
+        foreach($lines as $line){$mapping=$this->specialPdfMapping((string)$line['item_key']);if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}$resolved[]=['line'=>$line,'mapping'=>$mapping];foreach([(string)$line['item_key'],(string)($mapping['sku_id']??'')] as $candidate)if(trim($candidate)!=='')$inventoryCandidates[]=trim($candidate);}
+        $inventory=[];$inventoryCandidates=array_values(array_unique($inventoryCandidates));
+        if($inventoryCandidates){$inventoryMarks=implode(',',array_fill(0,count($inventoryCandidates),'?'));$inventoryStmt=$this->db->prepare("SELECT item_key,qty FROM product_inventory WHERE item_key IN ($inventoryMarks)");$inventoryStmt->execute($inventoryCandidates);foreach($inventoryStmt->fetchAll() as $stock)$inventory[$this->norm((string)$stock['item_key'])]=(int)$stock['qty'];}
         $activeLineIds=[];
         $active=$this->db->query("SELECT order_process_id FROM print_jobs WHERE job_type='product' AND order_process_id IS NOT NULL AND status IN ('queued','processing')");
         foreach($active->fetchAll(PDO::FETCH_COLUMN) as $lineId)$activeLineIds[(int)$lineId]=true;
-        $printers=$this->configuredPrinters();$result=[];
-        while($line=$stmt->fetch()){
-            $mapping=$this->specialPdfMapping((string)$line['item_key']);
-            if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}
+        $printers=$this->configuredPrinters();$result=[];$fileAvailability=$this->fileAvailabilityCache();$fileAvailabilityChanged=false;
+        foreach($resolved as $entry){$line=$entry['line'];$mapping=$entry['mapping'];
             $inventoryQty=null;
             $inventoryKeys=array_values(array_unique(array_filter([$this->norm((string)$line['item_key']),$this->norm((string)($mapping['sku_id']??''))])));
             foreach($inventoryKeys as $inventoryKey)if(array_key_exists($inventoryKey,$inventory)){$inventoryQty=$inventory[$inventoryKey];break;}
             $requiredQty=max(1,(int)$line['qty']);
-            $ready=$mapping!==null&&is_file((string)$mapping['file_path']);$defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
+            $path=(string)($mapping['file_path']??'');
+            if($path==='')$ready=false;
+            elseif(array_key_exists($path,$fileAvailability))$ready=(bool)$fileAvailability[$path];
+            else{$ready=is_file($path);$fileAvailability[$path]=$ready;$fileAvailabilityChanged=true;}
+            $defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
         }
+        if($fileAvailabilityChanged)$this->writeFileAvailabilityCache($fileAvailability);
         return$result;
     }
 
