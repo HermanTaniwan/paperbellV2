@@ -159,11 +159,8 @@ try {
 
     $mysql = Database::mysql($config['mysql']);
     $printing = new PrintService($mysql,$config['printing']['default_label_printer']);
-    $oauth = new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']);
-    $labelPreparer = new LabelPdfPreparer($config['printing'],__DIR__);
-    $labels = new MarketplaceLabelService($mysql,$oauth,__DIR__.'/storage/labels',$labelPreparer,(string)$config['printing']['default_label_printer']);
-    $marketSync = new MarketplaceOrderSyncService($mysql,$oauth);
-    $shopeeEscrow = new ShopeeEscrowService($mysql,$oauth);
+    $oauthService = static function() use ($mysql,$config): MarketplaceOAuthService { static $service=null;return $service??=new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']); };
+    $labelService = static function() use ($mysql,$config,$oauthService): MarketplaceLabelService { static $service=null;return $service??=new MarketplaceLabelService($mysql,$oauthService(),__DIR__.'/storage/labels',new LabelPdfPreparer($config['printing'],__DIR__),(string)$config['printing']['default_label_printer']); };
     $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__);
     $queueService = new PrintQueueService($mysql);
     $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__);
@@ -216,14 +213,14 @@ try {
     if ($action === 'spooler_action') {$input=body();respond($queueService->spoolerAction(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['operation']??''))));}
     if ($action === 'move_spooler_job') {$input=body();respond($queueService->moveSpoolerJob(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['target_printer']??''))));}
 
-    if ($action === 'oauth_status') respond($oauth->statuses(appBaseUrl($config)));
-    if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauth->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauth->statuses(appBaseUrl($config))]); }
-    if ($action === 'oauth_connect') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));respond(['ok'=>true,'url'=>$oauth->connectUrl($provider,appBaseUrl($config),(string)$_SESSION['paperbell_user'])]); }
-    if ($action === 'oauth_disconnect') { $input=body();$oauth->disconnect(strtolower(trim((string)($input['provider']??''))));respond(['ok'=>true]); }
-    if ($action === 'fetch_label') { $input=body();respond($labels->fetch(trim((string)($input['order_sn']??'')))); }
+    if ($action === 'oauth_status') respond($oauthService()->statuses(appBaseUrl($config)));
+    if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauthService()->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauthService()->statuses(appBaseUrl($config))]); }
+    if ($action === 'oauth_connect') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));respond(['ok'=>true,'url'=>$oauthService()->connectUrl($provider,appBaseUrl($config),(string)$_SESSION['paperbell_user'])]); }
+    if ($action === 'oauth_disconnect') { $input=body();$oauthService()->disconnect(strtolower(trim((string)($input['provider']??''))));respond(['ok'=>true]); }
+    if ($action === 'fetch_label') { $input=body();respond($labelService()->fetch(trim((string)($input['order_sn']??'')))); }
     if ($action === 'set_label_printed') { $input=body();$sn=trim((string)($input['order_sn']??''));$printed=(bool)($input['printed']??false);if($sn==='')respond(['error'=>'Order SN wajib diisi.'],422);$stmt=$mysql->prepare('INSERT INTO order_resi(order_sn,pdf_path,resi_printed,resi_printed_at) VALUES(?,\'\',?,?) ON DUPLICATE KEY UPDATE resi_printed=VALUES(resi_printed),resi_printed_at=VALUES(resi_printed_at)');$stmt->execute([$sn,$printed?1:0,$printed?time():null]);respond(['ok'=>true,'printed'=>$printed]); }
     if ($action === 'set_order_item_printed') { $input=body();$lineId=(int)($input['line_id']??0);$printed=(bool)($input['printed']??true);if($lineId<=0)respond(['error'=>'Item order tidak valid.'],422);$check=$mysql->prepare('SELECT order_sn FROM order_process WHERE id=?');$check->execute([$lineId]);$sn=(string)($check->fetchColumn()?:'');if($sn==='')respond(['error'=>'Item order tidak ditemukan.'],404);$stmt=$mysql->prepare('UPDATE order_process SET printed=?,printed_odd=?,printed_even=?,printed_at=? WHERE id=?');$stmt->execute([$printed?1:0,$printed?1:0,$printed?1:0,$printed?time():null,$lineId]);$remaining=$mysql->prepare('SELECT COUNT(*) FROM order_process WHERE order_sn=? AND printed=0');$remaining->execute([$sn]);respond(['ok'=>true,'printed'=>$printed,'order_sn'=>$sn,'remaining'=>(int)$remaining->fetchColumn()]); }
-    if ($action === 'sync_marketplace') { $input=body();respond($marketSync->sync(strtolower(trim((string)($input['provider']??''))),(string)$_SESSION['paperbell_user'])); }
+    if ($action === 'sync_marketplace') { $input=body();respond((new MarketplaceOrderSyncService($mysql,$oauthService()))->sync(strtolower(trim((string)($input['provider']??''))),(string)$_SESSION['paperbell_user'])); }
 
     if ($action === 'label_pdf') {
         $stmt=$mysql->prepare('SELECT pdf_path FROM order_resi WHERE order_sn=?');$stmt->execute([(string)($_GET['order_sn']??'')]);$path=(string)($stmt->fetchColumn()?:'');
@@ -249,13 +246,13 @@ try {
         $today=new DateTimeImmutable('today');
         $from=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($_GET['from']??'')))?:$today->setDate((int)$today->format('Y'),4,1);
         $to=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($_GET['to']??'')))?:$today;
-        respond($shopeeEscrow->dashboard($from,$to));
+        respond((new ShopeeEscrowService($mysql,$oauthService()))->dashboard($from,$to));
     }
     if ($action === 'sync_shopee_finance') {
         $input=body();$today=new DateTimeImmutable('today');
         $from=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($input['from']??'')))?:$today->setDate((int)$today->format('Y'),4,1);
         $to=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($input['to']??'')))?:$today;
-        respond($shopeeEscrow->sync($from,$to));
+        respond((new ShopeeEscrowService($mysql,$oauthService()))->sync($from,$to));
     }
 
     if ($action === 'shopee_shop_stats') {
