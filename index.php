@@ -244,7 +244,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </article>
           </section>
         </article>
-        <article v-if="shopeeStats" class="panel shopee-insights">
+        <article v-if="false" class="panel shopee-insights">
           <div class="shopee-insights-head">
             <div><span class="eyebrow">SHOPEE SHOP STATS</span><h3>Growth, funnel, dan kesehatan pelanggan</h3><p>{{shopeeStats.meta.source}} · {{shopeeStats.meta.periodLabel}} · status {{shopeeStats.meta.orderStatus}}</p></div>
             <span class="shopee-source-badge">{{number(shopeeStats.meta.sourceFiles.length)}} export terhubung</span>
@@ -312,8 +312,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </section>
           </div>
         </article>
-        <div class="panel-grid">
-<article class="panel">
+        <div>
+<article v-if="false" class="panel">
 <div class="panel-head">
 <div>
 <h3>Akses cepat</h3>
@@ -1474,7 +1474,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=107">
+<script src="assets/app.js?v=108">
 </script>
 </body>
 </html>
