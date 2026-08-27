@@ -23,7 +23,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/pdf-drawer.css?v=3">
   <link rel="stylesheet" href="assets/motion.css?v=1">
   <link rel="stylesheet" href="assets/scanner.css?v=2">
-  <link rel="stylesheet" href="assets/shopee-insights.css?v=8">
+  <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
 </head>
 <body>
 <script>
@@ -377,6 +377,38 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </dl>
 </article>
 </div>
+      </section>
+
+      <section v-if="view==='owner'" class="content shopee-page" v-cloak>
+        <template v-if="shopeeStats">
+          <article class="panel shopee-page-hero">
+            <div><span class="eyebrow">RINGKASAN OWNER</span><h2>{{shopeeStats.meta.latestLabel}}</h2><p>Ringkasan performa toko dari {{shopeeStats.meta.periodLabel}} · data Seller Centre.</p></div>
+            <span class="shopee-source-badge">{{number(shopeeStats.meta.sourceFiles.length)}} bulan terhubung</span>
+          </article>
+          <section class="shopee-kpis shopee-page-kpis"><article v-for="kpi in shopeeStats.latestKpis.slice(0,5)" :key="kpi.label" class="shopee-kpi"><span>{{kpi.label}}</span><strong>{{shopeeKpiValue(kpi)}}</strong><div class="shopee-kpi-foot"><b :class="shopeeDeltaTone(kpi)">{{shopeeDeltaText(kpi)}}</b><small>{{kpi.note}}</small></div></article></section>
+          <section class="shopee-page-grid">
+            <article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Pergerakan omzet</h4><p>Bandingkan penjualan bulanan untuk menangkap arah bisnis.</p></div></div><div class="monthly-bars"><div v-for="month in shopeeStats.monthly" :key="month.month" class="monthly-bar" :class="{latest:month.month===shopeeStats.monthly.at(-1)?.month}"><span>{{currency(month.sales)}}</span><i :style="{height:Math.max(5,month.sales/Math.max(1,...shopeeStats.monthly.map(item=>item.sales))*100)+'%'}"></i><b>{{month.label}}</b><small>{{number(month.orders)}} order</small></div></div></article>
+            <article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Prioritas keputusan</h4><p>Sinyal paling penting dibanding bulan sebelumnya.</p></div></div><div class="shopee-insight-list"><article v-for="insight in shopeeStats.insights" :key="insight.title" class="shopee-insight" :class="insight.tone"><span>{{insight.label}}</span><h5>{{insight.title}}</h5><p>{{insight.text}}</p></article></div></article>
+          </section>
+        </template>
+      </section>
+
+      <section v-if="view==='products'" class="content shopee-page" v-cloak>
+        <template v-if="shopeeStats"><article class="panel shopee-page-hero"><div><span class="eyebrow">PRODUK & SKU</span><h2>Produk penggerak omzet</h2><p>Top SKU pada {{shopeeStats.meta.latestLabel}} berdasarkan laporan Seller Centre.</p></div><span class="shopee-source-badge">Top 5 menyumbang {{shopeePercent(shopeeStats.topProductsShare,1)}}</span></article>
+        <article class="panel shopee-card"><div class="shopee-table-wrap"><table class="shopee-product-table"><thead><tr><th>Produk / SKU</th><th>Kontribusi</th><th>Omzet</th><th>Order atribusi</th><th>Unit</th><th>Konversi</th></tr></thead><tbody><tr v-for="product in shopeeStats.topProducts" :key="product.code"><td><b>{{product.name}}</b><small>{{product.code}}</small></td><td><span class="shopee-share"><i :style="{'--share':shopeeProductBar(product)+'%'}"></i>{{shopeePercent(product.share,1)}}</span></td><td>{{currency(product.sales)}}</td><td>{{number(product.orders)}}</td><td>{{number(product.units)}}</td><td>{{shopeePercent(product.conversion,2)}}</td></tr></tbody></table></div></article>
+        <section class="shopee-page-grid"><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Sumber traffic produk</h4><p>Channel yang paling banyak menghasilkan penjualan halaman produk.</p></div></div><div class="shopee-traffic-list"><div v-for="source in shopeeStats.trafficSources" :key="source.name" class="shopee-traffic-row"><span>{{source.name}}</span><i><b :style="{width:shopeeTrafficBar(source)+'%'}"></b></i><strong>{{shopeePercent(source.share,1)}}</strong></div></div></article><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Arah stok</h4><p>Gunakan halaman Rekomendasi Stok untuk menggabungkan demand SKU dengan stok aktual.</p></div></div><button type="button" @click="go('stock')">Lihat rekomendasi stok →</button></article></section></template>
+      </section>
+
+      <section v-if="view==='profit'" class="content shopee-page" v-cloak>
+        <template v-if="shopeeStats"><article class="panel shopee-page-hero"><div><span class="eyebrow">PROFIT & CASHFLOW</span><h2>Omzet, biaya, dan pencairan</h2><p>Omzet memakai laporan Seller Centre; pencairan aktual memakai data Escrow yang tersinkron.</p></div></article>
+        <section class="shopee-kpis shopee-page-kpis"><article class="shopee-kpi"><span>Omzet bulan terakhir</span><strong>{{currency(shopeeStats.monthly.at(-1)?.sales)}}</strong><small>{{shopeeStats.meta.latestLabel}}</small></article><article class="shopee-kpi"><span>Nilai pembatalan</span><strong>{{currency(shopeeStats.monthly.at(-1)?.cancelledSales)}}</strong><small>{{number(shopeeStats.monthly.at(-1)?.cancelledOrders)}} order dibatalkan</small></article><article class="shopee-kpi"><span>Belanja iklan</span><strong>{{currency(shopeeStats.ads.spend)}}</strong><small>ROAS {{number(shopeeStats.ads.roas)}}×</small></article><article class="shopee-kpi"><span>Pencairan escrow</span><strong>{{currency(shopeeFinance?.summary?.payout)}}</strong><small>{{number(shopeeFinance?.summary?.orders)}} order tersinkron</small></article></section>
+        <article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Rekonsiliasi cashflow</h4><p>Pencairan tidak selalu berada pada bulan order dibuat; gunakan sebagai pandangan arus kas, bukan margin bersih.</p></div><button type="button" class="ghost" @click="syncShopeeFinance" :disabled="financeSyncing">{{financeSyncing?'Sync...':'Sync escrow'}}</button></div><div v-if="shopeeFinance" class="cashflow-summary"><div><span>Gross</span><strong>{{currency(shopeeFinance.summary?.gross)}}</strong></div><div><span>Biaya marketplace</span><strong>{{currency(shopeeFinance.summary?.fees)}}</strong></div><div><span>Pencairan</span><strong>{{currency(shopeeFinance.summary?.payout)}}</strong></div></div><p class="shopee-attribution-note">Biaya bahan, tenaga kerja, dan ongkir di luar settlement belum termasuk. Halaman ini sengaja tidak menyebut angka tersebut sebagai laba bersih.</p></article></template>
+      </section>
+
+      <section v-if="view==='growth'" class="content shopee-page" v-cloak>
+        <template v-if="shopeeStats"><article class="panel shopee-page-hero"><div><span class="eyebrow">IKLAN & PERTUMBUHAN</span><h2>Efektivitas akuisisi</h2><p>{{shopeeStats.meta.latestLabel}} · attribution antar-channel dapat saling tumpang tindih.</p></div></article>
+        <section class="shopee-kpis shopee-page-kpis"><article class="shopee-kpi"><span>Omzet iklan</span><strong>{{currency(shopeeStats.ads.sales)}}</strong><small>{{shopeeStats.ads.name||'Shopee Ads'}}</small></article><article class="shopee-kpi"><span>Belanja iklan</span><strong>{{currency(shopeeStats.ads.spend)}}</strong><small>{{number(shopeeStats.ads.impressions)}} impresi</small></article><article class="shopee-kpi"><span>ROAS</span><strong>{{number(shopeeStats.ads.roas)}}×</strong><small>{{number(shopeeStats.ads.orders)}} order atribusi</small></article><article class="shopee-kpi"><span>Konversi iklan</span><strong>{{shopeePercent(shopeeStats.ads.conversion,2)}}</strong><small>Berbasis laporan iklan</small></article></section>
+        <section class="shopee-page-grid"><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Atribusi channel</h4><p>Kontribusi penjualan yang dicatat per channel oleh Shopee.</p></div></div><div class="attribution-list"><div v-for="channel in shopeeStats.attribution" :key="channel.name"><span>{{channel.name}}</span><strong>{{currency(channel.sales)}}</strong></div></div></article><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Funnel toko</h4><p>Traffic dan kualitas konversi bulan terakhir.</p></div></div><div class="cashflow-summary"><div><span>Pengunjung</span><strong>{{number(shopeeStats.monthly.at(-1)?.visitors)}}</strong></div><div><span>Klik</span><strong>{{number(shopeeStats.monthly.at(-1)?.clicks)}}</strong></div><div><span>Konversi</span><strong>{{shopeePercent(shopeeStats.monthly.at(-1)?.conversion,2)}}</strong></div></div></article></section></template>
       </section>
 
       <section v-if="view==='orders'" class="content">
@@ -1474,7 +1506,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=108">
+<script src="assets/app.js?v=109">
 </script>
 </body>
 </html>
