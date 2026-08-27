@@ -421,7 +421,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <span class="badge gray">{{row.status}}</span>
 <span class="badge" :class="row.unprinted_lines>0?'amber':'green'">{{row.unprinted_lines>0?row.unprinted_lines+' belum tercetak':'Cetak selesai'}}</span>
 </div>
-<button class="print-all-order-button" :disabled="row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':''))}}</button>
+<button class="print-all-order-button" :disabled="row.items_loading||row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.items_loading?'Memuat item…':(row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':'')))}}</button>
 </div>
 <p v-if="row.customer_note&&!row.order_sn.startsWith('RANDOM-')" class="customer-note-text">Catatan: {{row.customer_note}}</p>
 </header>
@@ -447,6 +447,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 </section>
 <div class="grouped-items">
+<div v-if="row.items_loading" class="order-items-loading" role="status" aria-live="polite">
+<span class="order-items-spinner" aria-hidden="true"></span>
+<div><b>Memuat item order…</b><small>Detail dan pengaturan cetak sedang disiapkan.</small></div>
+</div>
+<div v-else-if="row.items_error" class="order-items-error">
+<div><b>Item belum berhasil dimuat</b><small>{{row.items_error}}</small></div>
+<button class="ghost" @click="loadOrderItems([row])">Coba lagi</button>
+</div>
 <article v-for="line in row.items" :key="line.id" class="inline-print-item" :class="{'six-hole-item':isSixHole(line),'is-status-changing':line.marking_printed}">
 <div class="inline-item-main">
 <b>{{line.item_name||line.model_name||line.sku_id}}</b>
