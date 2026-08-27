@@ -30,6 +30,25 @@ function storeHolidays(PDO $db): array {
     foreach(is_array($decoded)?$decoded:[] as $value){$date=DateTimeImmutable::createFromFormat('!Y-m-d',(string)$value);if($date&&$date->format('Y-m-d')===$value)$items[]=$value;}
     $items=array_values(array_unique($items));sort($items);return $items;
 }
+function isShippingWorkday(DateTimeImmutable $date,array $holidayLookup): bool {
+    return (int)$date->format('N') < 6 && !isset($holidayLookup[$date->format('Y-m-d')]);
+}
+function nextShippingWorkday(DateTimeImmutable $date,array $holidayLookup): DateTimeImmutable {
+    do {$date=$date->modify('+1 day');} while(!isShippingWorkday($date,$holidayLookup));
+    return $date;
+}
+function shippingDeadline(int|string|null $createdAt,array $holidayLookup): array {
+    $timestamp=(int)$createdAt;
+    if($timestamp<1)return ['date'=>'','dueToday'=>false];
+    $timezone=new DateTimeZone(date_default_timezone_get());
+    $created=(new DateTimeImmutable('@'.$timestamp))->setTimezone($timezone);
+    $orderDate=$created->setTime(0,0);
+    $deadline=isShippingWorkday($orderDate,$holidayLookup) && (int)$created->format('G') < 12
+        ? $orderDate
+        : nextShippingWorkday($orderDate,$holidayLookup);
+    $today=(new DateTimeImmutable('today',$timezone))->setTime(0,0);
+    return ['date'=>$deadline->format('Y-m-d'),'dueToday'=>$deadline->format('Y-m-d')===$today->format('Y-m-d')];
+}
 function streamPdf(string $path, string $downloadName): never {
     $size = filesize($path);
     if ($size === false || $size < 1) respond(['error'=>'File PDF kosong atau tidak dapat dibaca.'], 404);
@@ -444,7 +463,8 @@ try {
             $matching=[];foreach($candidates as $row)if(isset($matchingByOrder[(string)$row['order_sn']]))$matching[]=$row;$total=count($matching);$items=array_slice($matching,$offset,$size);
             foreach($items as &$row){$matchedLines=$matchingByOrder[(string)$row['order_sn']];$row['item_ids']=array_map('intval',array_keys($matchedLines));$row['line_count']=count($matchedLines);$row['item_qty']=array_sum(array_column($matchedLines,'qty'));$row['unprinted_lines']=count(array_filter($matchedLines,fn($line)=>!$line['printed']));}unset($row);
         }
-        foreach($items as &$row){$row['createdText']=unixText($row['create_time']);$row['packaged']=(bool)$row['packaged'];$row['has_label_pdf']=$row['label_pdf_path']!==''&&is_file($row['label_pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];unset($row['label_pdf_path']);}
+        $holidayLookup=array_fill_keys(storeHolidays($mysql),true);
+        foreach($items as &$row){$deadline=shippingDeadline($row['create_time'],$holidayLookup);$row['createdText']=unixText($row['create_time']);$row['shipping_deadline']=$deadline['date'];$row['shipping_due_today']=$deadline['dueToday']&&!str_starts_with((string)$row['order_sn'],'MANUAL-')&&!str_starts_with((string)$row['order_sn'],'RANDOM-')&&strtoupper((string)$row['status'])!=='CANCELLED';$row['packaged']=(bool)$row['packaged'];$row['has_label_pdf']=$row['label_pdf_path']!==''&&is_file($row['label_pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];unset($row['label_pdf_path']);}
         respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->configuredPrinters(),'labelPrinters'=>$printing->labelPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
@@ -547,7 +567,7 @@ try {
         if($q!==''){$where[]='(o.order_sn LIKE ? OR r.tracking_number LIKE ?)';$params[]="%{$q}%";$params[]="%{$q}%";}if($filter==='unprinted')$where[]="IFNULL(r.resi_printed,0)=0 AND ((o.order_sn LIKE 'TIKTOK:%' AND UPPER(o.status) IN ('AWAITING_SHIPMENT','AWAITING_COLLECTION')) OR (o.order_sn NOT LIKE 'TIKTOK:%' AND UPPER(o.status) IN ('PROCESSED','READY_TO_SHIP')))";if($filter==='printed')$where[]='r.resi_printed=1';if($filter==='cancelled')$where[]="UPPER(o.status)='CANCELLED'";$sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
         $count=$mysql->prepare("SELECT COUNT(*) FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere}");$count->execute($params);$total=(int)$count->fetchColumn();
         $labelOrderBy=$filter==='printed'?'COALESCE(r.resi_printed_at,0) DESC,o.create_time DESC':'o.create_time DESC';
-        $stmt=$mysql->prepare("SELECT o.order_sn,o.status,o.create_time,COALESCE(oq.item_qty,0) item_qty,IFNULL(r.pdf_path,'') pdf_path,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.resi_printed,0) resi_printed,r.resi_printed_at,IFNULL(lf.status,'') label_fetch_status,IFNULL(lf.message,'') label_fetch_message,IFNULL(lf.error,'') label_fetch_error,IFNULL(lf.attempts,0) label_fetch_attempts FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN label_fetch_jobs lf ON lf.order_sn=o.order_sn LEFT JOIN (SELECT order_sn,COALESCE(SUM(qty),0) item_qty FROM order_process WHERE qty>0 AND UPPER(TRIM(status)) NOT IN ('CANCELLED','CANCELED') GROUP BY order_sn) oq ON oq.order_sn=o.order_sn {$sqlWhere} ORDER BY {$labelOrderBy} LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();foreach($items as &$row){$row['createdText']=unixText($row['create_time']);$row['item_qty']=(int)$row['item_qty'];$row['hasPdf']=$row['pdf_path']!==''&&is_file($row['pdf_path']);unset($row['pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];}respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->labelPrinters(),'defaultPrinter'=>$printing->defaultLabelPrinter()]);
+        $stmt=$mysql->prepare("SELECT o.order_sn,o.status,o.create_time,COALESCE(oq.item_qty,0) item_qty,IFNULL(r.pdf_path,'') pdf_path,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.resi_printed,0) resi_printed,r.resi_printed_at,IFNULL(lf.status,'') label_fetch_status,IFNULL(lf.message,'') label_fetch_message,IFNULL(lf.error,'') label_fetch_error,IFNULL(lf.attempts,0) label_fetch_attempts FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN label_fetch_jobs lf ON lf.order_sn=o.order_sn LEFT JOIN (SELECT order_sn,COALESCE(SUM(qty),0) item_qty FROM order_process WHERE qty>0 AND UPPER(TRIM(status)) NOT IN ('CANCELLED','CANCELED') GROUP BY order_sn) oq ON oq.order_sn=o.order_sn {$sqlWhere} ORDER BY {$labelOrderBy} LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();$holidayLookup=array_fill_keys(storeHolidays($mysql),true);foreach($items as &$row){$deadline=shippingDeadline($row['create_time'],$holidayLookup);$row['createdText']=unixText($row['create_time']);$row['shipping_deadline']=$deadline['date'];$row['shipping_due_today']=$deadline['dueToday']&&strtoupper((string)$row['status'])!=='CANCELLED';$row['item_qty']=(int)$row['item_qty'];$row['hasPdf']=$row['pdf_path']!==''&&is_file($row['pdf_path']);unset($row['pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];}respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->labelPrinters(),'defaultPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
     if ($action === 'command') respond(['error'=>'Bridge desktop sudah dinonaktifkan. Gunakan endpoint native web.'],410);

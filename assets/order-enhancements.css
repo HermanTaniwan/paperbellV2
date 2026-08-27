@@ -10,6 +10,7 @@
 .order-resi-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.order-resi-actions button{width:100%;padding:8px 10px;font-size:10px;white-space:nowrap}
 .toolbar .marketplace-sync-button{flex:0 0 auto;padding:8px 12px;border-radius:9px;font-size:11px;line-height:1.2;white-space:nowrap}
 .paper-order-filters{border-color:#d8e1da}.paper-order-filters button{white-space:nowrap}.paper-order-filters button.active{background:#dceee4;color:#185e40}
+.shipping-due-badge,.shipping-due-label{display:inline-flex;align-items:center;width:max-content;border:1px solid #d62f2f;border-radius:999px;padding:4px 8px;background:#fff0f0;color:#ae1717;font-size:9px;font-weight:900;letter-spacing:.045em;line-height:1.2}.shipping-due-badge{animation:shipping-due-pulse 1.7s ease-in-out infinite}.shipping-due-label{margin-top:5px}.shipping-due-today-row>td{background:#fff9f8}.shipping-due-today-row>td:first-child{box-shadow:inset 3px 0 #d62f2f}@keyframes shipping-due-pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,47,47,0)}50%{box-shadow:0 0 0 4px rgba(214,47,47,.14)}}
 .mark-printed-button{padding:7px 10px;border-color:#9bc2aa;color:#1e6c4b;font-size:10px;white-space:nowrap}
 .mark-printed-button.revert{border-color:#e1bd77;color:#8b5d14;background:#fffaf0}
 .inline-item-actions{display:grid;gap:6px}.inline-item-actions .inline-print-button{grid-column:auto;width:100%}.inline-item-actions .mark-printed-button{width:100%}

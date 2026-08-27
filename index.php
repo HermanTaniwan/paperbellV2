@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=20">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=21">
   <link rel="stylesheet" href="assets/features.css?v=23">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -182,7 +182,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             <div class="analytics-metric payout-summary"><span>Payout bersih Shopee</span><strong>{{currency(analytics.summary.shopeePayout)}}</strong><small>{{number(analytics.summary.escrowOrders)}} order escrow</small></div>
           </div>
           <details class="store-holiday-settings">
-            <summary><span><b>Hari libur toko</b><small>Atur tanggal yang tidak dihitung sebagai hari operasional</small></span><em v-if="analytics">{{number(analytics.summary.operatingDays)}} hari operasional <i>&middot;</i> {{number(analytics.summary.holidayDays)}} libur</em></summary>
+            <summary><span><b>Hari libur toko / nasional</b><small>Tanggal ini dilewati oleh target pengiriman dan tidak dihitung sebagai hari operasional</small></span><em v-if="analytics">{{number(analytics.summary.operatingDays)}} hari operasional <i>&middot;</i> {{number(analytics.summary.holidayDays)}} libur</em></summary>
             <div class="store-holiday-body"><form @submit.prevent="addStoreHoliday"><label>Tambah tanggal libur<input v-model="storeHolidayDate" type="date" required :disabled="holidaySaving"></label><button type="submit" :disabled="holidaySaving||!storeHolidayDate">{{holidaySaving?'Menyimpan...':'Tambah'}}</button></form><div class="store-holiday-list"><span v-if="!analytics?.holidays?.length">Belum ada tanggal libur yang disimpan.</span><button v-for="date in (analytics?.holidays||[])" :key="date" type="button" class="holiday-chip" :class="{'in-range':date>=analyticsFrom&&date<=analyticsTo}" :disabled="holidaySaving" @click="removeStoreHoliday(date)" :title="'Hapus '+holidayDateText(date)">{{holidayDateText(date)}} &times;</button></div></div>
           </details>
           <div v-if="analyticsLoading&&!analytics" class="analytics-empty">Memuat analitik order…</div>
@@ -419,6 +419,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="order-group-overview-actions">
 <div class="order-group-status">
 <span class="badge gray">{{row.status}}</span>
+<span v-if="row.shipping_due_today" class="shipping-due-badge">KIRIM HARI INI · maks. 17.00</span>
 <span class="badge" :class="row.unprinted_lines>0?'amber':'green'">{{row.unprinted_lines>0?row.unprinted_lines+' belum tercetak':'Cetak selesai'}}</span>
 </div>
 <button class="print-all-order-button" :disabled="row.items_loading||row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.items_loading?'Memuat item…':(row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':'')))}}</button>
@@ -743,13 +744,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <tr v-else-if="!pageData.items.length" key="labels-empty" class="labels-empty-row">
 <td colspan="8" class="empty">{{filter==='unprinted'?'Tidak ada resi yang belum dicetak.':filter==='printed'?'Belum ada resi yang sudah dicetak.':filter==='cancelled'?'Tidak ada resi yang dibatalkan.':'Tidak ada resi yang tersedia.'}}</td>
 </tr>
-<tr v-for="row in pageData.items" :key="row.order_sn" :class="{'is-status-changing':row.statusChanging,'is-previewing':labelPreview?.order_sn===row.order_sn}" @click="openLabelRow(row,$event)">
+<tr v-for="row in pageData.items" :key="row.order_sn" :class="{'is-status-changing':row.statusChanging,'is-previewing':labelPreview?.order_sn===row.order_sn,'shipping-due-today-row':row.shipping_due_today}" @click="openLabelRow(row,$event)">
 <td>
 <input type="checkbox" :checked="selected.has(row.order_sn)" @change="selectOne(row.order_sn,$event.target.checked)">
 </td>
 <td>
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
+<small v-if="row.shipping_due_today" class="shipping-due-label">KIRIM HARI INI · maks. 17.00</small>
 </td>
 <td class="label-item-qty"><b>{{number(row.item_qty)}}</b><small>pcs</small></td>
 <td><b class="tracking-number">{{row.tracking_number||'Belum tersedia'}}</b><small v-if="!row.tracking_number" class="badge amber">Nomor resi belum tersedia</small></td>
@@ -1450,6 +1452,5 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </script>
 </body>
 </html>
-
 
 
