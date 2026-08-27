@@ -298,6 +298,13 @@ try {
         ));
     }
 
+    if ($action === 'shopee_growth_stats') {
+        respond((new ShopeeShopStatsService($mysql))->growthStats(
+            trim((string)($_GET['from'] ?? '')),
+            trim((string)($_GET['to'] ?? ''))
+        ));
+    }
+
     if ($action === 'dashboard') {
         $totals = $mysql->query("SELECT COUNT(*) total,SUM(UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)) unprinted,SUM(UPPER(o.status)<>'CANCELLED' AND EXISTS(SELECT 1 FROM order_process done WHERE done.order_sn=o.order_sn) AND NOT EXISTS(SELECT 1 FROM order_process pending WHERE pending.order_sn=o.order_sn AND pending.printed=0)) printed,SUM(UPPER(o.status)='CANCELLED') cancelled FROM orders o")->fetch();
         $labels = $mysql->query("SELECT COUNT(*) total,SUM(resi_printed=0) unprinted,SUM(resi_printed=1) printed FROM order_resi")->fetch();

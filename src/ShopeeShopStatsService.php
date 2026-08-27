@@ -96,6 +96,35 @@ final class ShopeeShopStatsService
         ];
     }
 
+    public function growthStats(string $from, string $to): array
+    {
+        $bounds=$this->db->query('SELECT MIN(month_start) min_date,MAX(month_end) max_date FROM shopee_shop_stats_monthly')->fetch();
+        $minDate=(string)($bounds['min_date']??'');$maxDate=(string)($bounds['max_date']??'');
+        if($minDate===''||$maxDate==='')throw new RuntimeException('Data historis Shopee belum tersedia di database.');
+        $from=$this->validDate($from)?$from:$minDate;$to=$this->validDate($to)?$to:$maxDate;
+        if($from<$minDate)$from=$minDate;if($to>$maxDate)$to=$maxDate;
+        if($from>$to)throw new InvalidArgumentException('Tanggal mulai tidak boleh melewati tanggal akhir.');
+
+        $stmt=$this->db->prepare('SELECT COALESCE(SUM(ads_attributed_sales),0) ads_sales,COALESCE(SUM(ads_spend),0) ads_spend,COALESCE(SUM(ads_impressions),0) ads_impressions,COALESCE(SUM(ads_orders),0) ads_orders,COALESCE(SUM(ads_conversion_rate*ads_impressions),0) weighted_conversion,COALESCE(SUM(visitors),0) visitors,COALESCE(SUM(clicks),0) clicks,COALESCE(SUM(orders_count),0) orders FROM shopee_shop_stats_monthly WHERE month_end>=? AND month_start<=?');
+        $stmt->execute([$from,$to]);$summary=$stmt->fetch()?:[];
+        $impressions=(int)$summary['ads_impressions'];$spend=(float)$summary['ads_spend'];$visitors=(int)$summary['visitors'];
+        $adsNameStmt=$this->db->prepare("SELECT ads_name FROM shopee_shop_stats_monthly WHERE month_end>=? AND month_start<=? AND ads_name<>'' ORDER BY month_start DESC LIMIT 1");
+        $adsNameStmt->execute([$from,$to]);
+        $attributionStmt=$this->db->prepare('SELECT channel_name name,COALESCE(SUM(sales),0) sales FROM shopee_shop_stats_attribution WHERE month_start>=DATE_FORMAT(?,\'%Y-%m-01\') AND month_start<=DATE_FORMAT(?,\'%Y-%m-01\') GROUP BY channel_name ORDER BY sales DESC');
+        $attributionStmt->execute([$from,$to]);
+
+        return [
+            'from'=>$from,'to'=>$to,'minDate'=>$minDate,'maxDate'=>$maxDate,'periodLabel'=>$this->periodLabel($from,$to),
+            'ads'=>[
+                'name'=>(string)($adsNameStmt->fetchColumn()?:'Shopee Ads'),'sales'=>(float)$summary['ads_sales'],'spend'=>$spend,
+                'roas'=>$spend>0?(float)$summary['ads_sales']/$spend:0.0,'impressions'=>$impressions,'orders'=>(float)$summary['ads_orders'],
+                'conversion'=>$impressions>0?(float)$summary['weighted_conversion']/$impressions:0.0,
+            ],
+            'attribution'=>array_map(fn(array $row):array=>['name'=>(string)$row['name'],'sales'=>(float)$row['sales']],$attributionStmt->fetchAll()),
+            'funnel'=>['visitors'=>$visitors,'clicks'=>(int)$summary['clicks'],'conversion'=>$visitors>0?(float)$summary['orders']/$visitors:0.0],
+        ];
+    }
+
     private function monthlyRow(array $row): array
     {
         $orders=(int)$row['orders_count'];
