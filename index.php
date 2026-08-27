@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=22">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=23">
   <link rel="stylesheet" href="assets/features.css?v=23">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -398,6 +398,22 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button class="ghost marketplace-sync-button" @click="queue('shopee_sync','')" :disabled="busy">↻ Sync Shopee</button>
 <button class="ghost marketplace-sync-button" @click="queue('tiktok_sync','')" :disabled="busy">↻ Sync TikTok</button>
 </div>
+        <section v-if="pageData.shippingSummary" class="shipping-today-summary" :class="{'is-complete':pageData.shippingSummary.total>0&&pageData.shippingSummary.unprinted===0}" aria-live="polite">
+          <div class="shipping-summary-main">
+            <span class="shipping-summary-icon" aria-hidden="true">▤</span>
+            <div>
+              <span class="eyebrow">TARGET KIRIM HARI INI</span>
+              <h3 v-if="pageData.shippingSummary.total">Sisa <strong>{{number(pageData.shippingSummary.unprinted)}}</strong> order belum tercetak dari total <strong>{{number(pageData.shippingSummary.total)}}</strong> order</h3>
+              <h3 v-else>Tidak ada target pengiriman hari ini</h3>
+              <p v-if="pageData.shippingSummary.total">{{number(pageData.shippingSummary.printed)}} order sudah selesai dicetak</p>
+              <p v-else>Sabtu, Minggu, dan tanggal libur tidak dihitung sebagai hari kirim.</p>
+            </div>
+          </div>
+          <div v-if="pageData.shippingSummary.total" class="shipping-summary-progress">
+            <div><span>Progres cetak</span><b>{{Math.round(pageData.shippingSummary.printed/pageData.shippingSummary.total*100)}}%</b></div>
+            <span class="shipping-progress-track"><i :style="{width:Math.round(pageData.shippingSummary.printed/pageData.shippingSummary.total*100)+'%'}"></i></span>
+          </div>
+        </section>
         <div v-if="syncSummary" class="sync-result-box" :class="{warning:syncSummary.cancel_requests?.length}">
 <div>
 <b>Hasil Sync {{syncSummary.marketplace}}</b>
@@ -1456,7 +1472,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=106">
+<script src="assets/app.js?v=107">
 </script>
 </body>
 </html>

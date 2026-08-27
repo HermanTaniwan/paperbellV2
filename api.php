@@ -445,11 +445,13 @@ try {
 
     if ($action === 'orders') {
         $q = trim((string)($_GET['q'] ?? '')); $filter = $_GET['filter'] ?? 'all'; $dueToday=(string)($_GET['due_today']??'')==='1'; $paperFilter=strtolower(trim((string)($_GET['paper']??'all')));if(!in_array($paperFilter,['all','a5_6','a5_20','b5'],true))$paperFilter='all';$page=max(1,(int)($_GET['page']??1)); $size=30; $offset=($page-1)*$size;
+        $holidayLookup=array_fill_keys(storeHolidays($mysql),true);$dueRange=shippingDueTodayRange($holidayLookup);$shippingSummary=['total'=>0,'unprinted'=>0,'printed'=>0];
+        if($dueRange!==null){$summaryStmt=$mysql->prepare("SELECT COUNT(*) total,COALESCE(SUM(o.print_line_count=0 OR o.unprinted_lines>0),0) unprinted FROM orders o WHERE o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?");$summaryStmt->execute($dueRange);$summaryRow=$summaryStmt->fetch()?:[];$shippingSummary['total']=(int)($summaryRow['total']??0);$shippingSummary['unprinted']=(int)($summaryRow['unprinted']??0);$shippingSummary['printed']=$shippingSummary['total']-$shippingSummary['unprinted'];}
         $where=[]; $params=[];
         if ($q!=='') { $where[]='(o.order_sn LIKE ? OR o.buyer_username LIKE ? OR r.tracking_number LIKE ? OR EXISTS(SELECT 1 FROM order_process op WHERE op.order_sn=o.order_sn AND (op.item_name LIKE ? OR op.model_name LIKE ? OR op.model_sku LIKE ? OR op.item_sku LIKE ?)))'; $term="%{$q}%"; $params=array_fill(0,7,$term); }
-        if($dueToday){$holidayLookup=array_fill_keys(storeHolidays($mysql),true);$dueRange=shippingDueTodayRange($holidayLookup);if($dueRange===null)$where[]='1=0';else{$where[]="o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?";$params[]=$dueRange[0];$params[]=$dueRange[1];}}
+        if($dueToday){if($dueRange===null)$where[]='1=0';else{$where[]="o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?";$params[]=$dueRange[0];$params[]=$dueRange[1];}}
         if($paperFilter!=='all'&&in_array($filter,['unprinted','printed'],true))$where[]="UPPER(o.status)<>'CANCELLED'";
-        if ($paperFilter==='all'&&$filter==='unprinted') $where[]="UPPER(o.status)<>'CANCELLED' AND o.unprinted_lines>0";
+        if ($paperFilter==='all'&&$filter==='unprinted') $where[]="UPPER(o.status)<>'CANCELLED' AND (o.print_line_count=0 OR o.unprinted_lines>0)";
         if ($paperFilter==='all'&&$filter==='printed') $where[]="UPPER(o.status)<>'CANCELLED' AND o.print_line_count>0 AND o.unprinted_lines=0";
         $sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
         $orderBy=$filter==='printed'?'COALESCE(o.last_printed_at,0) DESC,o.create_time DESC':'o.create_time DESC';
@@ -472,9 +474,8 @@ try {
             $matching=[];foreach($candidates as $row)if(isset($matchingByOrder[(string)$row['order_sn']]))$matching[]=$row;$total=count($matching);$items=array_slice($matching,$offset,$size);
             foreach($items as &$row){$matchedLines=$matchingByOrder[(string)$row['order_sn']];$row['item_ids']=array_map('intval',array_keys($matchedLines));$row['line_count']=count($matchedLines);$row['item_qty']=array_sum(array_column($matchedLines,'qty'));$row['unprinted_lines']=count(array_filter($matchedLines,fn($line)=>!$line['printed']));}unset($row);
         }
-        $holidayLookup=array_fill_keys(storeHolidays($mysql),true);
         foreach($items as &$row){$deadline=shippingDeadline($row['create_time'],$holidayLookup);$row['createdText']=unixText($row['create_time']);$row['shipping_deadline']=$deadline['date'];$row['shipping_due_today']=$deadline['dueToday']&&!str_starts_with((string)$row['order_sn'],'MANUAL-')&&!str_starts_with((string)$row['order_sn'],'RANDOM-')&&!in_array(strtoupper((string)$row['status']),['CANCELLED','CANCELED'],true);$row['packaged']=(bool)$row['packaged'];$row['has_label_pdf']=$row['label_pdf_path']!==''&&is_file($row['label_pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];unset($row['label_pdf_path']);}
-        respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'printers'=>$printing->configuredPrinters(),'labelPrinters'=>$printing->labelPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
+        respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'shippingSummary'=>$shippingSummary,'printers'=>$printing->configuredPrinters(),'labelPrinters'=>$printing->labelPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
     if ($action === 'order_items') {
