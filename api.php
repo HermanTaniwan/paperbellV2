@@ -37,13 +37,16 @@ function nextShippingWorkday(DateTimeImmutable $date,array $holidayLookup): Date
     do {$date=$date->modify('+1 day');} while(!isShippingWorkday($date,$holidayLookup));
     return $date;
 }
+function shippingDueDateRange(DateTimeImmutable $dueDate,array $holidayLookup): ?array {
+    $dueDate=$dueDate->setTime(0,0);
+    if(!isShippingWorkday($dueDate,$holidayLookup))return null;
+    $previous=$dueDate;
+    do {$previous=$previous->modify('-1 day');} while(!isShippingWorkday($previous,$holidayLookup));
+    return [$previous->setTime(12,0)->getTimestamp(),$dueDate->setTime(12,0)->getTimestamp()];
+}
 function shippingDueTodayRange(array $holidayLookup): ?array {
     $timezone=new DateTimeZone(date_default_timezone_get());
-    $today=(new DateTimeImmutable('today',$timezone))->setTime(0,0);
-    if(!isShippingWorkday($today,$holidayLookup))return null;
-    $previous=$today;
-    do {$previous=$previous->modify('-1 day');} while(!isShippingWorkday($previous,$holidayLookup));
-    return [$previous->setTime(12,0)->getTimestamp(),$today->setTime(12,0)->getTimestamp()];
+    return shippingDueDateRange(new DateTimeImmutable('today',$timezone),$holidayLookup);
 }
 function shippingDeadline(int|string|null $createdAt,array $holidayLookup): array {
     $timestamp=(int)$createdAt;
@@ -445,8 +448,10 @@ try {
 
     if ($action === 'orders') {
         $q = trim((string)($_GET['q'] ?? '')); $filter = $_GET['filter'] ?? 'all'; $dueToday=(string)($_GET['due_today']??'')==='1'; $paperFilter=strtolower(trim((string)($_GET['paper']??'all')));if(!in_array($paperFilter,['all','a5_6','a5_20','b5'],true))$paperFilter='all';$page=max(1,(int)($_GET['page']??1)); $size=30; $offset=($page-1)*$size;
-        $holidayLookup=array_fill_keys(storeHolidays($mysql),true);$dueRange=shippingDueTodayRange($holidayLookup);$shippingSummary=['total'=>0,'unprinted'=>0,'printed'=>0];
-        if($dueRange!==null){$summaryStmt=$mysql->prepare("SELECT COUNT(*) total,COALESCE(SUM(o.print_line_count=0 OR o.unprinted_lines>0),0) unprinted FROM orders o WHERE o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?");$summaryStmt->execute($dueRange);$summaryRow=$summaryStmt->fetch()?:[];$shippingSummary['total']=(int)($summaryRow['total']??0);$shippingSummary['unprinted']=(int)($summaryRow['unprinted']??0);$shippingSummary['printed']=$shippingSummary['total']-$shippingSummary['unprinted'];}
+        $holidayLookup=array_fill_keys(storeHolidays($mysql),true);$timezone=new DateTimeZone(date_default_timezone_get());$todayDate=(new DateTimeImmutable('today',$timezone))->setTime(0,0);$dueRange=shippingDueDateRange($todayDate,$holidayLookup);
+        $loadShippingSummary=static function(?array $range)use($mysql):array{$summary=['total'=>0,'unprinted'=>0,'printed'=>0];if($range===null)return$summary;$stmt=$mysql->prepare("SELECT COUNT(*) total,COALESCE(SUM(o.print_line_count=0 OR o.unprinted_lines>0),0) unprinted FROM orders o WHERE o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?");$stmt->execute($range);$row=$stmt->fetch()?:[];$summary['total']=(int)($row['total']??0);$summary['unprinted']=(int)($row['unprinted']??0);$summary['printed']=$summary['total']-$summary['unprinted'];return$summary;};
+        $todaySummary=$loadShippingSummary($dueRange);$shippingSummary=$todaySummary+['period'=>'today','date'=>$todayDate->format('Y-m-d')];
+        if($todaySummary['total']>0&&$todaySummary['unprinted']===0){$nextDate=nextShippingWorkday($todayDate,$holidayLookup);$shippingSummary=$loadShippingSummary(shippingDueDateRange($nextDate,$holidayLookup))+['period'=>'next','date'=>$nextDate->format('Y-m-d'),'todayTotal'=>$todaySummary['total']];}
         $where=[]; $params=[];
         if ($q!=='') { $where[]='(o.order_sn LIKE ? OR o.buyer_username LIKE ? OR r.tracking_number LIKE ? OR EXISTS(SELECT 1 FROM order_process op WHERE op.order_sn=o.order_sn AND (op.item_name LIKE ? OR op.model_name LIKE ? OR op.model_sku LIKE ? OR op.item_sku LIKE ?)))'; $term="%{$q}%"; $params=array_fill(0,7,$term); }
         if($dueToday){if($dueRange===null)$where[]='1=0';else{$where[]="o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?";$params[]=$dueRange[0];$params[]=$dueRange[1];}}

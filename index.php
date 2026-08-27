@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=24">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=25">
   <link rel="stylesheet" href="assets/features.css?v=23">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -402,10 +402,12 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           <div class="shipping-summary-main">
             <span class="shipping-summary-icon" aria-hidden="true">▤</span>
             <div>
-              <span class="eyebrow">TARGET KIRIM HARI INI</span>
+              <span v-if="pageData.shippingSummary.period==='next'" class="eyebrow">TARGET KIRIM BERIKUTNYA · {{holidayDateText(pageData.shippingSummary.date)}}</span>
+              <span v-else class="eyebrow">TARGET KIRIM HARI INI</span>
               <h3 v-if="pageData.shippingSummary.total">Sisa <strong>{{number(pageData.shippingSummary.unprinted)}}</strong> order belum tercetak dari total <strong>{{number(pageData.shippingSummary.total)}}</strong> order</h3>
-              <h3 v-else>Tidak ada target pengiriman hari ini</h3>
-              <p v-if="pageData.shippingSummary.total">{{number(pageData.shippingSummary.printed)}} order sudah selesai dicetak</p>
+              <h3 v-else>{{pageData.shippingSummary.period==='next'?'Belum ada order untuk target berikutnya':'Tidak ada target pengiriman hari ini'}}</h3>
+              <p v-if="pageData.shippingSummary.period==='next'">Target hari ini selesai 100% · {{number(pageData.shippingSummary.todayTotal)}} order</p>
+              <p v-else-if="pageData.shippingSummary.total">{{number(pageData.shippingSummary.printed)}} order sudah selesai dicetak</p>
               <p v-else>Sabtu, Minggu, dan tanggal libur tidak dihitung sebagai hari kirim.</p>
             </div>
           </div>
