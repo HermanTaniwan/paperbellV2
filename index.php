@@ -387,7 +387,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button v-for="f in orderFilters" :class="{active:filter===f.id}" :disabled="loading" @click="changeOrderFilter(f.id)">{{ loading&&filter===f.id ? 'Memuat…' : f.label }}</button>
 </div>
 <div class="filters shipping-due-filter" aria-label="Filter target pengiriman">
-<button :class="{active:shippingDueToday}" :disabled="loading" @click="toggleShippingDueToday">Kirim hari ini</button>
+<button :class="{active:shippingFilter==='all'}" :disabled="loading" @click="changeShippingFilter('all')">Semua</button>
+<button :class="{active:shippingFilter==='due_today'}" :disabled="loading" @click="changeShippingFilter('due_today')">Kirim hari ini</button>
 </div>
 <div class="filters paper-order-filters" aria-label="Filter jenis kertas">
 <button v-for="f in paperFilters" :class="{active:paperFilter===f.id}" :disabled="loading" @click="changePaperFilter(f.id)">{{f.label}}</button>
@@ -712,7 +713,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button v-for="f in labelFilters" :class="{active:filter===f.id}" @click="filter=f.id;page=1;loadLabels()">{{ f.label }}</button>
 </div>
 <div class="filters shipping-due-filter" aria-label="Filter target pengiriman">
-<button :class="{active:shippingDueToday}" @click="toggleShippingDueToday">Kirim hari ini</button>
+<button :class="{active:shippingFilter==='all'}" @click="changeShippingFilter('all')">Semua</button>
+<button :class="{active:shippingFilter==='due_today'}" @click="changeShippingFilter('due_today')">Kirim hari ini</button>
 </div>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
 <button class="label-toolbar-button" :disabled="!selected.size||labelBulkFetching" @click="bulkCommand('fetch_label')">{{labelBulkFetching?'Mengambil PDF…':'Ambil PDF ('+selected.size+')'}}</button>
