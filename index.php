@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=21">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=22">
   <link rel="stylesheet" href="assets/features.css?v=23">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -419,7 +419,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="order-group-overview-actions">
 <div class="order-group-status">
 <span class="badge gray">{{row.status}}</span>
-<span v-if="row.shipping_due_today" class="shipping-due-badge">KIRIM HARI INI · maks. 17.00</span>
+<span v-if="row.shipping_due_today" class="shipping-due-badge">KIRIM HARI INI</span>
 <span class="badge" :class="row.unprinted_lines>0?'amber':'green'">{{row.unprinted_lines>0?row.unprinted_lines+' belum tercetak':'Cetak selesai'}}</span>
 </div>
 <button class="print-all-order-button" :disabled="row.items_loading||row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.items_loading?'Memuat item…':(row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':'')))}}</button>
@@ -751,7 +751,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <td>
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
-<small v-if="row.shipping_due_today" class="shipping-due-label">KIRIM HARI INI · maks. 17.00</small>
+<small v-if="row.shipping_due_today" class="shipping-due-label">KIRIM HARI INI</small>
 </td>
 <td class="label-item-qty"><b>{{number(row.item_qty)}}</b><small>pcs</small></td>
 <td><b class="tracking-number">{{row.tracking_number||'Belum tersedia'}}</b><small v-if="!row.tracking_number" class="badge amber">Nomor resi belum tersedia</small></td>
@@ -1452,5 +1452,4 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </script>
 </body>
 </html>
-
 
