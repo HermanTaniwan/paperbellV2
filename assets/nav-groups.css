@@ -62,18 +62,23 @@ nav .nav-group-items button.active {
 nav button:hover,
 nav .nav-primary:hover,
 nav .nav-group-items button:hover {
-  color: #fff;
+  color: #eef0f5;
 }
 
 nav button.active,
 nav .nav-primary.active,
 nav .nav-group-items button.active {
-  color: var(--sunshine);
+  color: #fff;
+  font-weight: 700;
 }
 
 .nav-primary {
   margin-bottom: 4px !important;
-  color: #cbd0de;
+  color: #aeb5c7;
+  font-weight: 600 !important;
+}
+
+nav .nav-primary.active {
   font-weight: 700 !important;
 }
 
@@ -89,10 +94,6 @@ nav .nav-group-items button.active {
 nav .nav-group-toggle {
   color: #cbd0de;
   background: transparent;
-}
-
-.nav-group.has-active .nav-group-toggle {
-  color: #fff;
 }
 
 nav .nav-chevron {
