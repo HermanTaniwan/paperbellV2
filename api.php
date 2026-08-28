@@ -470,11 +470,11 @@ try {
         if ($paperFilter==='all'&&$filter==='unprinted') $where[]="UPPER(o.status)<>'CANCELLED' AND (o.print_line_count=0 OR o.unprinted_lines>0)";
         if ($paperFilter==='all'&&$filter==='printed') $where[]="UPPER(o.status)<>'CANCELLED' AND o.print_line_count>0 AND o.unprinted_lines=0";
         $sqlWhere=$where?'WHERE '.implode(' AND ',$where):'';
-        $orderBy=$filter==='printed'?'COALESCE(o.last_printed_at,0) DESC,o.create_time DESC':'o.create_time DESC';
+        $orderBy=$filter==='printed'?'COALESCE(o.last_printed_at,0) DESC,o.create_time DESC,o.order_sn DESC':'o.create_time ASC,o.order_sn ASC';
         $orderSelect="SELECT o.order_sn,o.status,o.create_time,o.buyer_username,o.packaged,IFNULL(r.tracking_number,'') tracking_number,IFNULL(r.pdf_path,'') label_pdf_path,IFNULL(r.resi_printed,0) resi_printed,IFNULL(lf.status,'') label_fetch_status,IFNULL(lf.message,'') label_fetch_message,IFNULL(lf.error,'') label_fetch_error,IFNULL(lf.attempts,0) label_fetch_attempts,o.last_printed_at printed_at,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.buyer_message')),'null'),'') ELSE COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.message_to_seller')),'null'),'') END customer_note,o.print_line_count line_count,o.print_item_qty item_qty,o.unprinted_lines FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn LEFT JOIN label_fetch_jobs lf ON lf.order_sn=o.order_sn {$sqlWhere} ORDER BY {$orderBy}";
         if($paperFilter==='all'){
             $count=$mysql->prepare("SELECT COUNT(*) FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere}");$count->execute($params);$total=(int)$count->fetchColumn();
-            $pageOrderBy=$filter==='printed'?"COALESCE(o.last_printed_at,0) DESC,o.create_time DESC":"o.create_time DESC";
+            $pageOrderBy=$orderBy;
             $pageStmt=$mysql->prepare("SELECT o.order_sn FROM orders o LEFT JOIN order_resi r ON r.order_sn=o.order_sn {$sqlWhere} ORDER BY {$pageOrderBy} LIMIT {$size} OFFSET {$offset}");$pageStmt->execute($params);$pageOrderSns=$pageStmt->fetchAll(PDO::FETCH_COLUMN);
             if($pageOrderSns){$pageMarks=implode(',',array_fill(0,count($pageOrderSns),'?'));$detailWhere="WHERE o.order_sn IN ({$pageMarks})";$detailSelect=str_replace(" {$sqlWhere} ORDER BY"," {$detailWhere} ORDER BY",$orderSelect);$stmt=$mysql->prepare($detailSelect);$stmt->execute($pageOrderSns);$items=$stmt->fetchAll();$itemOrder=array_flip($pageOrderSns);usort($items,static fn(array $a,array $b):int=>$itemOrder[(string)$a['order_sn']]<=>$itemOrder[(string)$b['order_sn']]);}else $items=[];
         }
