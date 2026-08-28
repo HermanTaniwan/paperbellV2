@@ -26,6 +26,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
+  <link rel="stylesheet" href="assets/nav-groups.css?v=1">
 </head>
 <body>
 <script>
@@ -55,10 +56,19 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <strong>Paperbell</strong>
 <span>Shared workspace</span>
 </div>
-</div>
+      </div>
       <nav>
-        <button v-for="item in nav" :class="{active:view===item.id}" @click="go(item.id)">
+        <button v-for="item in primaryNav" :key="item.id" class="nav-primary" :class="{active:view===item.id}" @click="go(item.id)">
 <span>{{ item.icon }}</span>{{ item.label }}</button>
+        <section v-for="group in navGroups" :key="group.id" class="nav-group" :class="{open:navOpen[group.id]}">
+          <button type="button" class="nav-group-toggle" :aria-expanded="String(navOpen[group.id])" @click="toggleNavGroup(group.id)">
+            <span>{{ group.icon }}</span>{{ group.label }}<b aria-hidden="true">⌄</b>
+          </button>
+          <div v-show="navOpen[group.id]" class="nav-group-items">
+            <button v-for="item in group.items" :key="item.id" :class="{active:view===item.id}" @click="go(item.id)">
+<span>{{ item.icon }}</span>{{ item.label }}</button>
+          </div>
+        </section>
       </nav>
       <div class="aside-foot">
 <span class="dot online">
