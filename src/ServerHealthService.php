@@ -6,9 +6,14 @@ final class ServerHealthService
 {
     public function __construct(private readonly array $config, private readonly string $root) {}
     public function overview(): array {
-        $path=$this->root.'/storage/cache/server-health.json'; $cache=$this->read($path); $now=time(); $interval=max(15,(int)($this->config['cache_seconds']??60));
-        if(($cache['checked_at']??0)+$interval>$now)return $this->status($cache,$now);
-        try{$data=$this->collect();$data['checked_at']=$now;$data['collector_error']=null;$this->write($path,$data);return $this->status($data,$now);}catch(Throwable $e){error_log('Paperbell server-health collector: '.$e->getMessage());if($cache!==[]){$cache['collector_error']='Pembaruan metrik terakhir gagal; data cache ditampilkan.';return $this->status($cache,$now);}return $this->status(['checked_at'=>0,'collector_error'=>'Monitoring belum dapat dijalankan.'],$now);}
+        $cache=$this->read($this->root.'/storage/cache/server-health.json');
+        if($cache===[])$cache=['checked_at'=>0,'collector_error'=>'Monitoring belum menghasilkan data.'];
+        return $this->status($cache,time());
+    }
+    public function refresh(): array {
+        $now=time();$data=$this->collect();$data['checked_at']=$now;$data['collector_error']=null;
+        $this->write($this->root.'/storage/cache/server-health.json',$data);
+        return $this->status($data,$now);
     }
     private function collect(): array {
         if(PHP_OS_FAMILY!=='Windows')throw new RuntimeException('Server Health hanya dapat dikumpulkan pada host Windows.');
