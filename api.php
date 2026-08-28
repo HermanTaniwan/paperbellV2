@@ -32,7 +32,7 @@ function storeHolidays(PDO $db): array {
     $items=array_values(array_unique($items));sort($items);return $items;
 }
 function isShippingWorkday(DateTimeImmutable $date,array $holidayLookup): bool {
-    return (int)$date->format('N') < 6 && !isset($holidayLookup[$date->format('Y-m-d')]);
+    return (int)$date->format('N') !== 7 && !isset($holidayLookup[$date->format('Y-m-d')]);
 }
 function nextShippingWorkday(DateTimeImmutable $date,array $holidayLookup): DateTimeImmutable {
     do {$date=$date->modify('+1 day');} while(!isShippingWorkday($date,$holidayLookup));

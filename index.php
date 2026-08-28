@@ -26,7 +26,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
-  <link rel="stylesheet" href="assets/shipping-progress.css?v=1">
+  <link rel="stylesheet" href="assets/shipping-progress.css?v=2">
   <link rel="stylesheet" href="assets/nav-groups.css?v=5">
 </head>
 <body>
@@ -464,12 +464,20 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <h3 v-else>{{pageData.shippingSummary.period==='next'?'Belum ada order untuk target berikutnya':'Tidak ada target pengiriman hari ini'}}</h3>
               <p v-if="pageData.shippingSummary.period==='next'">Target hari ini selesai 100% · {{number(pageData.shippingSummary.todayTotal)}} order</p>
               <p v-else-if="pageData.shippingSummary.total">{{number(pageData.shippingSummary.printed)}} order sudah selesai dicetak</p>
-              <p v-else>Sabtu, Minggu, dan tanggal libur tidak dihitung sebagai hari kirim.</p>
+              <p v-else>Minggu dan tanggal libur tidak dihitung sebagai hari kirim.</p>
             </div>
           </div>
           <div v-if="pageData.shippingSummary.total" class="shipping-summary-progress">
-            <div><span>Order {{number(pageData.shippingSummary.printed)}} / {{number(pageData.shippingSummary.total)}} · {{shippingOrderProgress(pageData.shippingSummary)}}%</span><b>Item {{number(pageData.shippingSummary.item_printed)}} / {{number(pageData.shippingSummary.item_total)}} · {{shippingPrintProgress(pageData.shippingSummary)}}%</b></div>
-            <span class="shipping-progress-track"><i :style="{width:shippingPrintProgress(pageData.shippingSummary)+'%'}"></i></span>
+            <div class="shipping-progress-row order-progress">
+              <span><b>Order</b> {{number(pageData.shippingSummary.printed)}} / {{number(pageData.shippingSummary.total)}}</span>
+              <span class="shipping-progress-track"><i :style="{width:shippingOrderProgress(pageData.shippingSummary)+'%'}"></i></span>
+              <strong>{{shippingOrderProgress(pageData.shippingSummary)}}%</strong>
+            </div>
+            <div class="shipping-progress-row item-progress">
+              <span><b>Item</b> {{number(pageData.shippingSummary.item_printed)}} / {{number(pageData.shippingSummary.item_total)}}</span>
+              <span class="shipping-progress-track"><i :style="{width:shippingPrintProgress(pageData.shippingSummary)+'%'}"></i></span>
+              <strong>{{shippingPrintProgress(pageData.shippingSummary)}}%</strong>
+            </div>
           </div>
         </section>
         <div v-if="syncSummary" class="sync-result-box" :class="{warning:syncSummary.cancel_requests?.length}">

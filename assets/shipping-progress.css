@@ -1,1 +1,50 @@
-.shipping-summary-progress b { font-size: 8px; }
+.shipping-summary-progress {
+  gap: 5px;
+}
+
+.shipping-summary-progress .shipping-progress-row {
+  display: grid;
+  grid-template-columns: 76px minmax(72px, 1fr) 28px;
+  align-items: center;
+  gap: 6px;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.shipping-progress-row > span:first-child {
+  white-space: nowrap;
+}
+
+.shipping-progress-row b {
+  color: #795b35;
+  font-size: 8px;
+}
+
+.shipping-progress-row strong {
+  color: #9a5700;
+  font-size: 8px;
+  text-align: right;
+}
+
+.shipping-progress-row .shipping-progress-track {
+  height: 5px;
+}
+
+.shipping-progress-row.order-progress .shipping-progress-track i {
+  background: linear-gradient(90deg, #b96518, #e48a29);
+}
+
+.shipping-today-summary.is-complete .shipping-progress-row b,
+.shipping-today-summary.is-complete .shipping-progress-row strong {
+  color: #27865a;
+}
+
+.shipping-today-summary.is-complete .shipping-progress-row.order-progress .shipping-progress-track i {
+  background: #27865a;
+}
+
+@media (max-width: 700px) {
+  .shipping-summary-progress .shipping-progress-row {
+    grid-template-columns: 76px minmax(72px, 1fr) 28px;
+  }
+}
