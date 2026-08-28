@@ -50,6 +50,27 @@ nav button.active .nav-icon {
   transform: translateX(2px);
 }
 
+nav button:hover,
+nav button.active,
+nav .nav-primary:hover,
+nav .nav-primary.active,
+nav .nav-group-items button:hover,
+nav .nav-group-items button.active {
+  background: transparent;
+}
+
+nav button:hover,
+nav .nav-primary:hover,
+nav .nav-group-items button:hover {
+  color: #fff;
+}
+
+nav button.active,
+nav .nav-primary.active,
+nav .nav-group-items button.active {
+  color: var(--sunshine);
+}
+
 .nav-primary {
   margin-bottom: 4px !important;
   color: #f1f3f8;
@@ -63,7 +84,6 @@ nav button.active .nav-icon {
 .nav-group {
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, .12);
 }
 
 nav .nav-group-toggle {
@@ -94,7 +114,6 @@ nav .nav-chevron {
   gap: 2px;
   margin: 2px 0 4px 21px;
   padding: 2px 0 2px 10px;
-  border-left: 1px solid rgba(255, 255, 255, .14);
 }
 
 nav .nav-group-items button {
