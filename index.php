@@ -467,8 +467,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </div>
           </div>
           <div v-if="pageData.shippingSummary.total" class="shipping-summary-progress">
-            <div><span>Progres cetak</span><b>{{Math.round(pageData.shippingSummary.printed/pageData.shippingSummary.total*100)}}%</b></div>
-            <span class="shipping-progress-track"><i :style="{width:Math.round(pageData.shippingSummary.printed/pageData.shippingSummary.total*100)+'%'}"></i></span>
+            <div><span>Progres cetak · {{number(pageData.shippingSummary.item_printed)}} / {{number(pageData.shippingSummary.item_total)}} item</span><b>{{shippingPrintProgress(pageData.shippingSummary)}}%</b></div>
+            <span class="shipping-progress-track"><i :style="{width:shippingPrintProgress(pageData.shippingSummary)+'%'}"></i></span>
           </div>
         </section>
         <div v-if="syncSummary" class="sync-result-box" :class="{warning:syncSummary.cancel_requests?.length}">
