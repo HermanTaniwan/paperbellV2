@@ -27,6 +27,7 @@ PROMO_BOTTOM_POINTS = 2 * MM_TO_POINTS
 PROMO_GAP_POINTS = 0
 CONTENT_PADDING_POINTS = 0.25 * MM_TO_POINTS
 CONTINUATION_NOISE_LIMIT_POINTS = 7 * MM_TO_POINTS
+MAX_SOURCE_PAGES = 20
 PROMO_WHITE_THRESHOLD = 18
 PROMO_IMAGE = Path(__file__).resolve().parents[1] / "assets" / "label-unboxing.jpeg"
 
@@ -215,8 +216,10 @@ def prepare_label(
         raise RuntimeError("PDF label terenkripsi tidak didukung")
     if not reader.pages:
         raise RuntimeError("PDF label tidak memiliki halaman")
-    if len(reader.pages) > 2:
-        raise RuntimeError("PDF label lebih dari 2 halaman; tidak aman digabung otomatis")
+    if len(reader.pages) > MAX_SOURCE_PAGES:
+        raise RuntimeError(
+            f"PDF label lebih dari {MAX_SOURCE_PAGES} halaman; tidak aman diproses otomatis"
+        )
 
     promo_image, promo_aspect = promo_image_and_aspect()
     crop_heights = []
