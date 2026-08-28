@@ -25,6 +25,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
+  <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
 </head>
 <body>
 <script>
@@ -88,6 +89,11 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         </div>
         <button type="button" class="ghost" @click="enablePrinterNotifications">Aktifkan notifikasi</button>
         <button type="button" @click="openQueuePanel">Lihat masalah</button>
+      </section>
+      <section v-if="cpuTemperatureAlert()" class="server-temperature-banner" :class="cpuTemperatureAlert().level" role="alert" aria-live="assertive">
+        <span class="server-temperature-icon" aria-hidden="true">♨</span>
+        <div><b>{{cpuTemperatureAlert().label}}: {{cpuTemperatureAlert().temperature}}°C</b><span>Ambang peringatan 80°C · kritis 90°C</span></div>
+        <button type="button" @click="go('server-health')">Lihat Server Health</button>
       </section>
       <div v-if="loading||busy" class="page-status is-loading" role="status" aria-live="polite">
         <span class="status-spinner" aria-hidden="true"></span>
@@ -1530,7 +1536,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=111">
+<script src="assets/app.js?v=112">
 </script>
 </body>
 </html>

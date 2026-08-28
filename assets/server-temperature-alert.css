@@ -1,0 +1,5 @@
+.server-temperature-banner{display:flex;align-items:center;gap:12px;margin:0 24px 14px;padding:12px 14px;border:1px solid #efd18f;border-radius:11px;background:#fff3d8;color:#81560c;box-shadow:0 5px 16px rgba(91,59,7,.08)}
+.server-temperature-banner.critical{border-color:#efb1a9;background:#fde8e5;color:#a33527}
+.server-temperature-icon{display:grid;place-items:center;flex:0 0 30px;height:30px;border-radius:50%;background:rgba(255,255,255,.7);font-size:17px}
+.server-temperature-banner div{flex:1}.server-temperature-banner b,.server-temperature-banner span{display:block}.server-temperature-banner b{font-size:12px}.server-temperature-banner div span{margin-top:2px;font-size:9px;opacity:.78}.server-temperature-banner button{white-space:nowrap}
+@media(max-width:650px){.server-temperature-banner{align-items:flex-start;flex-wrap:wrap;margin:0 12px 12px}.server-temperature-banner div{min-width:calc(100% - 46px)}.server-temperature-banner button{width:100%}}
