@@ -20,3 +20,29 @@ For every requested Paperbell code change, use this workflow unless the user exp
 8. Verify the relevant host process or endpoint after deployment and report the commit hash and deployment result.
 
 Use PowerShell `-EncodedCommand` for multi-line SSH commands to the Windows host. Keep the dedicated deployment key private and never print its contents.
+
+## GitHub read/write key routing
+
+This repository deliberately uses different SSH credentials for pushing from WSL and pulling on the Windows host.
+
+- GitHub write key in WSL: `/home/herman/.ssh/paperbell_github_write`
+- GitHub read-only key on Windows: `C:/Users/Herman/.ssh/paperbell_github_readonly`
+- SSH deployment key in WSL: `/home/herman/.ssh/id_ed25519_paperbell_deploy`
+
+The repository's local `core.sshCommand` points to the Windows read-only key so `git pull` works when Git runs on the host. Do not replace that setting with the WSL path: `.git/config` is shared with the Windows checkout and Windows cannot resolve `/home/herman/...`.
+
+To push from the WSL working computer, override the SSH command for that invocation only:
+
+```bash
+git -c core.sshCommand="ssh -i /home/herman/.ssh/paperbell_github_write -o IdentitiesOnly=yes" push origin main
+```
+
+The expected successful output includes `main -> main`. If Git reports that the key is read-only, first confirm that the command above is using `paperbell_github_write`, not `paperbell_github_readonly`. Never copy a private key to the repository, print its contents, or commit it.
+
+For host inspection and deployment, connect from WSL with:
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=8 herman@192.168.1.8 "powershell.exe -NoProfile -NonInteractive -EncodedCommand <BASE64>"
+```
+
+`<BASE64>` must be the UTF-16LE Base64 encoding of the PowerShell script. Keep read-only inspection, `git pull --ff-only origin main`, and post-deployment verification explicit in that script. The host's existing read-only GitHub key is sufficient for fetch and pull; the WSL write key is only needed for push.
