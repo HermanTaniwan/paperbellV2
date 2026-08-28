@@ -26,7 +26,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
-  <link rel="stylesheet" href="assets/nav-groups.css?v=3">
+  <link rel="stylesheet" href="assets/nav-groups.css?v=4">
 </head>
 <body>
 <script>
