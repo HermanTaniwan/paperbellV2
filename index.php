@@ -26,7 +26,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
-  <link rel="stylesheet" href="assets/nav-groups.css?v=1">
+  <link rel="stylesheet" href="assets/nav-groups.css?v=2">
 </head>
 <body>
 <script>
@@ -59,14 +59,16 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </div>
       <nav>
         <button v-for="item in primaryNav" :key="item.id" class="nav-primary" :class="{active:view===item.id}" @click="go(item.id)">
-<span>{{ item.icon }}</span>{{ item.label }}</button>
-        <section v-for="group in navGroups" :key="group.id" class="nav-group" :class="{open:navOpen[group.id]}">
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span class="nav-text">{{ item.label }}</span>
+        </button>
+        <section v-for="group in navGroups" :key="group.id" class="nav-group" :class="{open:navOpen[group.id],'has-active':group.items.some(item=>item.id===view)}">
           <button type="button" class="nav-group-toggle" :aria-expanded="String(navOpen[group.id])" @click="toggleNavGroup(group.id)">
-            <span>{{ group.icon }}</span>{{ group.label }}<b aria-hidden="true">⌄</b>
+            <span class="nav-icon" aria-hidden="true">{{ group.icon }}</span><span class="nav-text">{{ group.label }}</span><span class="nav-chevron" aria-hidden="true">›</span>
           </button>
           <div v-show="navOpen[group.id]" class="nav-group-items">
             <button v-for="item in group.items" :key="item.id" :class="{active:view===item.id}" @click="go(item.id)">
-<span>{{ item.icon }}</span>{{ item.label }}</button>
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span class="nav-text">{{ item.label }}</span>
+            </button>
           </div>
         </section>
       </nav>
