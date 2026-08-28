@@ -26,6 +26,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
+  <link rel="stylesheet" href="assets/shipping-progress.css?v=1">
   <link rel="stylesheet" href="assets/nav-groups.css?v=5">
 </head>
 <body>
@@ -467,7 +468,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </div>
           </div>
           <div v-if="pageData.shippingSummary.total" class="shipping-summary-progress">
-            <div><span>Progres cetak · {{number(pageData.shippingSummary.item_printed)}} / {{number(pageData.shippingSummary.item_total)}} item</span><b>{{shippingPrintProgress(pageData.shippingSummary)}}%</b></div>
+            <div><span>Order {{number(pageData.shippingSummary.printed)}} / {{number(pageData.shippingSummary.total)}} · {{shippingOrderProgress(pageData.shippingSummary)}}%</span><b>Item {{number(pageData.shippingSummary.item_printed)}} / {{number(pageData.shippingSummary.item_total)}} · {{shippingPrintProgress(pageData.shippingSummary)}}%</b></div>
             <span class="shipping-progress-track"><i :style="{width:shippingPrintProgress(pageData.shippingSummary)+'%'}"></i></span>
           </div>
         </section>
