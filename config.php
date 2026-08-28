@@ -29,6 +29,7 @@ return [
     ],
     'server_health' => [
         'powershell' => getenv('PAPERBELL_POWERSHELL_PATH') ?: 'powershell.exe',
+        'librehardwaremonitor_library' => __DIR__ . '/storage/librehardwaremonitor/LibreHardwareMonitorLib.dll',
         'cache_seconds' => 60,
         'thresholds' => ['offline_after_seconds'=>300,'cpu'=>['warning'=>80,'critical'=>95],'memory'=>['warning'=>80,'critical'=>90],'disk'=>['warning'=>80,'critical'=>90],'cpu_temperature'=>['warning'=>80,'critical'=>90],'ssd_temperature'=>['warning'=>65,'critical'=>75]],
     ],

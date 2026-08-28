@@ -12,14 +12,23 @@ final class ServerHealthService
     }
     private function collect(): array {
         if(PHP_OS_FAMILY!=='Windows')throw new RuntimeException('Server Health hanya dapat dikumpulkan pada host Windows.');
-        $script= <<<'PS'
+        $libraryPath=(string)($this->config['librehardwaremonitor_library']??'');$script='$libraryPath='.json_encode($libraryPath,JSON_UNESCAPED_SLASHES).";\n". <<<'PS'
 $ErrorActionPreference='Stop'
 $cpu=Get-CimInstance Win32_Processor|Measure-Object -Property LoadPercentage -Average
 $os=Get-CimInstance Win32_OperatingSystem
 $disks=Get-CimInstance Win32_LogicalDisk -Filter 'DriveType = 3'|ForEach-Object {[pscustomobject]@{letter=$_.DeviceID;total_bytes=[int64]$_.Size;free_bytes=[int64]$_.FreeSpace;used_bytes=[int64]$_.Size-[int64]$_.FreeSpace;usage_percent=if($_.Size){[math]::Round((1-($_.FreeSpace/$_.Size))*100,1)}else{$null}}}
 $temperature=$null;try{$thermal=Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop|Select-Object -First 1;if($thermal -and $thermal.CurrentTemperature){$temperature=[math]::Round(($thermal.CurrentTemperature/10)-273.15,1)}}catch{}
 $physical=@();try{$physical=Get-PhysicalDisk -ErrorAction Stop|ForEach-Object {[pscustomobject]@{name=$_.FriendlyName;health=if($_.HealthStatus){$_.HealthStatus.ToString()}else{$null};operational_status=if($_.OperationalStatus){($_.OperationalStatus -join ', ')}else{$null};temperature=$null}}}catch{}
-[pscustomobject]@{cpu_percent=if($null -ne $cpu.Average){[math]::Round($cpu.Average,1)}else{$null};cpu_temperature=$temperature;memory_total_bytes=[int64]$os.TotalVisibleMemorySize*1KB;memory_free_bytes=[int64]$os.FreePhysicalMemory*1KB;hostname=$env:COMPUTERNAME;server_time=(Get-Date).ToString('o');uptime_seconds=[int64]((Get-Date)-$os.LastBootUpTime).TotalSeconds;disks=@($disks);physical_disks=@($physical)}|ConvertTo-Json -Depth 5 -Compress
+$sensorSource='WMI/ACPI'
+if($libraryPath -and (Test-Path -LiteralPath $libraryPath)){try{
+  Add-Type -Path $libraryPath -ErrorAction Stop
+  $computer=New-Object LibreHardwareMonitor.Hardware.Computer
+  $computer.IsCpuEnabled=$true;$computer.IsStorageEnabled=$true;$computer.Open()
+  $hardware=@();foreach($item in $computer.Hardware){$hardware+=$item;$hardware+=$item.SubHardware}
+  foreach($item in $hardware){$item.Update();$temps=@($item.Sensors|Where-Object {$_.SensorType.ToString() -eq 'Temperature' -and $null -ne $_.Value});if(!$temps){continue};$value=[math]::Round((($temps|Measure-Object -Property Value -Maximum).Maximum),1);if($item.HardwareType.ToString() -eq 'Cpu'){$temperature=$value}else{foreach($disk in $physical){if($item.Name -and ($disk.name -like "*$($item.Name)*" -or $item.Name -like "*$($disk.name)*")){$disk.temperature=$value}}}}
+  $computer.Close();$sensorSource='LibreHardwareMonitor'
+}catch{}}
+[pscustomobject]@{cpu_percent=if($null -ne $cpu.Average){[math]::Round($cpu.Average,1)}else{$null};cpu_temperature=$temperature;temperature_source=$sensorSource;memory_total_bytes=[int64]$os.TotalVisibleMemorySize*1KB;memory_free_bytes=[int64]$os.FreePhysicalMemory*1KB;hostname=$env:COMPUTERNAME;server_time=(Get-Date).ToString('o');uptime_seconds=[int64]((Get-Date)-$os.LastBootUpTime).TotalSeconds;disks=@($disks);physical_disks=@($physical)}|ConvertTo-Json -Depth 5 -Compress
 PS;
         $pipes=[];$process=proc_open([(string)($this->config['powershell']??'powershell.exe'),'-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$script],[1=>['pipe','w'],2=>['pipe','w']],$pipes,$this->root,null,['bypass_shell'=>true]);if(!is_resource($process))throw new RuntimeException('PowerShell collector tidak dapat dimulai.');$stdout=stream_get_contents($pipes[1]);$stderr=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);if(proc_close($process)!==0)throw new RuntimeException(trim($stderr)?:'PowerShell collector gagal.');$data=json_decode($stdout,true,512,JSON_THROW_ON_ERROR);if(!is_array($data))throw new RuntimeException('Hasil collector tidak valid.');$total=max(0,(int)($data['memory_total_bytes']??0));$free=max(0,(int)($data['memory_free_bytes']??0));$data['memory_used_bytes']=max(0,$total-$free);$data['memory_usage_percent']=$total?round((($total-$free)/$total)*100,1):null;return $data;
     }
