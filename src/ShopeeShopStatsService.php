@@ -105,7 +105,7 @@ final class ShopeeShopStatsService
         if($from<$minDate)$from=$minDate;if($to>$maxDate)$to=$maxDate;
         if($from>$to)throw new InvalidArgumentException('Tanggal mulai tidak boleh melewati tanggal akhir.');
 
-        $stmt=$this->db->prepare('SELECT COALESCE(SUM(ads_attributed_sales),0) ads_sales,COALESCE(SUM(ads_spend),0) ads_spend,COALESCE(SUM(ads_impressions),0) ads_impressions,COALESCE(SUM(ads_orders),0) ads_orders,COALESCE(SUM(ads_conversion_rate*ads_impressions),0) weighted_conversion,COALESCE(SUM(visitors),0) visitors,COALESCE(SUM(clicks),0) clicks,COALESCE(SUM(orders_count),0) orders FROM shopee_shop_stats_monthly WHERE month_end>=? AND month_start<=?');
+        $stmt=$this->db->prepare('SELECT COALESCE(SUM(ads_attributed_sales),0) ads_sales,COALESCE(SUM(ads_spend),0) ads_spend,COALESCE(SUM(ads_impressions),0) ads_impressions,COALESCE(SUM(ads_orders),0) ads_orders,COALESCE(SUM(ads_conversion_rate*ads_impressions),0) weighted_conversion,MAX(ads_attributed_sales<>0 OR ads_spend<>0 OR ads_impressions<>0 OR ads_orders<>0) has_ads_data,COALESCE(SUM(visitors),0) visitors,COALESCE(SUM(clicks),0) clicks,COALESCE(SUM(orders_count),0) orders FROM shopee_shop_stats_monthly WHERE month_end>=? AND month_start<=?');
         $stmt->execute([$from,$to]);$summary=$stmt->fetch()?:[];
         $impressions=(int)$summary['ads_impressions'];$spend=(float)$summary['ads_spend'];$visitors=(int)$summary['visitors'];
         $adsNameStmt=$this->db->prepare("SELECT ads_name FROM shopee_shop_stats_monthly WHERE month_end>=? AND month_start<=? AND ads_name<>'' ORDER BY month_start DESC LIMIT 1");
@@ -114,7 +114,7 @@ final class ShopeeShopStatsService
         $attributionStmt->execute([$from,$to]);
 
         return [
-            'from'=>$from,'to'=>$to,'minDate'=>$minDate,'maxDate'=>$maxDate,'periodLabel'=>$this->periodLabel($from,$to),
+            'from'=>$from,'to'=>$to,'minDate'=>$minDate,'maxDate'=>$maxDate,'periodLabel'=>substr($from,0,7)===substr($to,0,7)?$this->monthYear($from):$this->periodLabel($from,$to),'hasAdsData'=>(bool)$summary['has_ads_data'],
             'ads'=>[
                 'name'=>(string)($adsNameStmt->fetchColumn()?:'Shopee Ads'),'sales'=>(float)$summary['ads_sales'],'spend'=>$spend,
                 'roas'=>$spend>0?(float)$summary['ads_sales']/$spend:0.0,'impressions'=>$impressions,'orders'=>(float)$summary['ads_orders'],
