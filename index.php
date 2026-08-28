@@ -24,6 +24,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/motion.css?v=1">
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=9">
+  <link rel="stylesheet" href="assets/server-health.css?v=1">
 </head>
 <body>
 <script>
@@ -615,6 +616,25 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="manual-order-footer"><button class="ghost" @click="randomPrint.open=false">Batal</button><button :disabled="randomPrint.printing" @click="generateRandomFromPopup">{{randomPrint.printing?'Membuat PDF…':'Buat Random Pages'}}</button></div>
 </section>
 </div>
+      </section>
+
+      <section v-if="view==='server-health'" class="content server-health-page">
+        <article v-if="serverHealth" class="panel health-overview" :class="serverHealth.status">
+          <div><span class="eyebrow">WINDOWS HOST</span><h2>Server Health</h2><p>Data dikumpulkan di server dan di-cache selama satu menit.</p></div>
+          <strong class="health-badge" :class="serverHealth.status">{{healthStatus(serverHealth.status)}}</strong>
+        </article>
+        <p v-else class="health-empty">Memuat metrik server…</p>
+        <template v-if="serverHealth">
+          <p v-if="serverHealth.collector_error" class="health-notice">{{serverHealth.collector_error}}</p>
+          <section class="health-metrics">
+            <article class="panel health-card"><span>CPU</span><strong>{{healthPercent(serverHealth.cpu_percent)}}</strong><small>Temperatur: {{serverHealth.cpu_temperature===null?'N/A':serverHealth.cpu_temperature+'°C'}}</small></article>
+            <article class="panel health-card"><span>Memory</span><strong>{{healthPercent(serverHealth.memory_usage_percent)}}</strong><small>{{bytes(serverHealth.memory_used_bytes)}} / {{bytes(serverHealth.memory_total_bytes)}} · bebas {{bytes(serverHealth.memory_free_bytes)}}</small></article>
+            <article class="panel health-card"><span>Uptime</span><strong class="health-uptime">{{uptimeText(serverHealth.uptime_seconds)}}</strong><small>{{serverHealth.hostname||'N/A'}}</small></article>
+          </section>
+          <article class="panel health-storage"><div class="panel-head"><div><h3>Storage</h3><p>Kapasitas seluruh drive lokal/fixed.</p></div></div><div class="health-disk-grid"><div v-for="disk in serverHealth.disks||[]" :key="disk.letter" class="health-disk"><div><b>{{disk.letter}}</b><strong>{{healthPercent(disk.usage_percent)}}</strong></div><i><em :style="{width:Math.min(100,Number(disk.usage_percent)||0)+'%'}"></em></i><small>{{bytes(disk.used_bytes)}} / {{bytes(disk.total_bytes)}} · bebas {{bytes(disk.free_bytes)}}</small></div><p v-if="!(serverHealth.disks||[]).length">Tidak ada disk yang dapat dibaca.</p></div></article>
+          <article class="panel health-hardware"><div class="panel-head"><div><h3>Hardware</h3><p>Sensor yang tidak tersedia ditampilkan sebagai N/A.</p></div></div><dl><div><dt>CPU Temperature</dt><dd>{{serverHealth.cpu_temperature===null?'N/A':serverHealth.cpu_temperature+'°C'}}</dd></div><div v-for="disk in serverHealth.physical_disks||[]" :key="disk.name"><dt>{{disk.name||'Physical disk'}}</dt><dd>{{disk.health||'N/A'}}<template v-if="disk.temperature!==null"> · {{disk.temperature}}°C</template></dd></div><div v-if="!(serverHealth.physical_disks||[]).length"><dt>Disk health</dt><dd>N/A</dd></div></dl></article>
+          <article class="panel health-server"><dl><div><dt>Hostname</dt><dd>{{serverHealth.hostname||'N/A'}}</dd></div><div><dt>Server time</dt><dd>{{serverHealth.server_time?new Date(serverHealth.server_time).toLocaleString('id-ID'):'N/A'}}</dd></div><div><dt>Last health check</dt><dd>{{timeText(serverHealth.checked_at)}}<template v-if="serverHealth.age_seconds!==null"> · {{serverHealth.age_seconds}} dtk lalu</template></dd></div></dl></article>
+        </template>
       </section>
 
       <section v-if="view==='stock'" class="content stock-dashboard">

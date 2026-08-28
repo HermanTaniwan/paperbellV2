@@ -27,6 +27,11 @@ return [
         'python' => getenv('PAPERBELL_SCANNER_PYTHON_PATH') ?: 'C:/Users/Herman Taniwan/AppData/Local/Programs/Python/Python311/python.exe',
         'default_source' => getenv('PAPERBELL_SCANNER_SOURCE') ?: 'EPSON WF-C5710/C5790 Series',
     ],
+    'server_health' => [
+        'powershell' => getenv('PAPERBELL_POWERSHELL_PATH') ?: 'powershell.exe',
+        'cache_seconds' => 60,
+        'thresholds' => ['offline_after_seconds'=>300,'cpu'=>['warning'=>80,'critical'=>95],'memory'=>['warning'=>80,'critical'=>90],'disk'=>['warning'=>80,'critical'=>90],'cpu_temperature'=>['warning'=>80,'critical'=>90],'ssd_temperature'=>['warning'=>65,'critical'=>75]],
+    ],
     'mapping' => [
         'spreadsheet_id' => getenv('PAPERBELL_MAPPING_SHEET_ID') ?: '1eXwQ_H8ofVroEYlK5X90bvlT66f5a8Q5tnVtTAKNHy4',
         'gid' => getenv('PAPERBELL_MAPPING_SHEET_GID') ?: '0',

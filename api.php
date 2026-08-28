@@ -19,6 +19,7 @@ require __DIR__ . '/src/DataMappingService.php';
 require __DIR__ . '/src/PrintQueueService.php';
 require __DIR__ . '/src/PdfToolsService.php';
 require __DIR__ . '/src/ScannerService.php';
+require __DIR__ . '/src/ServerHealthService.php';
 
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
@@ -196,6 +197,9 @@ try {
     $queueService = static function() use ($mysql): PrintQueueService { static $service=null;return $service??=new PrintQueueService($mysql); };
     $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__);
     $scannerService = new ScannerService($config['scanner']??[],__DIR__);
+    $serverHealth = new ServerHealthService($config['server_health'] ?? [], __DIR__);
+
+    if ($action === 'server_health') respond($serverHealth->overview());
 
     if ($action === 'scanner_overview') respond($scannerService->overview());
     if ($action === 'scanner_start') respond($scannerService->start(body(),(string)$_SESSION['paperbell_user']),202);
