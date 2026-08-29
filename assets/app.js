@@ -29,6 +29,9 @@ createApp({
  methods:{
   shippingPrintProgress(summary){const itemTotal=Number(summary?.item_total)||0,itemPrinted=Number(summary?.item_printed)||0,orderTotal=Number(summary?.total)||0,orderPrinted=Number(summary?.printed)||0;const ratio=itemTotal>0?itemPrinted/itemTotal:orderTotal>0?orderPrinted/orderTotal:0;return Math.max(0,Math.min(100,Math.round(ratio*100)))},
   shippingOrderProgress(summary){const total=Number(summary?.total)||0,printed=Number(summary?.printed)||0;return total>0?Math.max(0,Math.min(100,Math.round(printed/total*100))):0},
+  shippingTarget(){return this.pageData?.shippingSummary||this.pageData?.shippingTarget||null},
+  shippingTargetButtonLabel(){return this.shippingTarget()?.period==='next'?'Kirim target berikutnya':'Kirim hari ini'},
+  shippingDueBadgeText(){return this.shippingTarget()?.period==='next'?'TARGET KIRIM BERIKUTNYA':'KIRIM HARI INI'},
   toggleNavGroup(groupId){this.navOpen[groupId]=!this.navOpen[groupId]},
   openNavGroupForView(view){const group=this.navGroups.find(group=>group.items.some(item=>item.id===view));if(group)this.navOpen[group.id]=true},
   unacknowledgedPrinterIncidents(){return(this.queueData.incidents||[]).filter(item=>!item.acknowledged_at)},

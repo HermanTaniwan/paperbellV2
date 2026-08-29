@@ -444,7 +444,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <div class="filters shipping-due-filter" aria-label="Filter target pengiriman">
 <button :class="{active:shippingFilter==='all'}" :disabled="loading" @click="changeShippingFilter('all')">Semua</button>
-<button :class="{active:shippingFilter==='due_today'}" :disabled="loading" @click="changeShippingFilter('due_today')">Kirim hari ini</button>
+<button :class="{active:shippingFilter==='due_today'}" :disabled="loading" @click="changeShippingFilter('due_today')">{{shippingTargetButtonLabel()}}</button>
 </div>
 <div class="filters paper-order-filters" aria-label="Filter jenis kertas">
 <button v-for="f in paperFilters" :class="{active:paperFilter===f.id}" :disabled="loading" @click="changePaperFilter(f.id)">{{f.label}}</button>
@@ -505,7 +505,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="order-group-overview-actions">
 <div class="order-group-status">
 <span class="badge gray">{{row.status}}</span>
-<span v-if="row.shipping_due_today" class="shipping-due-badge">KIRIM HARI INI</span>
+<span v-if="row.shipping_due_today" class="shipping-due-badge">{{shippingDueBadgeText()}}</span>
 <span class="badge" :class="row.unprinted_lines>0?'amber':'green'">{{row.unprinted_lines>0?row.unprinted_lines+' belum tercetak':'Cetak selesai'}}</span>
 </div>
 <button class="print-all-order-button" :disabled="row.items_loading||row.printing_all||!printableOrderCount(row)" @click="printAllOrder(row)">{{row.items_loading?'Memuat item…':(row.printing_all?'Mengantrekan…':('Cetak semua'+(printableOrderCount(row)?' ('+printableOrderCount(row)+')':'')))}}</button>
@@ -815,7 +815,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <div class="filters shipping-due-filter" aria-label="Filter target pengiriman">
 <button :class="{active:shippingFilter==='all'}" @click="changeShippingFilter('all')">Semua</button>
-<button :class="{active:shippingFilter==='due_today'}" @click="changeShippingFilter('due_today')">Kirim hari ini</button>
+<button :class="{active:shippingFilter==='due_today'}" @click="changeShippingFilter('due_today')">{{shippingTargetButtonLabel()}}</button>
 </div>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
 <button class="label-toolbar-button" :disabled="!selected.size||labelBulkFetching" @click="bulkCommand('fetch_label')">{{labelBulkFetching?'Mengambil PDF…':'Ambil PDF ('+selected.size+')'}}</button>
@@ -860,7 +860,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <td>
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
-<small v-if="row.shipping_due_today" class="shipping-due-label">KIRIM HARI INI</small>
+<small v-if="row.shipping_due_today" class="shipping-due-label">{{shippingDueBadgeText()}}</small>
 </td>
 <td class="label-item-qty"><b>{{number(row.item_qty)}}</b><small>pcs</small></td>
 <td><b class="tracking-number">{{row.tracking_number||'Belum tersedia'}}</b><small v-if="!row.tracking_number" class="badge amber">Nomor resi belum tersedia</small></td>
@@ -1557,7 +1557,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=112">
+<script src="assets/app.js?v=113">
 </script>
 </body>
 </html>
