@@ -28,6 +28,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=5">
+  <link rel="stylesheet" href="assets/loyalty-badges.css?v=1">
 </head>
 <body>
 <script>
@@ -499,8 +500,19 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div>
 <span class="eyebrow">ORDER</span>
 <h3>{{row.order_sn}}</h3>
-<p>
-<button class="customer-history-link" @click="openCustomerHistory(row.buyer_username)">{{row.buyer_username||'Tanpa nama pembeli'}}</button> · {{row.createdText}}</p>
+<p class="customer-identity-line">
+<button class="customer-history-link" @click="openCustomerHistory(row.buyer_username)">{{row.buyer_username||'Tanpa nama pembeli'}}</button>
+<span v-if="row.loyalty" class="customer-loyalty-badges">
+<span v-if="row.loyalty.primary" class="loyalty-badge loyalty-primary" :class="'loyalty-'+row.loyalty.primary.key" tabindex="0" :aria-label="row.loyalty.primary.title+': '+row.loyalty.primary.tooltipDetail">
+<span aria-hidden="true">{{row.loyalty.primary.icon}}</span> {{row.loyalty.primary.label}}
+<span class="loyalty-tooltip" role="tooltip"><strong>{{row.loyalty.primary.icon}} {{row.loyalty.primary.title}}</strong><span>{{row.loyalty.primary.description}}</span><small>{{row.loyalty.primary.tooltipDetail}}</small></span>
+</span>
+<span v-for="badge in row.loyalty.secondary" :key="badge.key" class="loyalty-badge loyalty-secondary" :class="'loyalty-'+badge.key" tabindex="0" :aria-label="badge.title+': '+badge.tooltipDetail">
+<span aria-hidden="true">{{badge.icon}}</span> {{badge.label}}
+<span class="loyalty-tooltip" role="tooltip"><strong>{{badge.icon}} {{badge.title}}</strong><small>{{badge.tooltipDetail}}</small></span>
+</span>
+</span>
+<span class="customer-order-date">· {{row.createdText}}</span></p>
 <p v-if="row.unprinted_lines==0&&row.printed_at" class="printed-update-time">Dipindahkan ke Sudah Dicetak: {{timeText(row.printed_at)}}</p>
 </div>
 <div class="order-group-overview-actions">
@@ -1419,7 +1431,17 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="modal-head">
 <div>
 <span class="eyebrow">CUSTOMER HISTORY</span>
-<h2>{{customerHistory.buyer}}</h2>
+<div class="customer-detail-name"><h2>{{customerHistory.buyer}}</h2>
+<span v-if="customerHistory.loyalty" class="customer-loyalty-badges">
+<span v-if="customerHistory.loyalty.primary" class="loyalty-badge loyalty-primary" :class="'loyalty-'+customerHistory.loyalty.primary.key" tabindex="0" :aria-label="customerHistory.loyalty.primary.title+': '+customerHistory.loyalty.primary.tooltipDetail">
+<span aria-hidden="true">{{customerHistory.loyalty.primary.icon}}</span> {{customerHistory.loyalty.primary.label}}
+<span class="loyalty-tooltip" role="tooltip"><strong>{{customerHistory.loyalty.primary.icon}} {{customerHistory.loyalty.primary.title}}</strong><span>{{customerHistory.loyalty.primary.description}}</span><small>{{customerHistory.loyalty.primary.tooltipDetail}}</small></span>
+</span>
+<span v-for="badge in customerHistory.loyalty.secondary" :key="badge.key" class="loyalty-badge loyalty-secondary" :class="'loyalty-'+badge.key" tabindex="0" :aria-label="badge.title+': '+badge.tooltipDetail">
+<span aria-hidden="true">{{badge.icon}}</span> {{badge.label}}
+<span class="loyalty-tooltip" role="tooltip"><strong>{{badge.icon}} {{badge.title}}</strong><small>{{badge.tooltipDetail}}</small></span>
+</span>
+</span></div>
 <p>1 tahun terakhir: {{customerHistory.summary.orders}} order · {{customerHistory.summary.lines}} item · total {{customerHistory.summary.qty}} pcs</p>
 </div>
 <button class="icon-button" @click="customerHistory=null">×</button>
