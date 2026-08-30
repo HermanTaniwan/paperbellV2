@@ -28,7 +28,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=5">
-  <link rel="stylesheet" href="assets/loyalty-badges.css?v=1">
+  <link rel="stylesheet" href="assets/loyalty-badges.css?v=2">
 </head>
 <body>
 <script>
