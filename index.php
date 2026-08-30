@@ -462,7 +462,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <span v-else class="eyebrow">TARGET KIRIM HARI INI</span>
               <h3 v-if="pageData.shippingSummary.total">Sisa <strong>{{number(pageData.shippingSummary.unprinted)}}</strong> order belum tercetak dari total <strong>{{number(pageData.shippingSummary.total)}}</strong> order</h3>
               <h3 v-else>{{pageData.shippingSummary.period==='next'?'Belum ada order untuk target berikutnya':'Tidak ada target pengiriman hari ini'}}</h3>
-              <p v-if="pageData.shippingSummary.period==='next'">Target hari ini selesai 100% · {{number(pageData.shippingSummary.todayTotal)}} order</p>
+              <p v-if="pageData.shippingSummary.rollover==='complete'">Target hari ini selesai 100% · {{number(pageData.shippingSummary.todayTotal)}} order</p>
+              <p v-else-if="pageData.shippingSummary.rollover==='non_workday'">Hari ini bukan hari operasional.</p>
               <p v-else-if="pageData.shippingSummary.total">{{number(pageData.shippingSummary.printed)}} order sudah selesai dicetak</p>
               <p v-else>Minggu dan tanggal libur tidak dihitung sebagai hari kirim.</p>
             </div>
