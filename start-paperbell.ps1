@@ -4,6 +4,8 @@ $mysqlAdmin = 'C:\xampp\mysql\bin\mysqladmin.exe'
 $mysqlExecutable = 'C:\xampp\mysql\bin\mysqld.exe'
 $mysqlConfig = 'C:\xampp\mysql\bin\my.ini'
 $mysqlErrorLog = 'C:\xampp\mysql\data\mysql_error.log'
+$apacheExecutable = 'C:\xampp\apache\bin\httpd.exe'
+$apacheHealthUrl = 'http://127.0.0.1/paperbell/assets/app.js'
 $logDirectory = Join-Path $root 'storage\logs'
 $startupLog = Join-Path $logDirectory 'startup.log'
 
@@ -26,13 +28,62 @@ function Get-PaperbellMariaDbService {
     return $null
 }
 
+function Test-ApacheReady {
+    try {
+        $response = Invoke-WebRequest `
+            -UseBasicParsing `
+            -Method Head `
+            -Uri $apacheHealthUrl `
+            -TimeoutSec 4
+        return [int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400
+    }
+    catch {
+        return $false
+    }
+}
+
+function Start-PaperbellApache {
+    Start-Process -FilePath $apacheExecutable `
+        -WorkingDirectory 'C:\xampp\apache\bin' `
+        -WindowStyle Hidden
+
+    for ($attempt = 1; $attempt -le 15; $attempt++) {
+        if (Test-ApacheReady) {
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    }
+
+    return $false
+}
+
 function Test-MariaDbReady {
     & $mysqlAdmin -h 127.0.0.1 -P 3306 -u root --connect-timeout=1 ping --silent 2>$null | Out-Null
     return $LASTEXITCODE -eq 0
 }
 
-if (-not (Get-Process -Name httpd -ErrorAction SilentlyContinue)) {
-    Start-Process -FilePath 'C:\xampp\apache\bin\httpd.exe' -WorkingDirectory 'C:\xampp\apache\bin' -WindowStyle Hidden
+$apacheProcesses = @(Get-Process -Name httpd -ErrorAction SilentlyContinue)
+if ($apacheProcesses.Count -eq 0) {
+    if (-not (Start-PaperbellApache)) {
+        Write-StartupLog 'ERROR Apache dimulai tetapi belum merespons setelah 15 detik.'
+        throw 'Apache belum siap setelah 15 detik.'
+    }
+}
+elseif (-not (Test-ApacheReady)) {
+    # Confirm the failure so one slow request does not cause an unnecessary restart.
+    Start-Sleep -Seconds 2
+    if (-not (Test-ApacheReady)) {
+        Write-StartupLog 'Apache terdeteksi aktif tetapi tidak merespons; memulai ulang Apache.'
+        & $apacheExecutable -k shutdown 2>$null
+        Start-Sleep -Seconds 5
+        Get-Process -Name httpd -ErrorAction SilentlyContinue | Stop-Process -Force
+
+        if (-not (Start-PaperbellApache)) {
+            Write-StartupLog 'ERROR Apache belum merespons setelah dimulai ulang.'
+            throw 'Apache gagal pulih setelah dimulai ulang.'
+        }
+        Write-StartupLog 'Apache kembali merespons setelah dimulai ulang.'
+    }
 }
 
 $mysqlStartAttempted = $false
