@@ -133,52 +133,6 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <small>{{ number(dashboard.inventory.items) }} jenis produk</small>
 </article>
         </div>
-        <article class="panel contribution-panel">
-          <div class="analytics-head contribution-head">
-            <div><span class="eyebrow">KONTRIBUSI PENJUALAN</span><h3>Komposisi ukuran loose leaf</h3><p>Proporsi berdasarkan quantity item marketplace yang terjual.</p></div>
-            <form class="analytics-range" @submit.prevent="loadSalesContribution">
-              <div class="analytics-presets"><button v-for="days in [7,14,30,90]" :key="days" type="button" class="ghost" :class="{active:contributionRangeDays===days}" :disabled="contributionLoading" @click="setContributionRange(days)">{{days}} hari</button></div>
-              <label class="analytics-month-shortcut">Bulan<input v-model="contributionMonth" type="month" :max="analyticsMonthMax()" :disabled="contributionLoading" @change="setContributionMonth"></label>
-              <label>Dari<input v-model="contributionFrom" type="date" :max="contributionTo" required @change="contributionMonth=''"></label>
-              <label>Sampai<input v-model="contributionTo" type="date" :min="contributionFrom" required @change="contributionMonth=''"></label>
-              <button type="submit" :disabled="contributionLoading">{{contributionLoading?'Memuat…':'Terapkan'}}</button>
-            </form>
-          </div>
-          <div v-if="contributionLoading&&!salesContribution" class="analytics-empty">Memuat kontribusi penjualan…</div>
-          <div v-else-if="salesContribution&&!salesContribution.summary.qty" class="analytics-empty">Belum ada penjualan A5 atau B5 pada rentang tanggal ini.</div>
-          <div v-else-if="salesContribution" class="contribution-body">
-            <section class="contribution-chart-card">
-              <div class="contribution-chart-head">
-                <div><b>Pergerakan share penjualan</b><small>{{contributionWindow()>1?'Rata-rata berjalan '+contributionWindow()+' hari':'Share per hari'}}</small></div>
-                <div class="contribution-legend"><span v-for="item in salesContribution.items" :key="item.key"><i :style="{background:item.color}"></i>{{item.shortLabel}}</span></div>
-              </div>
-              <div class="contribution-chart-wrap">
-                <svg viewBox="0 0 836 265" role="img" aria-label="Time series persentase kontribusi penjualan A5 dan B5">
-                  <g class="contribution-grid"><g v-for="tick in [0,25,50,75,100]" :key="tick"><line x1="58" :y1="contributionChartY(tick)" x2="778" :y2="contributionChartY(tick)"></line><text x="48" :y="contributionChartY(tick)+3" text-anchor="end">{{tick}}%</text></g></g>
-                  <line class="axis-line" x1="58" y1="40" x2="58" y2="215"></line><line class="axis-line" x1="58" y1="215" x2="778" y2="215"></line>
-                  <g class="contribution-x-ticks"><g v-for="tick in contributionChartDateTicks()" :key="tick.index"><line :x1="contributionChartX(tick.index)" y1="215" :x2="contributionChartX(tick.index)" y2="220"></line><text :x="contributionChartX(tick.index)" y="236" text-anchor="middle">{{tick.label}}</text></g></g>
-                  <polyline class="contribution-line a5-20" :points="contributionChartPoints('a5_20')"></polyline>
-                  <polyline class="contribution-line a5-6" :points="contributionChartPoints('a5_6')"></polyline>
-                  <polyline class="contribution-line b5" :points="contributionChartPoints('b5')"></polyline>
-                  <g v-if="salesContribution.series.length<=31"><circle v-for="(day,index) in contributionSeries()" :key="'20-'+day.date" class="contribution-point a5-20" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_20)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'6-'+day.date" class="contribution-point a5-6" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_6)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'b5-'+day.date" class="contribution-point b5" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.b5)" r="2.8"></circle></g>
-                  <line v-if="contributionSelected" class="contribution-guide" :x1="contributionChartX(contributionSelected.index)" y1="40" :x2="contributionChartX(contributionSelected.index)" y2="215"></line>
-                  <rect v-for="(day,index) in contributionSeries()" :key="'hover-'+day.date" class="contribution-hover-zone" :x="index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2" y="40" :width="index===salesContribution.series.length-1?778-(index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2):(contributionChartX(index+1)-contributionChartX(index-1))/2" height="175" @mouseenter="contributionSelect(day,index)" @click.stop="contributionSelect(day,index)"></rect>
-                  <text class="axis-title" x="418" y="258" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="128" text-anchor="middle" transform="rotate(-90 13 128)">Kontribusi</text>
-                </svg>
-                <div v-if="contributionSelected" class="contribution-tooltip" :style="{left:(contributionChartX(contributionSelected.index)/8.36)+'%'}"><b>{{contributionSelected.label}}</b><span><i style="background:#ef7558"></i>A5 20L <strong>{{number(contributionSelected.share.a5_20.toFixed(1))}}%</strong></span><span><i style="background:#e7b54a"></i>A5 6L <strong>{{number(contributionSelected.share.a5_6.toFixed(1))}}%</strong></span><span><i style="background:#4f8f78"></i>B5 <strong>{{number(contributionSelected.share.b5.toFixed(1))}}%</strong></span></div>
-              </div>
-              <div v-if="contributionShift()" class="contribution-shift" :class="contributionShift().delta>=0?'up':'down'"><span>Perubahan terbesar</span><b>{{contributionShiftText()}}</b></div>
-            </section>
-            <div class="contribution-breakdown">
-              <article v-for="item in salesContribution.items" :key="item.key" :class="'contribution-'+item.key">
-                <div class="contribution-card-head"><span><i :style="{background:item.color}"></i>{{item.label}}</span><strong>{{number(item.share)}}%</strong></div>
-                <div class="contribution-track"><i :style="{width:item.share+'%',background:item.color}"></i></div>
-                <div class="contribution-card-foot"><b>{{number(item.qty)}} item</b><span>tersebar di {{number(item.orders)}} order</span></div>
-              </article>
-              <div class="contribution-coverage"><span>{{number(salesContribution.summary.orders)}} order terkategori</span><span>Cakupan klasifikasi {{number(salesContribution.summary.coverage)}}%</span></div>
-            </div>
-          </div>
-        </article>
         <article class="panel analytics-panel">
           <div class="analytics-head">
             <div><span class="eyebrow">ANALITIK ORDER</span><h3>Order harian per marketplace</h3><p>Order masuk yang tidak dibatalkan, dibedakan antara Shopee dan TikTok Shop.</p></div>
@@ -333,71 +287,52 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             </section>
           </div>
         </article>
-        <div>
-<article v-if="false" class="panel">
-<div class="panel-head">
-<div>
-<h3>Akses cepat</h3>
-<p>Pekerjaan yang paling sering dilakukan.</p>
-</div>
-</div>
-<div class="quick-actions">
-<button @click="go('stock')">↗<span>
-<b>Rekomendasi stok</b>
-<small>Cek prioritas per SKU</small>
-</span>
-</button>
-<button @click="go('orders')">▤<span>
-<b>Kelola order</b>
-<small>Cek cetak & kemasan</small>
-</span>
-</button>
-<button @click="go('labels')">▧<span>
-<b>Label pengiriman</b>
-<small>Ambil dan cetak resi</small>
-</span>
-</button>
-<button @click="go('inventory')">◇<span>
-<b>Inventory</b>
-<small>Atur stok produk</small>
-</span>
-</button>
-<button @click="openQueuePanel">⌁<span>
-<b>Printer Job</b>
-<small>Pantau dan kontrol job</small>
-</span>
-</button>
-</div>
-</article>
-<article class="panel status-panel">
-<div class="panel-head">
-<div>
-<h3>Status sistem</h3>
-<p>Koneksi data bersama.</p>
-</div>
-</div>
-<dl>
-<div>
-<dt>
-<span class="dot online">
-</span>MySQL shared database</dt>
-<dd>Online</dd>
-</div>
-<div>
-<dt>
-<span class="dot online">
-</span>Sinkron data</dt>
-<dd>{{ dashboard?.lastSyncText }}</dd>
-</div>
-<div>
-<dt>
-<span class="dot" :class="dashboard?.queued?'warning':'online'">
-</span>Antrean printer</dt>
-<dd>{{ dashboard?.queued || 0 }}</dd>
-</div>
-</dl>
-</article>
-</div>
+        <article class="panel contribution-panel">
+          <div class="analytics-head contribution-head">
+            <div><span class="eyebrow">KONTRIBUSI PENJUALAN</span><h3>Komposisi ukuran loose leaf</h3><p>Proporsi berdasarkan quantity item marketplace yang terjual.</p></div>
+            <form class="analytics-range" @submit.prevent="loadSalesContribution">
+              <div class="analytics-presets"><button v-for="days in [7,14,30,90]" :key="days" type="button" class="ghost" :class="{active:contributionRangeDays===days}" :disabled="contributionLoading" @click="setContributionRange(days)">{{days}} hari</button></div>
+              <label class="analytics-month-shortcut">Bulan<input v-model="contributionMonth" type="month" :max="analyticsMonthMax()" :disabled="contributionLoading" @change="setContributionMonth"></label>
+              <label>Dari<input v-model="contributionFrom" type="date" :max="contributionTo" required @change="contributionMonth=''"></label>
+              <label>Sampai<input v-model="contributionTo" type="date" :min="contributionFrom" required @change="contributionMonth=''"></label>
+              <button type="submit" :disabled="contributionLoading">{{contributionLoading?'Memuat…':'Terapkan'}}</button>
+            </form>
+          </div>
+          <div v-if="contributionLoading&&!salesContribution" class="analytics-empty">Memuat kontribusi penjualan…</div>
+          <div v-else-if="salesContribution&&!salesContribution.summary.qty" class="analytics-empty">Belum ada penjualan A5 atau B5 pada rentang tanggal ini.</div>
+          <div v-else-if="salesContribution" class="contribution-body">
+            <section class="contribution-chart-card">
+              <div class="contribution-chart-head">
+                <div><b>Pergerakan share penjualan</b><small>{{contributionWindow()>1?'Rata-rata berjalan '+contributionWindow()+' hari':'Share per hari'}}</small></div>
+                <div class="contribution-legend"><span v-for="item in salesContribution.items" :key="item.key"><i :style="{background:item.color}"></i>{{item.shortLabel}}</span></div>
+              </div>
+              <div class="contribution-chart-wrap">
+                <svg viewBox="0 0 836 265" role="img" aria-label="Time series persentase kontribusi penjualan A5 dan B5">
+                  <g class="contribution-grid"><g v-for="tick in [0,25,50,75,100]" :key="tick"><line x1="58" :y1="contributionChartY(tick)" x2="778" :y2="contributionChartY(tick)"></line><text x="48" :y="contributionChartY(tick)+3" text-anchor="end">{{tick}}%</text></g></g>
+                  <line class="axis-line" x1="58" y1="40" x2="58" y2="215"></line><line class="axis-line" x1="58" y1="215" x2="778" y2="215"></line>
+                  <g class="contribution-x-ticks"><g v-for="tick in contributionChartDateTicks()" :key="tick.index"><line :x1="contributionChartX(tick.index)" y1="215" :x2="contributionChartX(tick.index)" y2="220"></line><text :x="contributionChartX(tick.index)" y="236" text-anchor="middle">{{tick.label}}</text></g></g>
+                  <polyline class="contribution-line a5-20" :points="contributionChartPoints('a5_20')"></polyline>
+                  <polyline class="contribution-line a5-6" :points="contributionChartPoints('a5_6')"></polyline>
+                  <polyline class="contribution-line b5" :points="contributionChartPoints('b5')"></polyline>
+                  <g v-if="salesContribution.series.length<=31"><circle v-for="(day,index) in contributionSeries()" :key="'20-'+day.date" class="contribution-point a5-20" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_20)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'6-'+day.date" class="contribution-point a5-6" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.a5_6)" r="2.8"></circle><circle v-for="(day,index) in contributionSeries()" :key="'b5-'+day.date" class="contribution-point b5" :cx="contributionChartX(index)" :cy="contributionChartY(day.share.b5)" r="2.8"></circle></g>
+                  <line v-if="contributionSelected" class="contribution-guide" :x1="contributionChartX(contributionSelected.index)" y1="40" :x2="contributionChartX(contributionSelected.index)" y2="215"></line>
+                  <rect v-for="(day,index) in contributionSeries()" :key="'hover-'+day.date" class="contribution-hover-zone" :x="index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2" y="40" :width="index===salesContribution.series.length-1?778-(index===0?58:(contributionChartX(index-1)+contributionChartX(index))/2):(contributionChartX(index+1)-contributionChartX(index-1))/2" height="175" @mouseenter="contributionSelect(day,index)" @click.stop="contributionSelect(day,index)"></rect>
+                  <text class="axis-title" x="418" y="258" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="128" text-anchor="middle" transform="rotate(-90 13 128)">Kontribusi</text>
+                </svg>
+                <div v-if="contributionSelected" class="contribution-tooltip" :style="{left:(contributionChartX(contributionSelected.index)/8.36)+'%'}"><b>{{contributionSelected.label}}</b><span><i style="background:#ef7558"></i>A5 20L <strong>{{number(contributionSelected.share.a5_20.toFixed(1))}}%</strong></span><span><i style="background:#e7b54a"></i>A5 6L <strong>{{number(contributionSelected.share.a5_6.toFixed(1))}}%</strong></span><span><i style="background:#4f8f78"></i>B5 <strong>{{number(contributionSelected.share.b5.toFixed(1))}}%</strong></span></div>
+              </div>
+              <div v-if="contributionShift()" class="contribution-shift" :class="contributionShift().delta>=0?'up':'down'"><span>Perubahan terbesar</span><b>{{contributionShiftText()}}</b></div>
+            </section>
+            <div class="contribution-breakdown">
+              <article v-for="item in salesContribution.items" :key="item.key" :class="'contribution-'+item.key">
+                <div class="contribution-card-head"><span><i :style="{background:item.color}"></i>{{item.label}}</span><strong>{{number(item.share)}}%</strong></div>
+                <div class="contribution-track"><i :style="{width:item.share+'%',background:item.color}"></i></div>
+                <div class="contribution-card-foot"><b>{{number(item.qty)}} item</b><span>tersebar di {{number(item.orders)}} order</span></div>
+              </article>
+              <div class="contribution-coverage"><span>{{number(salesContribution.summary.orders)}} order terkategori</span><span>Cakupan klasifikasi {{number(salesContribution.summary.coverage)}}%</span></div>
+            </div>
+          </div>
+        </article>
       </section>
 
       <section v-if="view==='owner'" class="content shopee-page" v-cloak>
