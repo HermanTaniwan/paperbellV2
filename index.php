@@ -1515,7 +1515,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=113">
+<script src="assets/app.js?v=114">
 </script>
 </body>
 </html>
