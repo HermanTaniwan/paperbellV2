@@ -21,6 +21,7 @@ require __DIR__ . '/src/PdfToolsService.php';
 require __DIR__ . '/src/ScannerService.php';
 require __DIR__ . '/src/ServerHealthService.php';
 require __DIR__ . '/src/CustomerLoyaltyService.php';
+require __DIR__ . '/src/DashboardAnalyticsService.php';
 
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
@@ -446,27 +447,28 @@ try {
 
     if ($action === 'dashboard_analytics') {
         $today = new DateTimeImmutable('today');
-        $defaultFrom = $today->modify('-13 days');
+        $defaultFrom = $today->modify('first day of this month');
         $from = DateTimeImmutable::createFromFormat('!Y-m-d', trim((string)($_GET['from'] ?? ''))) ?: $defaultFrom;
         $to = DateTimeImmutable::createFromFormat('!Y-m-d', trim((string)($_GET['to'] ?? ''))) ?: $today;
         if ($from > $to) respond(['error'=>'Tanggal mulai tidak boleh melewati tanggal akhir.'],422);
         if ((int)$from->diff($to)->format('%a') > 365) respond(['error'=>'Rentang analitik maksimal 366 hari.'],422);
+        $comparisonMode=(string)($_GET['comparison_mode']??'previous_period');
+        if($comparisonMode==='mtd'&&$from->format('d')==='01')[$previousFrom,$previousTo]=DashboardAnalyticsService::previousMonthToDate($from,$to);
+        else{$comparisonMode='previous_period';[$previousFrom,$previousTo]=DashboardAnalyticsService::previousPeriod($from,$to);}
         $stmt = $mysql->prepare("SELECT order_date,marketplace,COUNT(*) total,COALESCE(SUM(item_qty),0) item_total,COALESCE(SUM(order_amount),0) revenue_total,SUM(order_amount>0) priced_orders FROM (SELECT o.order_sn,DATE(FROM_UNIXTIME(o.create_time)) order_date,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN 'tiktok' ELSE 'shopee' END marketplace,COALESCE(SUM(op.qty),0) item_qty,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.payment.total_amount')),'') AS DECIMAL(18,2)),0) ELSE COALESCE(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.total_amount')),'') AS DECIMAL(18,2)),0) END order_amount FROM orders o LEFT JOIN order_process op ON op.order_sn=o.order_sn WHERE o.create_time>=? AND o.create_time<? AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') GROUP BY o.order_sn,o.create_time,o.raw_json) daily_orders GROUP BY order_date,marketplace ORDER BY order_date");
-        $stmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
+        $stmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
         $counts=[];
         foreach($stmt->fetchAll() as $row)$counts[(string)$row['order_date']][(string)$row['marketplace']]=['orders'=>(int)$row['total'],'items'=>(int)$row['item_total'],'revenue'=>(float)$row['revenue_total'],'pricedOrders'=>(int)$row['priced_orders']];
         $fallbackStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(create_time)) order_date,CASE WHEN order_sn LIKE 'TIKTOK:%' THEN 'tiktok' ELSE 'shopee' END marketplace,raw_json FROM orders WHERE create_time>=? AND create_time<? AND order_sn NOT LIKE 'MANUAL-%' AND order_sn NOT LIKE 'RANDOM-%' AND UPPER(status) NOT IN ('CANCELLED','CANCELED')");
-        $fallbackStmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
+        $fallbackStmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
         foreach($fallbackStmt->fetchAll() as $row){$raw=json_decode((string)$row['raw_json'],true);if(!is_array($raw))continue;$marketplace=(string)$row['marketplace'];$primary=$marketplace==='tiktok'?(float)($raw['payment']['total_amount']??0):(float)($raw['total_amount']??0);if($primary>0)continue;$fallback=0.0;if($marketplace==='tiktok'){$fallback=(float)($raw['payment']['sub_total']??0);if($fallback<=0)foreach(($raw['line_items']??[]) as $line)$fallback+=(float)($line['sale_price']??0)*max(1,(int)($line['quantity']??1));}else foreach(($raw['item_list']??[]) as $line)$fallback+=(float)($line['model_discounted_price']??$line['model_original_price']??0)*max(1,(int)($line['model_quantity_purchased']??1));if($fallback<=0)continue;$key=(string)$row['order_date'];$counts[$key][$marketplace]['revenue']=(float)($counts[$key][$marketplace]['revenue']??0)+$fallback;$counts[$key][$marketplace]['pricedOrders']=(int)($counts[$key][$marketplace]['pricedOrders']??0)+1;}
         $escrowStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(order_create_time)) order_date,COUNT(*) orders,COALESCE(SUM(payout_amount),0) payout,COALESCE(SUM(total_marketplace_fee),0) fees FROM shopee_escrow_details WHERE order_create_time>=? AND order_create_time<? GROUP BY order_date");
-        $escrowStmt->execute([$from->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);$escrowCounts=[];foreach($escrowStmt->fetchAll() as $row)$escrowCounts[(string)$row['order_date']]=['orders'=>(int)$row['orders'],'payout'=>(float)$row['payout'],'fees'=>(float)$row['fees']];
-        $holidays=storeHolidays($mysql);$holidayLookup=array_fill_keys($holidays,true);$rangeHolidayDays=0;
-        $items=[];$shopee=0;$tiktok=0;$itemTotal=0;$revenueTotal=0.0;$pricedOrders=0;$shopeePayout=0.0;$shopeeFees=0.0;$escrowOrders=0;
-        for($date=$from;$date<=$to;$date=$date->modify('+1 day')){$key=$date->format('Y-m-d');$isHoliday=isset($holidayLookup[$key]);if($isHoliday)$rangeHolidayDays++;$dayShopee=(int)($counts[$key]['shopee']['orders']??0);$dayTiktok=(int)($counts[$key]['tiktok']['orders']??0);$dayItems=(int)($counts[$key]['shopee']['items']??0)+(int)($counts[$key]['tiktok']['items']??0);$dayShopeeRevenue=(float)($counts[$key]['shopee']['revenue']??0);$dayTiktokRevenue=(float)($counts[$key]['tiktok']['revenue']??0);$dayRevenue=$dayShopeeRevenue+$dayTiktokRevenue;$dayPriced=(int)($counts[$key]['shopee']['pricedOrders']??0)+(int)($counts[$key]['tiktok']['pricedOrders']??0);$dayPayout=(float)($escrowCounts[$key]['payout']??0);$dayFees=(float)($escrowCounts[$key]['fees']??0);$dayEscrowOrders=(int)($escrowCounts[$key]['orders']??0);$shopee+=$dayShopee;$tiktok+=$dayTiktok;$itemTotal+=$dayItems;$revenueTotal+=$dayRevenue;$pricedOrders+=$dayPriced;$shopeePayout+=$dayPayout;$shopeeFees+=$dayFees;$escrowOrders+=$dayEscrowOrders;$items[]=['date'=>$key,'label'=>$date->format('d M'),'isHoliday'=>$isHoliday,'shopee'=>$dayShopee,'tiktok'=>$dayTiktok,'total'=>$dayShopee+$dayTiktok,'items'=>$dayItems,'revenue'=>$dayRevenue,'shopeeRevenue'=>$dayShopeeRevenue,'tiktokRevenue'=>$dayTiktokRevenue,'shopeePayout'=>$dayPayout,'shopeeFees'=>$dayFees,'escrowOrders'=>$dayEscrowOrders,'pricedOrders'=>$dayPriced];}
-        $orderTotal=$shopee+$tiktok;
-        $rangeDays=(int)$from->diff($to)->format('%a')+1;
-        $operatingDays=$rangeDays-$rangeHolidayDays;
-        respond(['from'=>$from->format('Y-m-d'),'to'=>$to->format('Y-m-d'),'holidays'=>$holidays,'items'=>$items,'summary'=>['shopee'=>$shopee,'tiktok'=>$tiktok,'total'=>$orderTotal,'rangeDays'=>$rangeDays,'holidayDays'=>$rangeHolidayDays,'operatingDays'=>$operatingDays,'ordersPerDay'=>$operatingDays>0?round($orderTotal/$operatingDays,2):0,'items'=>$itemTotal,'itemsPerDay'=>$operatingDays>0?round($itemTotal/$operatingDays,2):0,'itemsPerOrder'=>$orderTotal>0?round($itemTotal/$orderTotal,2):0,'revenue'=>$revenueTotal,'pricedOrders'=>$pricedOrders,'shopeePayout'=>$shopeePayout,'shopeeFees'=>$shopeeFees,'escrowOrders'=>$escrowOrders]]);
+        $escrowStmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);$escrowCounts=[];foreach($escrowStmt->fetchAll() as $row)$escrowCounts[(string)$row['order_date']]=['orders'=>(int)$row['orders'],'payout'=>(float)$row['payout'],'fees'=>(float)$row['fees']];
+        $holidays=storeHolidays($mysql);$holidayLookup=array_fill_keys($holidays,true);
+        $current=DashboardAnalyticsService::summarize($from,$to,$counts,$escrowCounts,$holidayLookup);
+        $previous=DashboardAnalyticsService::summarize($previousFrom,$previousTo,$counts,$escrowCounts,$holidayLookup,false);
+        $comparison=DashboardAnalyticsService::comparison($current['summary'],$previous['summary'],$from,$to,$previousFrom,$previousTo,[],$comparisonMode);
+        respond(['from'=>$from->format('Y-m-d'),'to'=>$to->format('Y-m-d'),'holidays'=>$holidays,'items'=>$current['items'],'summary'=>$current['summary'],'comparison'=>$comparison]);
     }
 
     if ($action === 'orders') {

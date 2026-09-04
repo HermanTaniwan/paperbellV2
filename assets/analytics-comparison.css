@@ -1,0 +1,92 @@
+.analytics-period-comparison {
+  margin-top: 16px;
+  padding: 9px 12px;
+  border: 1px solid #dce6df;
+  border-radius: 9px;
+  background: #f5f9f6;
+  color: #536159;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.analytics-summary .metric-period-comparison {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #e2e8e4;
+}
+
+.analytics-summary .metric-period-comparison span,
+.analytics-summary .metric-period-comparison em {
+  display: block;
+  overflow: visible;
+  color: #68746d;
+  font-size: 8px;
+  font-style: normal;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.analytics-summary .metric-period-comparison span b {
+  color: #3f4c45;
+  font-weight: 750;
+}
+
+.analytics-summary .metric-period-comparison em {
+  font-weight: 750;
+}
+
+.analytics-summary .metric-period-comparison em i {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  margin-right: 3px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8ece9;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.analytics-summary .metric-period-comparison.positive em {
+  color: #23764f;
+}
+
+.analytics-summary .metric-period-comparison.positive em i {
+  background: #dcefe5;
+}
+
+.analytics-summary .metric-period-comparison.negative em {
+  color: #ad4343;
+}
+
+.analytics-summary .metric-period-comparison.negative em i {
+  background: #f8e1e1;
+}
+
+.analytics-summary .metric-period-comparison.neutral em {
+  color: #66716b;
+}
+
+@media (max-width: 700px) {
+  .analytics-period-comparison {
+    margin-top: 14px;
+  }
+
+  .analytics-summary .metric-period-comparison span,
+  .analytics-summary .metric-period-comparison em {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 420px) {
+  .analytics-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-summary .payout-summary {
+    grid-column: auto;
+  }
+}

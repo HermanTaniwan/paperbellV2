@@ -29,6 +29,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=5">
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=2">
+  <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
 </head>
 <body>
 <script>
@@ -145,16 +146,18 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <button type="button" class="ghost" @click="syncShopeeFinance" :disabled="analyticsLoading||financeSyncing">{{financeSyncing?'Sync...':'Sync Escrow'}}</button>
             </form>
           </div>
+          <div v-if="analytics?.comparison" class="analytics-period-comparison" aria-live="polite">{{analyticsComparisonPeriodText()}}</div>
           <div v-if="analytics" class="analytics-summary">
-            <div class="market-summary"><i class="legend-dot shopee"></i><span>Shopee</span><strong>{{number(analytics.summary.shopee)}}</strong></div>
-            <div class="market-summary"><i class="legend-dot tiktok"></i><span>TikTok Shop</span><strong>{{number(analytics.summary.tiktok)}}</strong></div>
-            <div class="analytics-metric"><span>Total order</span><strong>{{number(analytics.summary.total)}}</strong></div>
-            <div class="analytics-metric"><span>Total item</span><strong>{{number(analytics.summary.items)}}</strong></div>
-            <div class="analytics-metric"><span>Item / order</span><strong>{{number(analytics.summary.itemsPerOrder)}}</strong></div>
-            <div class="analytics-metric average-summary"><span>Rata-rata order / hari</span><strong>{{number(analytics.summary.ordersPerDay)}}</strong><small>{{number(analytics.summary.operatingDays)}} hari operasional</small></div>
-            <div class="analytics-metric average-summary"><span>Rata-rata item / hari</span><strong>{{number(analytics.summary.itemsPerDay)}}</strong><small>{{number(analytics.summary.operatingDays)}} hari operasional</small></div>
-            <div class="analytics-metric revenue-summary"><span>Omzet pesanan</span><strong>{{currency(analytics.summary.revenue)}}</strong><small>{{number(analytics.summary.pricedOrders)}} order memiliki nominal</small></div>
-            <div class="analytics-metric payout-summary"><span>Payout bersih Shopee</span><strong>{{currency(analytics.summary.shopeePayout)}}</strong><small>{{number(analytics.summary.escrowOrders)}} order escrow</small></div>
+            <div v-for="card in analyticsMetricCards()" :key="card.key" class="analytics-metric" :class="card.className">
+              <i v-if="card.icon" class="legend-dot" :class="card.icon"></i>
+              <span>{{card.label}}</span>
+              <strong>{{card.value}}</strong>
+              <small v-if="card.note">{{card.note}}</small>
+              <div class="metric-period-comparison" :class="card.tone">
+                <span>{{card.previousLabel}} <b>{{card.previous}}</b></span>
+                <em><i aria-hidden="true">{{card.arrow}}</i> Selisih {{card.difference}} · {{card.changeLabel}}</em>
+              </div>
+            </div>
           </div>
           <details class="store-holiday-settings">
             <summary><span><b>Hari libur toko / nasional</b><small>Tanggal ini dilewati oleh target pengiriman dan tidak dihitung sebagai hari operasional</small></span><em v-if="analytics">{{number(analytics.summary.operatingDays)}} hari operasional <i>&middot;</i> {{number(analytics.summary.holidayDays)}} libur</em></summary>
@@ -1515,7 +1518,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=114">
+<script src="assets/app.js?v=116">
 </script>
 </body>
 </html>
