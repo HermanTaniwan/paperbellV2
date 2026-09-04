@@ -2,6 +2,12 @@ nav {
   display: block;
   overflow: auto;
   padding: 2px 2px 8px 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+nav::-webkit-scrollbar {
+  display: none;
 }
 
 nav button,
