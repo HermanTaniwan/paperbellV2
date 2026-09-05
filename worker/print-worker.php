@@ -12,6 +12,11 @@ $labelPreparer = new LabelPdfPreparer($config['printing'],$root);
 $once = in_array('--once', $argv, true);
 $brotherPaperSizeCache = [];
 
+function isWindowsPrintHost(): bool
+{
+    return PHP_OS_FAMILY === 'Windows';
+}
+
 function logLine(string $message): void
 {
     global $root;
@@ -50,9 +55,9 @@ function recoverInterruptedJobs(PDO $db): void
         $safe->execute();
         $requeued = $safe->rowCount();
 
-        // Once submission to Windows has started, automatically retrying could
+        // Once submission to the host spooler has started, automatically retrying could
         // print a duplicate if the previous worker died after handing off data.
-        $uncertain = $db->prepare("UPDATE print_jobs SET status='failed',message='Perlu diperiksa sebelum dicetak ulang',error='Worker terputus saat mengirim ke Windows. Periksa antrean printer sebelum menggunakan Coba lagi.',completed_at=? WHERE status='processing'");
+        $uncertain = $db->prepare("UPDATE print_jobs SET status='failed',message='Perlu diperiksa sebelum dicetak ulang',error='Worker terputus saat mengirim ke spooler host. Periksa antrean printer sebelum menggunakan Coba lagi.',completed_at=? WHERE status='processing'");
         $uncertain->execute([time()]);
         $flagged = $uncertain->rowCount();
         $db->commit();
@@ -163,6 +168,7 @@ function setPrinterPaperSize(string $printer, string $paper): void
 function applyBrotherProductPaperSize(array $job, string $printSettings): ?string
 {
     global $brotherPaperSizeCache;
+    if (!isWindowsPrintHost()) return null;
     if (($job['job_type'] ?? '') !== 'product' || stripos((string)($job['printer'] ?? ''), 'Brother') === false) return null;
     $paper = paperSizeFromPrintSettings($printSettings);
     if ($paper === null) return null;
@@ -193,6 +199,7 @@ function applyBrotherProductPaperSize(array $job, string $printSettings): ?strin
 function warmBrotherPaperSizeCache(PDO $db): void
 {
     global $brotherPaperSizeCache;
+    if (!isWindowsPrintHost()) return;
     try {
         $raw = (string)($db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn() ?: '');
         $printers = json_decode($raw, true);
@@ -224,6 +231,7 @@ function prepareLabelPdf(array $job): string
 function applyLabelPaperSize(array $job): ?string
 {
     global $root;
+    if (!isWindowsPrintHost()) return null;
     if (($job['job_type'] ?? '') !== 'label') return null;
     // Epson L3210 menyimpan ukuran Letter lagi di snapshot DEVMODE privat.
     // Mengganti PageMediaSize XML saja membuat driver menerima dua ukuran
@@ -304,10 +312,49 @@ function labelPrintSettings(string $printer): string
     } elseif (stripos($printer, 'WF') !== false) {
         $parts[] = 'bin=261'; // Rear Paper Feed, sama dengan aplikasi desktop.
     }
+    if(!isWindowsPrintHost())$parts[]='paper=Custom.105x182mm';
     // Jangan paksa A6: resi sudah disiapkan sebagai 105 x 182 mm dan driver
     // label memakai ukuran custom yang sama.
     return implode(',', $parts);
 }
+
+function cupsOptions(string $printSettings,string $printer): array
+{
+    $options=[];
+    foreach(array_filter(array_map('trim',explode(',',$printSettings))) as $token){
+        $lower=strtolower($token);
+        if(preg_match('/^\d+(?:-\d*)?$/',$token))$options[]='page-ranges='.$token;
+        elseif(in_array($lower,['odd','even'],true))$options[]='page-set='.$lower;
+        elseif($lower==='simplex')$options[]='sides=one-sided';
+        elseif($lower==='duplexlong')$options[]='sides=two-sided-long-edge';
+        elseif($lower==='duplexshort')$options[]='sides=two-sided-short-edge';
+        elseif($lower==='monochrome'){$options[]='print-color-mode=monochrome';$options[]='ColorModel=Gray';}
+        elseif($lower==='color')$options[]='print-color-mode=color';
+        elseif($lower==='noscale')$options[]='scaling=100';
+        elseif(str_starts_with($lower,'paper='))$options[]='media='.substr($token,6);
+        elseif($lower==='paperkind=13')$options[]='media=B5';
+        elseif($lower==='paperkind=88')$options[]='media=B6';
+        elseif($lower==='bin=7')$options[]='InputSlot=Auto';
+        elseif($lower==='bin=258')$options[]='InputSlot=ByPassTray';
+        elseif($lower==='bin=261')$options[]='InputSlot=Rear';
+    }
+    return array_values(array_unique($options));
+}
+
+function submitPdfToHost(string $sumatra,string $printer,string $printSettings,int $copies,string $path):?int
+{
+    if(isWindowsPrintHost()){
+        runProcess([$sumatra,'-print-to',$printer,'-print-settings',$printSettings,'-silent',$path],'Gagal menjalankan SumatraPDF.');
+        return null;
+    }
+    $command=['lp','-d',$printer,'-n',(string)max(1,$copies)];
+    foreach(cupsOptions($printSettings,$printer) as $option){$command[]='-o';$command[]=$option;}
+    $command[]=$path;
+    $output=runProcess($command,'Gagal mengirim dokumen ke CUPS.');
+    return preg_match('/request id is\s+\S+-(\d+)/i',$output,$match)?(int)$match[1]:null;
+}
+
+if(defined('PAPERBELL_PRINT_WORKER_FUNCTIONS_ONLY'))return;
 
 $db = connectDatabase();
 recoverInterruptedJobs($db);
@@ -337,7 +384,7 @@ do {
         $db->commit();
         $processingStartedAt = microtime(true);
 
-        if (!is_file($sumatra)) throw new RuntimeException('SumatraPDF tidak ditemukan.');
+        if (isWindowsPrintHost()&&!is_file($sumatra)) throw new RuntimeException('SumatraPDF tidak ditemukan.');
         if (!is_file($job['file_path'])) throw new RuntimeException('File PDF tidak ditemukan: ' . $job['file_path']);
 
         $printPath = (string)$job['file_path'];
@@ -362,27 +409,20 @@ do {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
         }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
-        $submitting = $db->prepare("UPDATE print_jobs SET message='Mengirim ke Windows spooler' WHERE id=? AND status='processing'");
-        $submitting->execute([$job['id']]);
+        $spoolerName=isWindowsPrintHost()?'Windows spooler':'CUPS';
+        $submitting = $db->prepare("UPDATE print_jobs SET message=? WHERE id=? AND status='processing'");
+        $submitting->execute(['Mengirim ke '.$spoolerName,$job['id']]);
         $stageStartedAt = microtime(true);
-        runProcess([
-            $sumatra,
-            '-print-to',
-            $printPrinter,
-            '-print-settings',
-            $printSettings,
-            '-silent',
-            $printPath,
-        ], 'Gagal menjalankan SumatraPDF.');
+        $spoolerJobId=submitPdfToHost($sumatra,$printPrinter,$printSettings,(int)$job['copies'],$printPath);
         $timings['sumatra'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
 
         // Jangan menahan worker untuk membaca ulang WMI/Get-PrintJob. Pada host
         // ini korelasi ID dapat memakan lebih dari 60 detik setelah printer
         // sudah mulai bekerja. Widget spooler tetap membaca antrean terpisah.
-        $spoolerJobId = null;
+        if(isWindowsPrintHost())$spoolerJobId=null;
         $timings['correlate'] = 0;
 
-        // Windows now owns the submitted job. Drop the cached spooler snapshot
+        // The host spooler now owns the submitted job. Drop its cached snapshot
         // so the web widget can show it on its very next refresh.
         @unlink($root . '/storage/printer-spooler-cache.json');
 
@@ -395,7 +435,7 @@ do {
 
         $db->beginTransaction();
         $done = $db->prepare("UPDATE print_jobs SET status='submitted',message=?,completed_at=?,submitted_at=?,spooler_job_id=?,error='' WHERE id=? AND status='processing'");
-        $submittedAt=time();$done->execute([$spoolerJobId===null?'Diserahkan ke Windows spooler':'Diserahkan ke Windows spooler #'.$spoolerJobId,$submittedAt,$submittedAt,$spoolerJobId,$job['id']]);
+        $submittedAt=time();$done->execute([$spoolerJobId===null?'Diserahkan ke '.$spoolerName:'Diserahkan ke '.$spoolerName.' #'.$spoolerJobId,$submittedAt,$submittedAt,$spoolerJobId,$job['id']]);
         if ($job['job_type'] === 'product' && $job['order_process_id']) {
             $tokens = array_map('strtolower', array_map('trim', explode(',', (string)$job['print_settings'])));
             if (in_array('odd', $tokens, true)) {
@@ -413,7 +453,7 @@ do {
         }
         $db->commit();
         $totalMs = $processingStartedAt > 0 ? (int)round((microtime(true) - $processingStartedAt) * 1000) : 0;
-        logLine("Job #{$job['id']} submitted to Windows: {$printPrinter} [prepare={$timings['prepare']}ms, driver={$timings['driver']}ms, sumatra={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
+        logLine("Job #{$job['id']} submitted to {$spoolerName}: {$printPrinter} [prepare={$timings['prepare']}ms, driver={$timings['driver']}ms, submit={$timings['sumatra']}ms, correlate={$timings['correlate']}ms, total={$totalMs}ms]");
     } catch (Throwable $e) {
         try {
             if ($db->inTransaction()) $db->rollBack();

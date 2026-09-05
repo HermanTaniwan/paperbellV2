@@ -52,7 +52,7 @@ final class PrintQueueService
         if($action==='cancel'){if(!in_array($status,['queued','processing'],true))throw new RuntimeException('Job ini tidak dapat dibatalkan.');$next=$status==='queued'?'cancelled':'cancel_requested';$stmt=$this->db->prepare("UPDATE print_jobs SET status=?,message='Dibatalkan pengguna',completed_at=? WHERE id=?");$stmt->execute([$next,time(),$id]);}
         elseif($action==='retry'){
             if(!in_array($status,['failed','cancelled','cancel_requested','submitted'],true))throw new RuntimeException('Hanya job gagal, dibatalkan, atau sudah dikirim yang dapat diulang.');
-            if($status==='submitted'&&(int)($job['spooler_job_id']??0)>0){$state=$this->spoolerState();foreach($state['jobs'] as $spoolerJob)if((string)($spoolerJob['printer']??'')===(string)$job['printer']&&(int)($spoolerJob['job_id']??0)===(int)$job['spooler_job_id'])throw new RuntimeException('Job lama masih ada di Windows spooler. Cancel job spooler terlebih dahulu agar tidak tercetak dobel.');}
+            if($status==='submitted'&&(int)($job['spooler_job_id']??0)>0){$state=$this->spoolerState();foreach($state['jobs'] as $spoolerJob)if((string)($spoolerJob['printer']??'')===(string)$job['printer']&&(int)($spoolerJob['job_id']??0)===(int)$job['spooler_job_id'])throw new RuntimeException('Job lama masih ada di spooler. Batalkan job spooler terlebih dahulu agar tidak tercetak dobel.');}
             $stmt=$this->db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE id=?");$stmt->execute([$id]);
             $resolve=$this->db->prepare("UPDATE printer_incidents SET status='resolved',active_key=NULL,resolved_at=?,healthy_count=2 WHERE print_job_id=? AND status IN ('pending','active')");$resolve->execute([time(),$id]);
         }
@@ -73,6 +73,12 @@ final class PrintQueueService
 
     public function spoolerAction(string $printer,int $jobId,string $action):array
     {
+        if(PHP_OS_FAMILY!=='Windows'){
+            if($printer===''||$jobId<=0)throw new InvalidArgumentException('Printer dan ID spooler wajib diisi.');
+            $request=$printer.'-'.$jobId;
+            $command=match($action){'pause'=>['lp','-i',$request,'-H','hold'],'resume'=>['lp','-i',$request,'-H','resume'],'cancel'=>['cancel',$request],default=>throw new InvalidArgumentException('Aksi spooler tidak valid.')};
+            $this->cupsCommand($command);@unlink($this->spoolerCacheFile);return['ok'=>true];
+        }
         if($printer===''||$jobId<=0)throw new InvalidArgumentException('Printer dan ID spooler wajib diisi.');$verb=match($action){'pause'=>'Suspend-PrintJob','resume'=>'Resume-PrintJob','cancel'=>'Remove-PrintJob',default=>throw new InvalidArgumentException('Aksi spooler tidak valid.')};
         $p64=base64_encode(mb_convert_encoding($printer,'UTF-16LE','UTF-8'));
         $script="\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$p64}')); ";
@@ -90,7 +96,7 @@ final class PrintQueueService
         $state=$this->spoolerState();$sourceJob=null;$target=null;
         foreach($state['jobs'] as $row)if((string)($row['printer']??'')===$printer&&(int)($row['job_id']??0)===$jobId){$sourceJob=$row;break;}
         foreach($state['printers'] as $row)if((string)($row['name']??'')===$targetPrinter){$target=$row;break;}
-        if(!$sourceJob)throw new RuntimeException('Job sudah tidak ada di Windows spooler. Muat ulang antrean.');
+        if(!$sourceJob)throw new RuntimeException('Job sudah tidak ada di spooler. Muat ulang antrean.');
         if(!$target)throw new RuntimeException('Printer tujuan tidak tersedia pada konfigurasi Paperbell.');
         if(!(bool)($target['active']??false))throw new RuntimeException('Printer tujuan sedang bermasalah atau offline. Pilih printer yang aktif.');
 
@@ -106,7 +112,7 @@ final class PrintQueueService
 
         try{$this->spoolerAction($printer,$jobId,'cancel');}
         catch(Throwable $e){
-            $restore=$this->db->prepare("UPDATE print_jobs SET status='submitted',message='Diserahkan ke Windows spooler' WHERE id=? AND status='moving'");$restore->execute([$appJobId]);
+            $restore=$this->db->prepare("UPDATE print_jobs SET status='submitted',message='Diserahkan ke spooler' WHERE id=? AND status='moving'");$restore->execute([$appJobId]);
             throw $e;
         }
 
@@ -148,7 +154,7 @@ final class PrintQueueService
         foreach($jobs as $job)if((string)$job['status']==='failed'){
             $message=trim((string)$job['error'])?:'Worker printer melaporkan kegagalan tanpa detail.';
             $type=str_contains(strtolower($message),'sumatra')?'sumatra_failed':(str_contains(strtolower($message),'file pdf')?'file_missing':'job_failed');
-            $guidance=$type==='file_missing'?'Pastikan file PDF masih ada dan storage dapat dibaca, lalu klik Coba lagi.':($type==='sumatra_failed'?'Periksa path SumatraPDF dan printer tujuan, lalu klik Coba lagi.':'Periksa pesan teknis, koneksi printer, dan antrean Windows sebelum mencoba lagi.');
+            $guidance=$type==='file_missing'?'Pastikan file PDF masih ada dan storage dapat dibaca, lalu klik Coba lagi.':($type==='sumatra_failed'?'Periksa path SumatraPDF dan printer tujuan, lalu klik Coba lagi.':'Periksa pesan teknis, koneksi printer, dan antrean host sebelum mencoba lagi.');
             $signals[]=$this->signal($type,(string)$job['printer'],(int)$job['id'],null,'Job cetak gagal',$message,$guidance);
         }
         if(!$worker['online'])$signals[]=$this->signal('worker_offline','',null,null,'Print worker tidak aktif','Heartbeat terakhir: '.$worker['text'],'Paperbell mencoba mengaktifkan worker otomatis setiap 1 menit. Jika pesan ini tetap muncul, periksa task Paperbell Auto Start serta MariaDB.','critical',90);
@@ -221,6 +227,7 @@ final class PrintQueueService
 
     private function notifyWindows(string $title,string $message):bool
     {
+        if(PHP_OS_FAMILY!=='Windows')return false;
         $path64=base64_encode(mb_convert_encoding($this->notificationScript,'UTF-16LE','UTF-8'));$title64=base64_encode(mb_convert_encoding($title,'UTF-16LE','UTF-8'));$message64=base64_encode(mb_convert_encoding(mb_substr($message,0,500),'UTF-16LE','UTF-8'));
         $script="\$e=[Text.Encoding]::Unicode;\$p=\$e.GetString([Convert]::FromBase64String('{$path64}'));\$a=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',\$p,'-TitleBase64','{$title64}','-MessageBase64','{$message64}');Start-Process -FilePath 'powershell.exe' -ArgumentList \$a -WindowStyle Hidden";
         try{$this->powershell($script);return true;}catch(Throwable){return false;}
@@ -230,6 +237,7 @@ final class PrintQueueService
     {
         $cached=$this->readSpoolerCache();
         if($cached!==null&&(int)($cached['saved_at']??0)>=time()-15)return $cached['data']+['available'=>true];
+        if(PHP_OS_FAMILY!=='Windows')return $this->cupsSpoolerState($cached);
         $script="\$now=Get-Date; \$jobs=@(Get-CimInstance Win32_PrintJob -ErrorAction Stop | ForEach-Object { \$parts=\$_.Name -split ', '; \$submitted=try{[Management.ManagementDateTimeConverter]::ToDateTime(\$_.TimeSubmitted)}catch{\$now}; \$jobStatus=if(\$_.JobStatus){\$_.JobStatus}else{\$_.Status}; [pscustomobject]@{printer=(\$parts[0]);job_id=([int](\$parts[-1]));document=\$_.Document;status=([string]\$jobStatus);status_mask=([int]\$_.StatusMask);size=([int64]\$_.Size);pages_printed=([int]\$_.PagesPrinted);total_pages=([int]\$_.TotalPages);age_seconds=([int][Math]::Max(0,(\$now-\$submitted).TotalSeconds))} }); \$printers=@(Get-CimInstance Win32_Printer -ErrorAction Stop | ForEach-Object { [pscustomobject]@{name=\$_.Name;status_code=([int]\$_.PrinterStatus);extended_status=([int]\$_.ExtendedPrinterStatus);error_state=([int]\$_.DetectedErrorState);printer_state=([int]\$_.PrinterState);work_offline=([bool]\$_.WorkOffline);is_default=([bool]\$_.Default);port=\$_.PortName} }); [pscustomobject]@{jobs=\$jobs;printers=\$printers} | ConvertTo-Json -Depth 4 -Compress";
         try{
             $raw=$this->powershell($script);$data=json_decode(trim($raw),true);if(!is_array($data))throw new RuntimeException('Respons spooler tidak valid.');
@@ -245,6 +253,47 @@ final class PrintQueueService
             }
             usort($printers,fn($a,$b)=>(int)$b['active']<=>(int)$a['active']?:strnatcasecmp($a['name'],$b['name']));$result=['jobs'=>$jobs,'printers'=>$printers,'available'=>true];$this->writeSpoolerCache($result);return$result;
         }catch(Throwable){return($cached['data']??['jobs'=>[],'printers'=>[]])+['available'=>false];}
+    }
+
+    private function cupsSpoolerState(?array $cached):array
+    {
+        try{
+            $printerOutput=$this->cupsCommand(['lpstat','-p','-d']);
+            $jobOutput=$this->cupsCommand(['lpstat','-W','not-completed','-o']);
+            $visibleRaw=(string)($this->db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn()?:'');
+            $visible=json_decode($visibleRaw,true);$visible=is_array($visible)?array_flip(array_map('strval',$visible)):[];
+            $default='';if(preg_match('/^system default destination:\s*(\S+)/mi',$printerOutput,$match))$default=$match[1];
+            $printers=[];
+            foreach(preg_split('/\R/',trim($printerOutput))?:[] as $line){
+                if(!preg_match('/^printer\s+(\S+)\s+(.+)$/i',trim($line),$match))continue;
+                $name=$match[1];if($visible&&!isset($visible[$name]))continue;$detail=trim($match[2]);$lower=strtolower($detail);
+                $disabled=str_contains($lower,'disabled');$errorType='';$status='Siap';
+                if(str_contains($lower,'printing'))$status='Sedang mencetak';
+                elseif($disabled){$status='Dijeda';$errorType='paused';}
+                if(str_contains($lower,'paper jam')){$status='Kertas tersangkut';$errorType='paper_jam';}
+                elseif(str_contains($lower,'out of paper')||str_contains($lower,'media-empty')){$status='Kertas habis';$errorType='out_of_paper';}
+                elseif(str_contains($lower,'offline')||str_contains($lower,'unable to locate')){$status='Offline';$errorType='printer_offline';}
+                $printers[]=['name'=>$name,'active'=>$errorType==='','status'=>$status,'status_code'=>$disabled?6:3,'error_type'=>$errorType,'diagnostic'=>$detail,'is_default'=>$name===$default,'port'=>'CUPS','queue_count'=>0];
+            }
+            $printerNames=array_column($printers,'name');usort($printerNames,fn($a,$b)=>strlen($b)<=>strlen($a));$jobs=[];$jobCounts=[];
+            foreach(preg_split('/\R/',trim($jobOutput))?:[] as $line){
+                $line=trim($line);if($line===''||!preg_match('/^(\S+)-(\d+)\s+(\S+)\s+(\d+)\s*(.*)$/',$line,$match))continue;
+                $requestName=$match[1];$printer=$requestName;foreach($printerNames as $candidate)if($candidate===$requestName){$printer=$candidate;break;}
+                if($visible&&!isset($visible[$printer]))continue;$jobId=(int)$match[2];$jobCounts[$printer]=($jobCounts[$printer]??0)+1;
+                $jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestName.'-'.$jobId,'status'=>'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>0,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>false];
+            }
+            foreach($printers as &$printer)$printer['queue_count']=(int)($jobCounts[$printer['name']]??0);unset($printer);
+            usort($printers,fn($a,$b)=>(int)$b['active']<=>(int)$a['active']?:strnatcasecmp($a['name'],$b['name']));
+            $result=['jobs'=>$jobs,'printers'=>$printers,'available'=>true];$this->writeSpoolerCache($result);return$result;
+        }catch(Throwable){return($cached['data']??['jobs'=>[],'printers'=>[]])+['available'=>false];}
+    }
+
+    private function cupsCommand(array $command):string
+    {
+        $pipes=[];$process=@proc_open($command,[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);
+        if(!is_resource($process))throw new RuntimeException('Perintah CUPS tidak dapat dijalankan.');
+        $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$exit=proc_close($process);
+        if($exit!==0)throw new RuntimeException(trim((string)($err?:$out))?:'Perintah CUPS gagal.');return(string)$out;
     }
     private function readSpoolerCache():?array{if(!is_file($this->spoolerCacheFile))return null;$data=json_decode((string)@file_get_contents($this->spoolerCacheFile),true);return is_array($data)&&is_array($data['data']??null)?$data:null;}
     private function writeSpoolerCache(array $data):void{@file_put_contents($this->spoolerCacheFile,json_encode(['saved_at'=>time(),'data'=>$data],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),LOCK_EX);}

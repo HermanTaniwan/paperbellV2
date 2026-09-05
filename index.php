@@ -1205,7 +1205,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button class="ghost" @click="selectAllPrinters(false)">Kosongkan</button>
 <button class="ghost" @click="loadPrinterSettings">Deteksi ulang</button>
 </div>
-            <div v-if="!printerSettings.installed.length" class="empty printer-empty">Windows tidak mendeteksi printer pada komputer host.</div>
+            <div v-if="!printerSettings.installed.length" class="empty printer-empty">{{printerSettings.platform==='cups'?'CUPS tidak mendeteksi printer pada host Ubuntu.':'Windows tidak mendeteksi printer pada komputer host.'}}</div>
             <label v-for="printer in printerSettings.installed" :key="printer" class="printer-option">
               <input type="checkbox" :checked="printerSettings.visible.includes(printer)" @change="togglePrinter(printer,$event.target.checked)">
               <span>

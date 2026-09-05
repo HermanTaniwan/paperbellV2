@@ -22,6 +22,12 @@ final class PrintService
         $cached=$this->readInstalledCache();
         if($cached!==null&&!$refresh)
             return $this->installedCache=$cached['printers'];
+        if(PHP_OS_FAMILY!=='Windows'){
+            $printers=$this->cupsPrinters();
+            if($printers===null)return $this->installedCache=$cached['printers']??[];
+            $this->writeInstalledCache($printers);
+            return $this->installedCache=$printers;
+        }
         $script = "\$printers=@(Get-CimInstance Win32_Printer -ErrorAction Stop | Where-Object { -not \$_.WorkOffline -and ([int]\$_.PrinterStatus -notin 6,7) } | Select-Object -ExpandProperty Name); ConvertTo-Json -InputObject \$printers -Compress";
         $command = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' . escapeshellarg($script);
         $output = shell_exec($command);
@@ -34,6 +40,16 @@ final class PrintService
         $printers=array_values($printers);
         $this->writeInstalledCache($printers);
         return $this->installedCache=$printers;
+    }
+
+    private function cupsPrinters():?array
+    {
+        $pipes=[];$process=@proc_open(['lpstat','-e'],[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);
+        if(!is_resource($process))return null;
+        $stdout=stream_get_contents($pipes[1]);$stderr=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);
+        if(proc_close($process)!==0)return null;
+        $printers=array_values(array_unique(array_filter(array_map('trim',preg_split('/\R/',trim((string)$stdout))?:[]))));
+        natcasesort($printers);return array_values($printers);
     }
 
     private function readInstalledCache(): ?array
@@ -82,7 +98,7 @@ final class PrintService
         $l3210=trim((string)($saved['override_l3210']??''));
         if($brother!==''&&!in_array($brother,$visible,true))$brother='';
         if($l3210!==''&&!in_array($l3210,$visible,true))$l3210='';
-        return $this->settingsCache=['installed'=>$installed,'visible'=>$visible,'default_label_printer'=>$default,'override_brother'=>$brother,'override_l3210'=>$l3210];
+        return $this->settingsCache=['installed'=>$installed,'visible'=>$visible,'default_label_printer'=>$default,'override_brother'=>$brother,'override_l3210'=>$l3210,'platform'=>PHP_OS_FAMILY==='Windows'?'windows':'cups'];
     }
 
     public function configuredPrinters(): array { return $this->printerSettings()['visible']; }
