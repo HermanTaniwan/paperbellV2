@@ -263,6 +263,8 @@ final class PrintQueueService
             $visibleRaw=(string)($this->db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn()?:'');
             $visible=json_decode($visibleRaw,true);$visible=is_array($visible)?array_flip(array_map('strval',$visible)):[];
             $default='';if(preg_match('/^system default destination:\s*(\S+)/mi',$printerOutput,$match))$default=$match[1];
+            preg_match_all('/^printer\s+(\S+)\s+/mi',$printerOutput,$availableMatches);$availableNames=$availableMatches[1]??[];
+            if($visible&&!array_intersect(array_keys($visible),$availableNames))$visible=[];
             $printers=[];
             foreach(preg_split('/\R/',trim($printerOutput))?:[] as $line){
                 if(!preg_match('/^printer\s+(\S+)\s+(.+)$/i',trim($line),$match))continue;
