@@ -18,6 +18,15 @@ for command_name in php python3 lp lpstat cancel systemctl; do
     }
 done
 
+if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
+    command -v apt-get >/dev/null || {
+        echo "Modul venv Python belum tersedia dan apt-get tidak ditemukan." >&2
+        exit 1
+    }
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv
+fi
+
 [[ -f "${app_dir}/worker/print-worker.php" ]] || {
     echo "Worker Paperbell tidak ditemukan di ${app_dir}." >&2
     exit 1
@@ -37,7 +46,7 @@ if (( ${#printers[@]} == 0 )); then
     exit 1
 fi
 
-python3 -m venv "${app_dir}/.venv"
+python3 -m venv --clear "${app_dir}/.venv"
 "${app_dir}/.venv/bin/python" -m pip install --disable-pip-version-check -r "${app_dir}/requirements-ubuntu.txt"
 
 python3 - "${apache_config}" "${environment_file}" "${app_dir}/.venv/bin/python" <<'PYTHON'

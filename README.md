@@ -63,7 +63,7 @@ Untuk memasang dependensi Python dan print worker sebagai service Ubuntu yang ot
 sudo ./install-autostart-ubuntu.sh
 ```
 
-Installer membaca environment database Paperbell dari konfigurasi Apache, menyimpannya dengan permission root-only, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR` dan `PAPERBELL_APACHE_CONFIG` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
+Installer memasang `python3-venv` melalui APT bila belum tersedia, membaca environment database Paperbell dari konfigurasi Apache, menyimpannya dengan permission root-only, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR` dan `PAPERBELL_APACHE_CONFIG` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
 
 Random Pages, pembacaan XLSX, dan penyiapan resi memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl`, `pypdf`, Pillow, dan `reportlab`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.
 
