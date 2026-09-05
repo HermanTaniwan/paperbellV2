@@ -92,6 +92,7 @@ final class PrintService
         $visible=json_decode((string)($saved['visible_printers']??''),true);
         if(!is_array($visible))$visible=$installed;
         $visible=array_values(array_filter($visible,fn($p)=>in_array((string)$p,$installed,true)));
+        if(!$visible&&$installed)$visible=$installed;
         $default=trim((string)($saved['default_label_printer']??$this->fallbackLabelPrinter));
         if(!in_array($default,$visible,true))$default=$visible[0]??'';
         $brother=trim((string)($saved['override_brother']??''));
