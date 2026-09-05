@@ -55,9 +55,17 @@ Cetak label/resi memakai kertas fisik 105 x 182 mm, simplex, dan berwarna agar b
 
 Job berstatus `submitted` berarti file sudah diterima spooler Windows atau CUPS, bukan konfirmasi sensor bahwa kertas berhasil keluar. Paperbell memantau error worker, paper jam/out-of-paper, job spooler bermasalah atau macet, dan heartbeat worker. Printer yang sekadar offline/nonaktif tetap ditampilkan di panel tetapi tidak membuat insiden. Kondisi yang jelas membutuhkan tindakan dikonfirmasi dua kali; status generic `Error + Printing` ditahan selama 90 detik dan diabaikan selama halaman masih bertambah agar gangguan driver sementara tidak menjadi alarm. Insiden aktif harus diperiksa dan di-retry manual agar tidak berisiko tercetak ganda. Tombol **Sudah diperiksa** menyembunyikan insiden dari daftar masalah aktif tanpa menghapus riwayat job atau mencetaknya ulang.
 
-Pada Ubuntu, instal dan aktifkan CUPS beserta printer host terlebih dahulu. Paperbell memakai `lpstat` untuk deteksi/status, `lp` untuk mengirim PDF, dan `cancel` untuk membatalkan job. Set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki `pypdf`, `pdfplumber`, `reportlab`, dan Pillow agar penyiapan label serta fitur PDF dapat berjalan.
+Pada Ubuntu, instal dan aktifkan CUPS beserta printer host terlebih dahulu. Paperbell memakai `lpstat` untuk deteksi/status, `lp` untuk mengirim PDF, dan `cancel` untuk membatalkan job. Set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki `pypdf`, `reportlab`, Pillow, dan `openpyxl` agar penyiapan label serta fitur PDF dapat berjalan.
 
-Random Pages, pembacaan XLSX, dan penyiapan resi memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl`, `pypdf`, `pdfplumber`, dan `reportlab`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.
+Untuk memasang dependensi Python dan print worker sebagai service Ubuntu yang otomatis aktif saat boot, jalankan dari instalasi web Paperbell:
+
+```bash
+sudo ./install-autostart-ubuntu.sh
+```
+
+Installer membaca environment database Paperbell dari konfigurasi Apache, menyimpannya dengan permission root-only, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR` dan `PAPERBELL_APACHE_CONFIG` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
+
+Random Pages, pembacaan XLSX, dan penyiapan resi memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl`, `pypdf`, Pillow, dan `reportlab`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.
 
 Pada detail order, setiap item memiliki **Pengaturan cetak item** untuk memilih range halaman, semua/ganjil/genap, simplex/duplex, ukuran kertas, copies total, dan printer tujuan. Nilai awal mengikuti mapping produk × qty order dan dapat dioverride sebelum cetak per item maupun cetak seluruh order. Seperti desktop, ganjil/genap selalu memakai simplex; B5 memakai aturan printer khusus.
 
