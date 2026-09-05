@@ -6,14 +6,6 @@ $mysqlConfig = 'C:\xampp\mysql\bin\my.ini'
 $mysqlErrorLog = 'C:\xampp\mysql\data\mysql_error.log'
 $apacheExecutable = 'C:\xampp\apache\bin\httpd.exe'
 $apacheHealthUrl = 'http://127.0.0.1/paperbell/assets/app.js'
-$phpConsoleExecutable = 'C:\xampp\php\php.exe'
-$phpBackgroundExecutable = 'C:\xampp\php\php-win.exe'
-$workerPhpExecutable = if (Test-Path -LiteralPath $phpBackgroundExecutable -PathType Leaf) {
-    $phpBackgroundExecutable
-}
-else {
-    $phpConsoleExecutable
-}
 $logDirectory = Join-Path $root 'storage\logs'
 $startupLog = Join-Path $logDirectory 'startup.log'
 
@@ -141,17 +133,16 @@ if ($mysqlStartAttempted) {
     Write-StartupLog 'MariaDB siap menerima koneksi.'
 }
 
-$phpWorkers = Get-CimInstance Win32_Process -Filter "Name = 'php.exe' OR Name = 'php-win.exe'" -ErrorAction SilentlyContinue
-$worker = $phpWorkers | Where-Object { $_.CommandLine -like '*print-worker.php*' }
+$worker = Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*print-worker.php*' }
 if (-not $worker) {
-    Start-Process -FilePath $workerPhpExecutable `
+    Start-Process -FilePath 'C:\xampp\php\php.exe' `
         -ArgumentList "`"$root\worker\print-worker.php`"" `
         -WorkingDirectory $root -WindowStyle Hidden
 }
 
-$labelWorker = $phpWorkers | Where-Object { $_.CommandLine -like '*label-worker.php*' }
+$labelWorker = Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*label-worker.php*' }
 if (-not $labelWorker) {
-    Start-Process -FilePath $workerPhpExecutable `
+    Start-Process -FilePath 'C:\xampp\php\php.exe' `
         -ArgumentList "`"$root\worker\label-worker.php`"" `
         -WorkingDirectory $root -WindowStyle Hidden
 }
