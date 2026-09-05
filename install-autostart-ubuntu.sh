@@ -10,6 +10,11 @@ app_dir="${PAPERBELL_APP_DIR:-/var/www/html/paperbell}"
 apache_config="${PAPERBELL_APACHE_CONFIG:-/etc/apache2/conf-enabled/paperbell.conf}"
 environment_file="/etc/paperbell-print-worker.env"
 service_file="/etc/systemd/system/paperbell-print-worker.service"
+drive_service_file="/etc/systemd/system/paperbell-google-drive-mount.service"
+drive_user="${PAPERBELL_DRIVE_USER:-herman}"
+drive_mount="${PAPERBELL_UBUNTU_DRIVE_MOUNT:-/home/herman/GoogleDrive}"
+drive_remote="${PAPERBELL_RCLONE_REMOTE:-gdrive:}"
+ubuntu_print_root="${PAPERBELL_UBUNTU_PRINT_ROOT:-${drive_mount}/Paperbell/Print}"
 
 for command_name in php python3 lp lpstat cancel systemctl; do
     command -v "${command_name}" >/dev/null || {
@@ -44,6 +49,57 @@ mapfile -t printers < <(lpstat -e)
 if (( ${#printers[@]} == 0 )); then
     echo "CUPS belum memiliki printer. Tambahkan printer sebelum memasang worker." >&2
     exit 1
+fi
+
+if command -v rclone >/dev/null && [[ -f "/home/${drive_user}/.config/rclone/rclone.conf" ]]; then
+    for command_name in fusermount3 mountpoint runuser; do
+        command -v "${command_name}" >/dev/null || {
+            echo "Perintah mount wajib tidak ditemukan: ${command_name}" >&2
+            exit 1
+        }
+    done
+    if ! grep -Eq '^[[:space:]]*user_allow_other([[:space:]]|$)' /etc/fuse.conf 2>/dev/null; then
+        printf '\nuser_allow_other\n' >> /etc/fuse.conf
+    fi
+    install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
+
+    cat >"${drive_service_file}" <<SERVICE
+[Unit]
+Description=Paperbell Google Drive mount
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=${drive_user}
+Group=${drive_user}
+Environment=HOME=/home/${drive_user}
+ExecStart=/usr/bin/rclone mount ${drive_remote} ${drive_mount} --config /home/${drive_user}/.config/rclone/rclone.conf --vfs-cache-mode full --allow-other --umask 002
+ExecStop=/usr/bin/fusermount3 -u ${drive_mount}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+    systemctl stop paperbell-google-drive-mount.service 2>/dev/null || true
+    if mountpoint -q "${drive_mount}"; then
+        runuser -u "${drive_user}" -- fusermount3 -u "${drive_mount}"
+    fi
+    systemctl daemon-reload
+    systemctl enable --now paperbell-google-drive-mount.service
+    for _ in {1..20}; do
+        runuser -u www-data -- test -r "${ubuntu_print_root}" && break
+        sleep 1
+    done
+    runuser -u www-data -- test -r "${ubuntu_print_root}" || {
+        echo "Google Drive belum dapat dibaca www-data: ${ubuntu_print_root}" >&2
+        systemctl --no-pager --full status paperbell-google-drive-mount.service >&2 || true
+        exit 1
+    }
+else
+    echo "Peringatan: konfigurasi rclone tidak ditemukan; pastikan www-data dapat membaca ${ubuntu_print_root}." >&2
 fi
 
 python3 -m venv --clear "${app_dir}/.venv"
@@ -84,8 +140,8 @@ PYTHON
 cat >"${service_file}" <<SERVICE
 [Unit]
 Description=Paperbell print worker
-Wants=network-online.target cups.service
-After=network-online.target cups.service mariadb.service
+Wants=network-online.target cups.service paperbell-google-drive-mount.service
+After=network-online.target cups.service mariadb.service paperbell-google-drive-mount.service
 
 [Service]
 Type=simple
