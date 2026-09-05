@@ -8,6 +8,7 @@ $config = require __DIR__ . '/config.php';
 date_default_timezone_set($config['app']['timezone']);
 require __DIR__ . '/src/Database.php';
 require __DIR__ . '/src/PrintService.php';
+require __DIR__ . '/src/HostPathResolver.php';
 require __DIR__ . '/src/OAuthVault.php';
 require __DIR__ . '/src/MarketplaceOAuthService.php';
 require __DIR__ . '/src/LabelPdfPreparer.php';
@@ -202,12 +203,13 @@ try {
     session_write_close();
 
     $mysql = Database::mysql($config['mysql']);
-    $printing = new PrintService($mysql,$config['printing']['default_label_printer']);
+    $pathResolver = new HostPathResolver($config['paths']??[]);
+    $printing = new PrintService($mysql,$config['printing']['default_label_printer'],$pathResolver);
     $oauthService = static function() use ($mysql,$config): MarketplaceOAuthService { static $service=null;return $service??=new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']); };
     $labelService = static function() use ($mysql,$config,$oauthService): MarketplaceLabelService { static $service=null;return $service??=new MarketplaceLabelService($mysql,$oauthService(),__DIR__.'/storage/labels',new LabelPdfPreparer($config['printing'],__DIR__),(string)$config['printing']['default_label_printer']); };
-    $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__);
+    $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__,$pathResolver);
     $queueService = static function() use ($mysql): PrintQueueService { static $service=null;return $service??=new PrintQueueService($mysql); };
-    $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__);
+    $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__,$pathResolver);
     $scannerService = new ScannerService($config['scanner']??[],__DIR__);
     $serverHealth = new ServerHealthService($config['server_health'] ?? [], __DIR__);
     $customerLoyalty = new CustomerLoyaltyService($mysql);
@@ -280,7 +282,7 @@ try {
     }
     if ($action === 'mapping_pdf') {
         $stmt=$mysql->prepare('SELECT sku_id,product_name,variation_name,file_path FROM data_mappings WHERE id=?');$stmt->execute([(int)($_GET['mapping_id']??0)]);$mapping=$stmt->fetch();
-        if(!$mapping)respond(['error'=>'Data Mapping tidak ditemukan.'],404);$path=(string)$mapping['file_path'];if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'PDF produk tidak tersedia.'],404);
+        if(!$mapping)respond(['error'=>'Data Mapping tidak ditemukan.'],404);$path=$pathResolver->resolve((string)$mapping['file_path']);if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'PDF produk tidak tersedia.'],404);
         streamPdf($path,basename($path));
     }
     if ($action === 'manual_pdf') {
@@ -526,7 +528,7 @@ try {
         $input=body();$requested=is_array($input['items']??null)?$input['items']:[];if(!$requested)respond(['error'=>'Pilih minimal satu produk dari Data Mapping.'],422);
         $quantities=[];foreach($requested as $item){$mappingId=(int)($item['mapping_id']??0);$qty=(int)($item['qty']??0);if($mappingId<=0||$qty<1||$qty>999)respond(['error'=>'Produk atau quantity order manual tidak valid.'],422);$quantities[$mappingId]=min(999,($quantities[$mappingId]??0)+$qty);}
         $ids=array_keys($quantities);$marks=implode(',',array_fill(0,count($ids),'?'));$stmt=$mysql->prepare("SELECT * FROM data_mappings WHERE id IN ({$marks})");$stmt->execute($ids);$mappings=[];foreach($stmt->fetchAll() as $mapping)$mappings[(int)$mapping['id']]=$mapping;if(count($mappings)!==count($ids))respond(['error'=>'Sebagian Data Mapping sudah berubah. Silakan pilih ulang.'],422);
-        foreach($mappings as $mapping)if(!is_file((string)$mapping['file_path'])||strtolower(pathinfo((string)$mapping['file_path'],PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'File PDF mapping tidak ditemukan: '.((string)$mapping['sku_id']?:basename((string)$mapping['file_path']))],422);
+        foreach($mappings as $mapping){$mappingPath=$pathResolver->resolve((string)$mapping['file_path']);if(!is_file($mappingPath)||strtolower(pathinfo($mappingPath,PATHINFO_EXTENSION))!=='pdf')respond(['error'=>'File PDF mapping tidak ditemukan: '.((string)$mapping['sku_id']?:basename($mappingPath))],422);}
         $now=time();$orderSn='MANUAL-'.date('Ymd-His').'-'.strtoupper(bin2hex(random_bytes(2)));$note=trim((string)($input['note']??''));if(mb_strlen($note)>500)$note=mb_substr($note,0,500);$user=(string)$_SESSION['paperbell_user'];
         $mysql->beginTransaction();try{$order=$mysql->prepare('INSERT INTO orders(order_sn,status,create_time,update_time,buyer_username,raw_json) VALUES(?,?,?,?,?,?)');$order->execute([$orderSn,'PROCESSED',$now,$now,'Order manual',json_encode(['source'=>'manual','created_by'=>$user,'message_to_seller'=>$note],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)]);$line=$mysql->prepare('INSERT INTO order_process(order_sn,order_item_id,item_key,model_sku,item_sku,item_name,model_name,qty,status,create_time,saved_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');$position=0;foreach($ids as $mappingId){$mapping=$mappings[$mappingId];$line->execute([$orderSn,'manual-'.$mappingId.'-'.(++$position),(string)$mapping['sku_id'],(string)$mapping['sku_id'],(string)$mapping['parent_sku'],(string)$mapping['product_name'],(string)$mapping['variation_name'],$quantities[$mappingId],'PROCESSED',$now,$now]);}refreshOrderPrintSummary($mysql,$orderSn);$mysql->commit();}catch(Throwable $e){if($mysql->inTransaction())$mysql->rollBack();throw$e;}
         respond(['ok'=>true,'order_sn'=>$orderSn,'items'=>count($ids)]);

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 final class PdfToolsService
 {
-    public function __construct(private PDO $db,private array $config,private string $root) {}
+    public function __construct(private PDO $db,private array $config,private string $root,private ?HostPathResolver $pathResolver=null) {$this->pathResolver??=new HostPathResolver();}
 
     public function listDocuments():array
     {
@@ -23,7 +23,7 @@ final class PdfToolsService
 
     public function randomPool():array
     {
-        $rows=$this->db->query("SELECT group_name,paper,file_path,sku_id,parent_sku,variation,search_alias FROM data_mappings WHERE UPPER(LEFT(TRIM(group_name),1)) IN ('P','L') AND file_path<>''")->fetchAll();$result=['planner'=>[],'loose'=>[]];$seen=[];foreach($rows as $row){$kind=strtoupper(substr(trim((string)$row['group_name']),0,1));$paths=[];$raw=(string)$row['file_path'];if(is_file($raw))$paths[]=$raw;elseif(is_dir($raw))$paths=glob(rtrim($raw,'/\\').'/*.pdf')?:[];foreach($paths as $path){$key=strtolower($path);if(isset($seen[$kind][$key]))continue;$seen[$kind][$key]=true;$target=$kind==='L'?'loose':'planner';$result[$target][]=['path'=>$path,'file_name'=>basename($path),'paper'=>strtoupper((string)$row['paper']),'search'=>implode(' | ',array_filter([$row['sku_id'],$row['parent_sku'],$row['variation'],$row['search_alias'],basename($path)]))];}}
+        $rows=$this->db->query("SELECT group_name,paper,file_path,sku_id,parent_sku,variation,search_alias FROM data_mappings WHERE UPPER(LEFT(TRIM(group_name),1)) IN ('P','L') AND file_path<>''")->fetchAll();$result=['planner'=>[],'loose'=>[]];$seen=[];foreach($rows as $row){$kind=strtoupper(substr(trim((string)$row['group_name']),0,1));$paths=[];$raw=$this->pathResolver->resolve((string)$row['file_path']);if(is_file($raw))$paths[]=$raw;elseif(is_dir($raw))$paths=glob(rtrim($raw,'/\\').'/*.pdf')?:[];foreach($paths as $path){$key=strtolower($path);if(isset($seen[$kind][$key]))continue;$seen[$kind][$key]=true;$target=$kind==='L'?'loose':'planner';$result[$target][]=['path'=>$path,'file_name'=>basename($path),'paper'=>strtoupper((string)$row['paper']),'search'=>implode(' | ',array_filter([$row['sku_id'],$row['parent_sku'],$row['variation'],$row['search_alias'],basename($path)]))];}}
         return['counts'=>['planner'=>count($result['planner']),'loose'=>count($result['loose'])],'items'=>$result];
     }
 

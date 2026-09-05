@@ -37,6 +37,10 @@ return [
         'spreadsheet_id' => getenv('PAPERBELL_MAPPING_SHEET_ID') ?: '1eXwQ_H8ofVroEYlK5X90bvlT66f5a8Q5tnVtTAKNHy4',
         'gid' => getenv('PAPERBELL_MAPPING_SHEET_GID') ?: '0',
     ],
+    'paths' => [
+        'windows_print_root' => getenv('PAPERBELL_WINDOWS_PRINT_ROOT') ?: 'H:/My Drive/Paperbell/Print',
+        'ubuntu_print_root' => getenv('PAPERBELL_UBUNTU_PRINT_ROOT') ?: '/home/herman/GoogleDrive/Paperbell/Print',
+    ],
     'auth' => [
         'enabled' => filter_var(getenv('PAPERBELL_AUTH_ENABLED') ?: 'false', FILTER_VALIDATE_BOOL),
         'username' => getenv('PAPERBELL_WEB_USER') ?: 'admin',

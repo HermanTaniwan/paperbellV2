@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 final class DataMappingService
 {
-    public function __construct(private PDO $db, private array $config, private string $root) {}
+    public function __construct(private PDO $db, private array $config, private string $root, private ?HostPathResolver $pathResolver = null) {$this->pathResolver??=new HostPathResolver();}
 
     public function overview(string $query = '', int $page = 1, int $size = 30): array
     {
@@ -11,8 +11,8 @@ final class DataMappingService
         if(trim($query)!==''){$where='WHERE sku_id LIKE ? OR parent_sku LIKE ? OR product_name LIKE ? OR variation_name LIKE ? OR search_alias LIKE ?';$term='%'.trim($query).'%';$params=array_fill(0,5,$term);}
         $count=$this->db->prepare("SELECT COUNT(*) FROM data_mappings {$where}");$count->execute($params);$total=(int)$count->fetchColumn();
         $stmt=$this->db->prepare("SELECT id,sku_id,parent_sku,product_name,variation_name,group_name,duplex,paper,page_from,page_to,copies,file_path,printer,imported_at FROM data_mappings {$where} ORDER BY product_name,variation_name LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();
-        foreach($items as &$item){$item['file_exists']=is_file((string)$item['file_path'])||is_dir((string)$item['file_path']);$item['file_name']=basename((string)$item['file_path']);unset($item['file_path']);}
-        $stats=$this->db->query("SELECT COUNT(*) total,SUM(file_path='') empty_path FROM data_mappings")->fetch();$missing=0;foreach($this->db->query('SELECT file_path FROM data_mappings')->fetchAll(PDO::FETCH_COLUMN) as $path)if($path===''||(!is_file($path)&&!is_dir($path)))$missing++;
+        foreach($items as &$item){$path=$this->pathResolver->resolve((string)$item['file_path']);$item['file_exists']=is_file($path)||is_dir($path);$item['file_name']=basename($path);unset($item['file_path']);}
+        $stats=$this->db->query("SELECT COUNT(*) total,SUM(file_path='') empty_path FROM data_mappings")->fetch();$missing=0;foreach($this->db->query('SELECT file_path FROM data_mappings')->fetchAll(PDO::FETCH_COLUMN) as $path){$path=$this->pathResolver->resolve((string)$path);if($path===''||(!is_file($path)&&!is_dir($path)))$missing++;}
         $last=(int)($this->meta('mapping_last_sync_at')?:0);
         return ['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'stats'=>['total'=>(int)($stats['total']??0),'missing_files'=>$missing,'last_sync_at'=>$last,'last_sync_source'=>$this->meta('mapping_last_sync_source')]];
     }
@@ -33,7 +33,7 @@ final class DataMappingService
         if(count($rows)<2)throw new RuntimeException('Data Mapping kosong.');$headers=array_map(fn($v)=>trim((string)$v),array_shift($rows));$idx=array_flip($headers);
         foreach(['SKU ID','Nama Produk','File Path'] as $required)if(!array_key_exists($required,$idx))throw new RuntimeException("Kolom wajib {$required} tidak ditemukan.");
         $now=time();$this->db->beginTransaction();try{$this->db->exec('DELETE FROM mapping_aliases');$this->db->exec('DELETE FROM data_mappings');$insert=$this->db->prepare('INSERT INTO data_mappings(sku_id,product_name,variation_name,group_name,product_code,variant_1,variant_2,duplex,paper,page_from,page_to,copies,file_path,parent_sku,variation,printer,search_product,search_variant,search_alias,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');$alias=$this->db->prepare('INSERT IGNORE INTO mapping_aliases(alias_key,mapping_id) VALUES(?,?)');$count=0;$aliases=0;$missing=0;
-            foreach($rows as $row){$sku=$this->value($row,$idx,'SKU ID');if($sku==='')continue;[$from,$to]=$this->pages($row[$idx['Page']??-1]??'');$parent=$this->valueAny($row,$idx,['SKU Inti','SKU Induk','Parent SKU']);$productCode=$this->value($row,$idx,'Product Code');$v1=$this->value($row,$idx,'Variant-1');$v2=$this->value($row,$idx,'Variant-2');$paper=$this->value($row,$idx,'Size');$duplex=$this->value($row,$idx,'Duplex');$path=$this->value($row,$idx,'File Path');if($path===''||(!is_file($path)&&!is_dir($path)))$missing++;
+            foreach($rows as $row){$sku=$this->value($row,$idx,'SKU ID');if($sku==='')continue;[$from,$to]=$this->pages($row[$idx['Page']??-1]??'');$parent=$this->valueAny($row,$idx,['SKU Inti','SKU Induk','Parent SKU']);$productCode=$this->value($row,$idx,'Product Code');$v1=$this->value($row,$idx,'Variant-1');$v2=$this->value($row,$idx,'Variant-2');$paper=$this->value($row,$idx,'Size');$duplex=$this->value($row,$idx,'Duplex');$path=$this->value($row,$idx,'File Path');$resolvedPath=$this->pathResolver->resolve($path);if($path===''||(!is_file($resolvedPath)&&!is_dir($resolvedPath)))$missing++;
                 $insert->execute([$sku,$this->value($row,$idx,'Nama Produk'),$this->value($row,$idx,'Nama Variasi'),$this->value($row,$idx,'Group'),$productCode,$v1,$v2,$duplex,$paper,$from,$to,max(1,(int)$this->value($row,$idx,'Copies')),$path,$parent,$this->value($row,$idx,'Variasi'),$this->value($row,$idx,'Printer Name'),$this->value($row,$idx,'Search Product'),$this->value($row,$idx,'Search Variant'),$this->value($row,$idx,'Search Alias'),$now]);$mappingId=(int)$this->db->lastInsertId();$keys=[$sku.$parent,$parent,$sku,$v1.$v2.$paper.$duplex.$productCode,$parent.$sku];foreach(array_unique(array_filter(array_map([$this,'normalize'],$keys))) as $key){$alias->execute([$key,$mappingId]);$aliases+=$alias->rowCount();}$count++;}
             $this->db->commit();$this->invalidateOrderCaches();return ['count'=>$count,'aliases'=>$aliases,'missing_files'=>$missing];
         }catch(Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}

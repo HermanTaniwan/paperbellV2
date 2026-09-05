@@ -9,8 +9,9 @@ final class PrintService
     private string $orderMappingCacheFile;
     private string $fileAvailabilityCacheFile;
 
-    public function __construct(private PDO $db, private string $fallbackLabelPrinter = 'EPSON L3210 Series')
+    public function __construct(private PDO $db, private string $fallbackLabelPrinter = 'EPSON L3210 Series', private ?HostPathResolver $pathResolver = null)
     {
+        $this->pathResolver ??= new HostPathResolver();
         $this->installedCacheFile = dirname(__DIR__) . '/storage/printer-list-cache.json';
         $this->orderMappingCacheFile = dirname(__DIR__) . '/storage/order-mapping-cache.json';
         $this->fileAvailabilityCacheFile = dirname(__DIR__) . '/storage/order-file-availability-cache.json';
@@ -133,7 +134,7 @@ final class PrintService
     {
         $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,status FROM order_process WHERE order_sn=? ORDER BY id");$stmt->execute([$orderSn]);$items=[];
         $installed=$this->configuredPrinters();
-        while($line=$stmt->fetch()){$mapping=$this->resolveMapping($line);$defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$printOptions=$mapping?$this->normalizePrintOptions($mapping,[]):null;if($printOptions)$printOptions['copies']=max(1,(int)$line['qty'])*(int)$printOptions['copies'];$items[]=['line'=>$line,'mapping'=>$mapping,'print_options'=>$printOptions,'ready'=>$mapping!==null&&is_file($mapping['file_path']),'reason'=>$mapping===null?'Mapping tidak ditemukan':(!is_file($mapping['file_path'])?'File PDF tidak ditemukan':'Siap'),'file_name'=>$mapping?basename((string)$mapping['file_path']):'','default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$installed,true)];}
+        while($line=$stmt->fetch()){$mapping=$this->resolveMapping($line);if($mapping)$mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);$defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$printOptions=$mapping?$this->normalizePrintOptions($mapping,[]):null;if($printOptions)$printOptions['copies']=max(1,(int)$line['qty'])*(int)$printOptions['copies'];$items[]=['line'=>$line,'mapping'=>$mapping,'print_options'=>$printOptions,'ready'=>$mapping!==null&&is_file($mapping['file_path']),'reason'=>$mapping===null?'Mapping tidak ditemukan':(!is_file($mapping['file_path'])?'File PDF tidak ditemukan':'Siap'),'file_name'=>$mapping?basename((string)$mapping['file_path']):'','default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$installed,true)];}
         return $items;
     }
 
@@ -143,7 +144,7 @@ final class PrintService
         $marks=implode(',',array_fill(0,count($orderSns),'?'));
         $stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,printed_at FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);$lines=$stmt->fetchAll();
         $mappingByKey=$this->orderMappingCache();$resolved=[];$inventoryCandidates=[];
-        foreach($lines as $line){$mapping=$this->specialPdfMapping((string)$line['item_key']);if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}$resolved[]=['line'=>$line,'mapping'=>$mapping];foreach([(string)$line['item_key'],(string)($mapping['sku_id']??'')] as $candidate)if(trim($candidate)!=='')$inventoryCandidates[]=trim($candidate);}
+        foreach($lines as $line){$mapping=$this->specialPdfMapping((string)$line['item_key']);if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}if($mapping)$mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);$resolved[]=['line'=>$line,'mapping'=>$mapping];foreach([(string)$line['item_key'],(string)($mapping['sku_id']??'')] as $candidate)if(trim($candidate)!=='')$inventoryCandidates[]=trim($candidate);}
         $inventory=[];$inventoryCandidates=array_values(array_unique($inventoryCandidates));
         if($inventoryCandidates){$inventoryMarks=implode(',',array_fill(0,count($inventoryCandidates),'?'));$inventoryStmt=$this->db->prepare("SELECT item_key,qty FROM product_inventory WHERE item_key IN ($inventoryMarks)");$inventoryStmt->execute($inventoryCandidates);foreach($inventoryStmt->fetchAll() as $stock)$inventory[$this->norm((string)$stock['item_key'])]=(int)$stock['qty'];}
         $activeLineIds=[];
@@ -213,7 +214,7 @@ final class PrintService
         if($query!==''){$like='%'.$query.'%';$where.=' AND (sku_id LIKE ? OR parent_sku LIKE ? OR product_name LIKE ? OR variation_name LIKE ? OR search_alias LIKE ? OR file_path LIKE ?)';$params=array_fill(0,6,$like);}
         $stmt=$this->db->prepare("SELECT * FROM data_mappings WHERE {$where} ORDER BY product_name,variation_name LIMIT 100");$stmt->execute($params);$items=[];$printers=$this->configuredPrinters();
         while($mapping=$stmt->fetch()){
-            $path=(string)$mapping['file_path'];if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')continue;
+            $path=$this->pathResolver->resolve((string)$mapping['file_path']);if(!is_file($path)||strtolower(pathinfo($path,PATHINFO_EXTENSION))!=='pdf')continue;
             $printer=$this->resolveMappedPrinter((string)$mapping['printer']);$options=$this->normalizePrintOptions($mapping,[]);
             $items[]=['id'=>(int)$mapping['id'],'sku_id'=>(string)$mapping['sku_id'],'parent_sku'=>(string)$mapping['parent_sku'],'product_name'=>(string)$mapping['product_name'],'variation_name'=>(string)$mapping['variation_name'],'file_name'=>basename($path),'default_printer'=>$printer,'printer_available'=>$printer!==''&&in_array($printer,$printers,true),'settings'=>$options];
             if(count($items)>=30)break;
@@ -225,7 +226,7 @@ final class PrintService
     {
         if(!in_array($jobType,['manual','stock'],true))throw new InvalidArgumentException('Jenis job mapping tidak valid.');
         if($mappingId<=0)throw new InvalidArgumentException('Pilih PDF dari Data Mapping terlebih dahulu.');$stmt=$this->db->prepare('SELECT * FROM data_mappings WHERE id=?');$stmt->execute([$mappingId]);$mapping=$stmt->fetch();
-        if(!$mapping)throw new RuntimeException('Data Mapping tidak ditemukan. Silakan pilih ulang setelah sinkronisasi.');$file=(string)$mapping['file_path'];if(!is_file($file)||strtolower(pathinfo($file,PATHINFO_EXTENSION))!=='pdf')throw new RuntimeException('File PDF pada Data Mapping tidak ditemukan.');
+        if(!$mapping)throw new RuntimeException('Data Mapping tidak ditemukan. Silakan pilih ulang setelah sinkronisasi.');$file=$this->pathResolver->resolve((string)$mapping['file_path']);if(!is_file($file)||strtolower(pathinfo($file,PATHINFO_EXTENSION))!=='pdf')throw new RuntimeException('File PDF pada Data Mapping tidak ditemukan.');
         $printer=trim($printer!==''?$printer:$this->resolveMappedPrinter((string)$mapping['printer']));if($printer===''||!in_array($printer,$this->configuredPrinters(),true))throw new RuntimeException('Printer tidak tersedia atau dinonaktifkan.');
         $mapping['printer']=$printer;$options=$this->normalizePrintOptions($mapping,$input);$copies=(int)$options['copies'];$id=$this->insertJob($jobType,$reference,null,$file,$printer,$this->productSettings($mapping,$copies,$options),$copies,$user);
         return['ok'=>true,'id'=>$id,'copies'=>$copies,'printer'=>$printer,'options'=>$options];

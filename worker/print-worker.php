@@ -7,8 +7,10 @@ $root = dirname(__DIR__);
 $config = require $root . '/config.php';
 require $root . '/src/Database.php';
 require $root . '/src/LabelPdfPreparer.php';
+require $root . '/src/HostPathResolver.php';
 $sumatra = $config['printing']['sumatra'];
 $labelPreparer = new LabelPdfPreparer($config['printing'],$root);
+$hostPathResolver = new HostPathResolver($config['paths']??[]);
 $once = in_array('--once', $argv, true);
 $brotherPaperSizeCache = [];
 
@@ -385,6 +387,7 @@ do {
         $processingStartedAt = microtime(true);
 
         if (isWindowsPrintHost()&&!is_file($sumatra)) throw new RuntimeException('SumatraPDF tidak ditemukan.');
+        $job['file_path']=$hostPathResolver->resolve((string)$job['file_path']);
         if (!is_file($job['file_path'])) throw new RuntimeException('File PDF tidak ditemukan: ' . $job['file_path']);
 
         $printPath = (string)$job['file_path'];

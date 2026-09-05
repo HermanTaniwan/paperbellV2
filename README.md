@@ -57,6 +57,8 @@ Job berstatus `submitted` berarti file sudah diterima spooler Windows atau CUPS,
 
 Pada Ubuntu, instal dan aktifkan CUPS beserta printer host terlebih dahulu. Paperbell memakai `lpstat` untuk deteksi/status, `lp` untuk mengirim PDF, dan `cancel` untuk membatalkan job. Set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki `pypdf`, `reportlab`, Pillow, dan `openpyxl` agar penyiapan label serta fitur PDF dapat berjalan.
 
+Path Data Mapping Windows tetap disimpan dalam bentuk `H:\My Drive\Paperbell\Print\...`. Saat berjalan di Ubuntu, Paperbell menerjemahkannya ke `/home/herman/GoogleDrive/Paperbell/Print/...` tanpa mengubah data sumber, sehingga database yang sama tetap kompatibel dengan Windows. Root tersebut dapat dioverride melalui `PAPERBELL_WINDOWS_PRINT_ROOT` dan `PAPERBELL_UBUNTU_PRINT_ROOT`.
+
 Untuk memasang dependensi Python dan print worker sebagai service Ubuntu yang otomatis aktif saat boot, jalankan dari instalasi web Paperbell:
 
 ```bash
