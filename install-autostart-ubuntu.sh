@@ -61,8 +61,6 @@ if command -v rclone >/dev/null && [[ -f "/home/${drive_user}/.config/rclone/rcl
     if ! grep -Eq '^[[:space:]]*user_allow_other([[:space:]]|$)' /etc/fuse.conf 2>/dev/null; then
         printf '\nuser_allow_other\n' >> /etc/fuse.conf
     fi
-    install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
-
     cat >"${drive_service_file}" <<SERVICE
 [Unit]
 Description=Paperbell Google Drive mount
@@ -87,6 +85,7 @@ SERVICE
     if mountpoint -q "${drive_mount}"; then
         runuser -u "${drive_user}" -- fusermount3 -u "${drive_mount}"
     fi
+    install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
     systemctl daemon-reload
     systemctl enable --now paperbell-google-drive-mount.service
     for _ in {1..20}; do
