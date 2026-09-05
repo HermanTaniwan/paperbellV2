@@ -2,15 +2,16 @@ $ErrorActionPreference = 'Stop'
 
 $taskName = 'Paperbell Auto Start'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$launcher = Join-Path $root 'start-paperbell.ps1'
+$launcher = Join-Path $root 'start-paperbell-hidden.vbs'
+$wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
     throw "Launcher Paperbell tidak ditemukan: $launcher"
 }
 
-$arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}"' -f $launcher
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments -WorkingDirectory $root
+$arguments = '//B //NoLogo "{0}"' -f $launcher
+$action = New-ScheduledTaskAction -Execute $wscript -Argument $arguments -WorkingDirectory $root
 $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
 $watchdogTrigger = New-ScheduledTaskTrigger `
     -Once `
