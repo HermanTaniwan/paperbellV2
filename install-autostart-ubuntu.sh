@@ -89,7 +89,7 @@ SERVICE
     if mountpoint -q "${drive_mount}"; then
         runuser -u "${drive_user}" -- fusermount3 -uz "${drive_mount}"
     fi
-    for _ in {1..20}; do
+    for _ in {1..90}; do
         mountpoint -q "${drive_mount}" || break
         sleep 1
     done
