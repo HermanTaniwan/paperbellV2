@@ -1333,8 +1333,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
                   <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
                 </div>
-                <div class="printer-queue-job-actions">
-                  <button v-if="['queued','processing'].includes(job.status)" class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
+                <div v-if="['queued','processing'].includes(job.status)" class="printer-queue-job-actions">
+                  <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
                 </div>
               </article>
               <p v-if="!queueWidgetAppJobs.length" class="printer-queue-empty">Tidak ada job yang sedang berjalan.</p>
