@@ -78,7 +78,7 @@ final class PrintService
     private function fileAvailabilityCache(): array
     {
         if(!is_file($this->fileAvailabilityCacheFile))return[];$cached=json_decode((string)@file_get_contents($this->fileAvailabilityCacheFile),true);
-        return is_array($cached)&&is_array($cached['paths']??null)?$cached['paths']:[];
+        return is_array($cached)&&is_array($cached['paths']??null)&&(int)($cached['saved_at']??0)>=time()-60?$cached['paths']:[];
     }
 
     private function writeFileAvailabilityCache(array $paths): void
