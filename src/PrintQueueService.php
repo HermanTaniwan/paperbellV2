@@ -59,6 +59,21 @@ final class PrintQueueService
         ];
     }
 
+    public function liveProgress():array
+    {
+        if(PHP_OS_FAMILY==='Windows')return['available'=>false,'jobs'=>[]];
+        try{
+            $printing=array_keys($this->cupsPrintingRequests($this->cupsCommand(['lpstat','-p','-d'])));if(!$printing)return['available'=>true,'jobs'=>[]];
+            $devices=$this->cupsCommand(['lpstat','-v']);$jobs=[];$uriProgress=[];
+            foreach($printing as $requestId){
+                if(!preg_match('/^(.*)-(\d+)$/',$requestId,$match))continue;$printer=(string)$match[1];$uri=$this->cupsDirectPrinterUri($printer,$devices);if($uri==='')continue;
+                if(!array_key_exists($uri,$uriProgress))$uriProgress[$uri]=$this->cupsDeviceImpressions($uri);
+                $jobs[]=['printer'=>$printer,'job_id'=>(int)$match[2],'impressions_completed'=>$uriProgress[$uri]];
+            }
+            return['available'=>true,'jobs'=>$jobs];
+        }catch(Throwable){return['available'=>false,'jobs'=>[]];}
+    }
+
     public function appAction(int $id,string $action):array
     {
         $stmt=$this->db->prepare('SELECT status,printer,spooler_job_id FROM print_jobs WHERE id=?');$stmt->execute([$id]);$job=$stmt->fetch();$status=(string)($job['status']??'');if($status==='')throw new RuntimeException('Job cetak tidak ditemukan.');
@@ -327,8 +342,6 @@ final class PrintQueueService
                 if($visible&&!isset($visible[$printer]))continue;$jobId=(int)$match[2];$jobCounts[$printer]=($jobCounts[$printer]??0)+1;
                 $requestId=$requestName.'-'.$jobId;$printed=(int)($pageProgress[$requestId]??0);$jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestId,'status'=>isset($printingRequests[$requestId])?'Sedang mencetak':'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>$printed,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>$printed>0];
             }
-            $ippProgress=$this->cupsIppProgress(array_values(array_unique(array_column($jobs,'printer'))));
-            foreach($jobs as &$job){$requestId=(string)$job['printer'].'-'.(int)$job['job_id'];$job['sheets_completed']=(int)($ippProgress[$requestId]??0);}unset($job);
             foreach($printers as &$printer)$printer['queue_count']=(int)($jobCounts[$printer['name']]??0);unset($printer);
             usort($printers,fn($a,$b)=>(int)$b['active']<=>(int)$a['active']?:strnatcasecmp($a['name'],$b['name']));
             $result=['jobs'=>$jobs,'printers'=>$printers,'available'=>true];$this->writeSpoolerCache($result);return$result;
@@ -352,25 +365,26 @@ final class PrintQueueService
         return$progress;
     }
 
-    private function cupsIppProgress(array $printers):array
+    private function cupsDirectPrinterUri(string $printer,string $deviceOutput):string
     {
-        if(!is_file($this->cupsProgressTest)||!is_executable('/usr/bin/ipptool'))return[];
-        $progress=[];
-        foreach($printers as $printer){
-            $printer=trim((string)$printer);if($printer==='')continue;
-            try{$csv=$this->cupsCommand(['ipptool','-c','ipp://localhost/printers/'.rawurlencode($printer),$this->cupsProgressTest]);}
-            catch(Throwable){continue;}
-            $progress+=$this->cupsIppProgressRows($csv,$printer);
-        }
-        return$progress;
+        $normalize=static fn(string $name):string=>(string)preg_replace('/series$/','',(string)preg_replace('/[^a-z0-9]+/','',strtolower($name)));
+        $wanted=$normalize($printer);$best='';$bestScore=0;
+        foreach(preg_split('/\R/',$deviceOutput)?:[] as $line){if(!preg_match('/^device for\s+(\S+):\s+(ipps?:\/\/\S+)/i',trim($line),$match))continue;$candidate=$normalize((string)$match[1]);if($candidate===''||$wanted==='')continue;$score=$candidate===$wanted?3:(str_starts_with($wanted,$candidate)||str_starts_with($candidate,$wanted)?2:0);if($score>$bestScore){$bestScore=$score;$best=(string)$match[2];}}
+        return$best;
     }
 
-    private function cupsIppProgressRows(string $csv,string $printer):array
+    private function cupsDeviceImpressions(string $uri):int
     {
-        $lines=array_values(array_filter(preg_split('/\R/',trim($csv))?:[],fn(string $line):bool=>trim($line)!==''));if(count($lines)<2)return[];
-        $headers=str_getcsv(array_shift($lines));$progress=[];
-        foreach($lines as $line){$values=array_slice(array_pad(str_getcsv($line),count($headers),''),0,count($headers));$row=array_combine($headers,$values);if(!is_array($row))continue;$jobId=(int)($row['job-id']??0);if($jobId<=0)continue;$sheets=(int)($row['job-media-sheets-completed']??0);if($sheets<=0)$sheets=(int)($row['job-impressions-completed']??0);$progress[$printer.'-'.$jobId]=max(0,$sheets);}
-        return$progress;
+        if(!is_file($this->cupsProgressTest)||!is_executable('/usr/bin/ipptool'))return 0;
+        return$this->cupsDeviceImpressionsRows($this->cupsCommand(['ipptool','-c',$uri,$this->cupsProgressTest]));
+    }
+
+    private function cupsDeviceImpressionsRows(string $csv):int
+    {
+        $lines=array_values(array_filter(preg_split('/\R/',trim($csv))?:[],fn(string $line):bool=>trim($line)!==''));if(count($lines)<2)return 0;
+        $headers=str_getcsv(array_shift($lines));$progress=0;
+        foreach($lines as $line){$values=array_slice(array_pad(str_getcsv($line),count($headers),''),0,count($headers));$row=array_combine($headers,$values);if(!is_array($row)||(string)($row['job-state']??'')!=='processing')continue;$progress=max($progress,(int)($row['job-impressions-completed']??0));}
+        return max(0,$progress);
     }
 
     private function cupsCommand(array $command):string

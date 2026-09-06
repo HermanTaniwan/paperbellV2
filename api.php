@@ -216,6 +216,7 @@ try {
     if ($action === 'clear_completed_jobs') respond(['ok'=>true,'deleted'=>$queueService()->clearCompleted()]);
     if ($action === 'spooler_action') {$input=body();respond($queueService()->spoolerAction(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['operation']??''))));}
     if ($action === 'move_spooler_job') {$input=body();respond($queueService()->moveSpoolerJob(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['target_printer']??''))));}
+    if ($action === 'printer_live_progress') respond($queueService()->liveProgress());
 
     if ($action === 'oauth_status') respond($oauthService()->statuses(appBaseUrl($config)));
     if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauthService()->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauthService()->statuses(appBaseUrl($config))]); }

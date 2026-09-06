@@ -26,16 +26,20 @@ $progress=$progressMethod->invoke($service,implode("\n",[
 ]));
 assert($progress === ['EPSON_WF_C5390_Series-119'=>10]);
 
-$ippProgressMethod=new ReflectionMethod(PrintQueueService::class,'cupsIppProgressRows');
+$deviceUriMethod=new ReflectionMethod(PrintQueueService::class,'cupsDirectPrinterUri');
+$deviceUri=$deviceUriMethod->invoke($service,'EPSON_WF_C5390_Series',implode("\n",[
+    'device for EPSON_WF-C5390: ipp://192.168.1.6/ipp/print',
+    'device for EPSON_WF_C5390_Series: implicitclass://EPSON_WF_C5390_Series/',
+]));
+assert($deviceUri === 'ipp://192.168.1.6/ipp/print');
+
+$ippProgressMethod=new ReflectionMethod(PrintQueueService::class,'cupsDeviceImpressionsRows');
 $ippProgress=$ippProgressMethod->invoke($service,implode("\n",[
     'job-id,job-state,job-impressions-completed,job-media-sheets-completed',
-    '119,processing,20,10',
+    '63,processing,10,',
     '120,pending,0,0',
-]),'EPSON_WF_C5390_Series');
-assert($ippProgress === [
-    'EPSON_WF_C5390_Series-119'=>10,
-    'EPSON_WF_C5390_Series-120'=>0,
-]);
+]));
+assert($ippProgress === 10);
 
 $completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
 $completed=$completedMethod->invoke($service,[
