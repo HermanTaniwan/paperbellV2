@@ -1330,7 +1330,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <small class="printer-queue-job-name" :title="spoolerProductLabel(job,false)">{{spoolerProductLabel(job)}}</small>
                 </div>
                 <div class="printer-queue-job-status">
-                  <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
+                  <span class="badge" :class="appJobStatusClass(job)">{{appJobStatusLabel(job)}}</span>
                   <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
                 </div>
                 <div v-if="appJobMoveTargets(job).length" class="printer-queue-move">
@@ -1530,7 +1530,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=125">
+<script src="assets/app.js?v=126">
 </script>
 </body>
 </html>

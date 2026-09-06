@@ -30,6 +30,8 @@ createApp({
   spoolerProductLabel(job,short=true){const product=String(job?.item_name||'').trim(),variant=String(job?.model_name||'').trim();if(!product&&!variant)return String(job?.original_name||job?.document||'Dokumen');const visibleProduct=short&&Array.from(product).length>10?Array.from(product).slice(0,10).join('')+'…':product;return[visibleProduct,variant].filter(Boolean).join(' · ')},
   unmatchedSpoolerJobs(){return(this.queueData.spooler||[]).filter(job=>!Number(job.print_job_id))},
   appJobSpooler(job){return(this.queueData.spooler||[]).find(item=>Number(item.print_job_id)===Number(job.id))||null},
+  appJobStatusLabel(job){const spoolerJob=this.appJobSpooler(job);return job.status==='submitted'?(spoolerJob?.status||'Dikirim ke printer'):job.status},
+  appJobStatusClass(job){const label=this.appJobStatusLabel(job).toLowerCase();if(label.includes('mencetak'))return'blue';if(label.includes('menunggu'))return'amber';return this.statusClass(job.status)},
   appJobCanCancel(job){return['queued','processing'].includes(job.status)||(job.status==='submitted'&&!!this.appJobSpooler(job))},
   cancelAppJob(job){const spoolerJob=this.appJobSpooler(job);return spoolerJob?this.spoolerAction(spoolerJob,'cancel'):this.jobAction(job,'cancel')},
   appJobMoveTargets(job){const spoolerJob=this.appJobSpooler(job);return spoolerJob?this.spoolerMoveTargets(spoolerJob):[]},
