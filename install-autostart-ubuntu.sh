@@ -10,6 +10,7 @@ app_dir="${PAPERBELL_APP_DIR:-/var/www/html/paperbell}"
 apache_config="${PAPERBELL_APACHE_CONFIG:-/etc/apache2/conf-enabled/paperbell.conf}"
 environment_file="/etc/paperbell-print-worker.env"
 service_file="/etc/systemd/system/paperbell-print-worker.service"
+label_service_file="/etc/systemd/system/paperbell-label-worker.service"
 drive_service_file="/etc/systemd/system/paperbell-google-drive-mount.service"
 drive_user="${PAPERBELL_DRIVE_USER:-herman}"
 drive_mount="${PAPERBELL_UBUNTU_DRIVE_MOUNT:-/home/herman/GoogleDrive}"
@@ -184,14 +185,39 @@ RestartSec=2
 WantedBy=multi-user.target
 SERVICE
 
+cat >"${label_service_file}" <<SERVICE
+[Unit]
+Description=Paperbell label fetch worker
+Wants=network-online.target paperbell-google-drive-mount.service
+After=network-online.target mariadb.service paperbell-google-drive-mount.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=${app_dir}
+EnvironmentFile=${environment_file}
+ExecStart=/usr/bin/php ${app_dir}/worker/label-worker.php
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
 install -d -o www-data -g www-data -m 0775 "${app_dir}/storage/print-labels/prepared"
+install -d -o www-data -g www-data -m 0775 "${app_dir}/storage/labels"
 touch "${app_dir}/storage/print-worker.log"
-chown www-data:www-data "${app_dir}/storage/print-worker.log"
-chmod 0664 "${app_dir}/storage/print-worker.log"
+touch "${app_dir}/storage/label-worker.log"
+chown www-data:www-data "${app_dir}/storage/print-worker.log" "${app_dir}/storage/label-worker.log"
+chmod 0664 "${app_dir}/storage/print-worker.log" "${app_dir}/storage/label-worker.log"
 systemctl daemon-reload
 systemctl enable paperbell-print-worker.service
+systemctl enable paperbell-label-worker.service
 systemctl restart paperbell-print-worker.service
+systemctl restart paperbell-label-worker.service
 sleep 2
 systemctl --no-pager --full status paperbell-print-worker.service
+systemctl --no-pager --full status paperbell-label-worker.service
 
-echo "Worker Paperbell Ubuntu aktif. Printer CUPS: ${printers[*]}. WF permanen: ${wf_queue} -> ${wf_uri}"
+echo "Worker cetak dan resi Paperbell Ubuntu aktif. Printer CUPS: ${printers[*]}. WF permanen: ${wf_queue} -> ${wf_uri}"

@@ -63,7 +63,7 @@ Job Paperbell yang dikirim ke printer Epson WF melalui CUPS otomatis memakai kua
 
 Path Data Mapping Windows tetap disimpan dalam bentuk `H:\My Drive\Paperbell\Print\...`. Saat berjalan di Ubuntu, Paperbell menerjemahkannya ke `/home/herman/GoogleDrive/Paperbell/Print/...` tanpa mengubah data sumber, sehingga database yang sama tetap kompatibel dengan Windows. Root tersebut dapat dioverride melalui `PAPERBELL_WINDOWS_PRINT_ROOT` dan `PAPERBELL_UBUNTU_PRINT_ROOT`.
 
-Untuk memasang dependensi Python dan print worker sebagai service Ubuntu yang otomatis aktif saat boot, jalankan dari instalasi web Paperbell:
+Untuk memasang dependensi Python serta worker cetak dan pengambilan resi sebagai service Ubuntu yang otomatis aktif saat boot, jalankan dari instalasi web Paperbell:
 
 ```bash
 sudo ./install-autostart-ubuntu.sh
