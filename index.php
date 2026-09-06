@@ -1333,6 +1333,13 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
                   <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
                 </div>
+                <div v-if="appJobMoveTargets(job).length" class="printer-queue-move">
+                  <select :value="appJobSpooler(job)?.move_printer||''" :disabled="!!queueActionKey" aria-label="Printer tujuan" @focus="beginQueueMoveSelection" @change="selectAppJobMove(job,$event)" @blur="endQueueMoveSelection">
+                    <option value="">Pilih printer tujuan…</option>
+                    <option v-for="printer in appJobMoveTargets(job)" :key="printer.name" :value="printer.name">{{printer.name}}</option>
+                  </select>
+                  <button type="button" :disabled="!!queueActionKey||!appJobSpooler(job)?.move_printer" @click="moveAppJob(job)">Pindah</button>
+                </div>
                 <div v-if="appJobCanCancel(job)" class="printer-queue-job-actions">
                   <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="cancelAppJob(job)">Cancel</button>
                 </div>
@@ -1523,7 +1530,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=124">
+<script src="assets/app.js?v=125">
 </script>
 </body>
 </html>
