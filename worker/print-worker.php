@@ -333,8 +333,10 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif($lower==='monochrome'){$options[]='print-color-mode=monochrome';$options[]='ColorModel=Gray';}
         elseif($lower==='color')$options[]='print-color-mode=color';
         elseif($lower==='noscale')$options[]='scaling=100';
+        elseif($lower==='paper=a5')$options[]='media=iso_a5_148x210mm';
+        elseif($lower==='paper=b5')$options[]='media=Custom.182x257mm';
         elseif(str_starts_with($lower,'paper='))$options[]='media='.substr($token,6);
-        elseif($lower==='paperkind=13')$options[]='media=B5';
+        elseif($lower==='paperkind=13')$options[]='media=Custom.182x257mm';
         elseif($lower==='paperkind=88')$options[]='media=B6';
         elseif($lower==='bin=7')$options[]='InputSlot=Auto';
         elseif($lower==='bin=258')$options[]='InputSlot=ByPassTray';
