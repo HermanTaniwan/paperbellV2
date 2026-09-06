@@ -33,4 +33,10 @@ if(PHP_OS_FAMILY!=='Windows'&&!str_contains($label,'paper=Custom.105x182mm')){
     throw new RuntimeException('Linux label media size was not added.');
 }
 
+$l3210Label=labelPrintSettings('L3210-Series');
+if(PHP_OS_FAMILY!=='Windows'){
+    if(str_contains($l3210Label,'paper=Custom.105x182mm'))throw new RuntimeException('L3210 must use its native B6 page instead of a custom media size.');
+    expectContains(cupsOptions($l3210Label,'L3210-Series'),'PageSize=B6');
+}
+
 echo "Linux print worker tests passed\n";

@@ -314,9 +314,9 @@ function labelPrintSettings(string $printer): string
     } elseif (stripos($printer, 'WF') !== false) {
         $parts[] = 'bin=261'; // Rear Paper Feed, sama dengan aplikasi desktop.
     }
-    if(!isWindowsPrintHost())$parts[]='paper=Custom.105x182mm';
-    // Jangan paksa A6: resi sudah disiapkan sebagai 105 x 182 mm dan driver
-    // label memakai ukuran custom yang sama.
+    if(!isWindowsPrintHost()&&stripos($printer,'L3210')===false)$parts[]='paper=Custom.105x182mm';
+    // L3210 memakai halaman driver B6 yang sudah dibuat oleh preparer. Printer
+    // lain menerima halaman fisik 105 x 182 mm sebagai ukuran custom.
     return implode(',', $parts);
 }
 
@@ -340,7 +340,7 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif($lower==='paper=b5')$options[]='media=Custom.182x257mm';
         elseif(str_starts_with($lower,'paper='))$options[]='media='.substr($token,6);
         elseif($lower==='paperkind=13')$options[]='media=Custom.182x257mm';
-        elseif($lower==='paperkind=88')$options[]='media=B6';
+        elseif($lower==='paperkind=88')$options[]=stripos($printer,'L3210')!==false?'PageSize=B6':'media=B6';
         elseif($lower==='bin=7')$options[]='InputSlot=Auto';
         elseif($lower==='bin=258')$options[]='InputSlot=ByPassTray';
         elseif($lower==='bin=261')$options[]='InputSlot=Rear';
