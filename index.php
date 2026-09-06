@@ -1261,10 +1261,10 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button v-if="!queuePanelOpen" class="printer-queue-fab" :class="{'has-incident':unacknowledgedPrinterIncidents().length}" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
           <span class="printer-queue-fab-icon" aria-hidden="true">&#128424;</span>
           <span class="printer-queue-fab-copy">
-            <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+(queueData.spooler?.length||0))+' job berjalan'}}</b>
+            <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+unmatchedSpoolerJobs().length)+' job berjalan'}}</b>
             <small>{{unacknowledgedPrinterIncidents().length?'Segera periksa printer':queueWidgetPrinterSummary}}</small>
           </span>
-          <span class="printer-queue-fab-count">{{unacknowledgedPrinterIncidents().length||(queueWidgetAppJobs.length+(queueData.spooler?.length||0))}}</span>
+          <span class="printer-queue-fab-count">{{unacknowledgedPrinterIncidents().length||(queueWidgetAppJobs.length+unmatchedSpoolerJobs().length)}}</span>
         </button>
 
         <button v-if="queuePanelOpen" class="printer-queue-scrim" type="button" aria-label="Tutup panel Printer Job" @click="closeQueuePanel"></button>
@@ -1281,7 +1281,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 
           <div class="printer-queue-totals">
             <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Job aplikasi</span></div>
-            <div><strong>{{queueData.spooler?.length||0}}</strong><span>Antrean CUPS</span></div>
+            <div><strong>{{unmatchedSpoolerJobs().length}}</strong><span>CUPS lainnya</span></div>
           </div>
 
           <div v-if="(queueData.incidents||[]).length" class="printer-queue-section printer-incident-section">
@@ -1333,18 +1333,18 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
                   <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
                 </div>
-                <div v-if="['queued','processing'].includes(job.status)" class="printer-queue-job-actions">
-                  <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
+                <div v-if="appJobCanCancel(job)" class="printer-queue-job-actions">
+                  <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="cancelAppJob(job)">Cancel</button>
                 </div>
               </article>
               <p v-if="!queueWidgetAppJobs.length" class="printer-queue-empty">Tidak ada job yang sedang berjalan.</p>
             </div>
           </div>
 
-          <div class="printer-queue-section">
-            <h3>Antrean CUPS</h3>
+          <div v-if="unmatchedSpoolerJobs().length" class="printer-queue-section">
+            <h3>Antrean CUPS lainnya</h3>
             <div class="printer-queue-jobs">
-              <article v-for="job in (queueData.spooler||[])" :key="job.printer+'-'+job.job_id" class="printer-queue-job">
+              <article v-for="job in unmatchedSpoolerJobs()" :key="job.printer+'-'+job.job_id" class="printer-queue-job">
                 <div>
                   <b>Spooler #{{job.job_id}}</b>
                   <small class="printer-queue-job-name">No. Order: {{job.order_sn||'-'}}</small>
@@ -1364,7 +1364,6 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="spoolerAction(job,'cancel')">Cancel</button>
                 </div>
               </article>
-              <p v-if="!queueData.spooler?.length" class="printer-queue-empty">Tidak ada job pada antrean CUPS.</p>
             </div>
           </div>
         </section>
@@ -1524,7 +1523,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=123">
+<script src="assets/app.js?v=124">
 </script>
 </body>
 </html>
