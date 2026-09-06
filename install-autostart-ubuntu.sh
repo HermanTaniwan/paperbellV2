@@ -206,6 +206,7 @@ WantedBy=multi-user.target
 SERVICE
 
 install -d -o www-data -g www-data -m 0775 "${app_dir}/storage/print-labels/prepared"
+install -d -o www-data -g www-data -m 0775 "${app_dir}/storage/print-labels/previews"
 install -d -o www-data -g www-data -m 0775 "${app_dir}/storage/labels"
 touch "${app_dir}/storage/print-worker.log"
 touch "${app_dir}/storage/label-worker.log"

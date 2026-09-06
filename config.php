@@ -20,7 +20,7 @@ return [
         'sumatra' => getenv('PAPERBELL_SUMATRA_PATH') ?: (PHP_OS_FAMILY==='Windows'?((getenv('LOCALAPPDATA') ?: '') . '/SumatraPDF/SumatraPDF.exe'):''),
         'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: 'EPSON L3210 Series',
         'brother_b5_printer' => getenv('PAPERBELL_BROTHER_B5_PRINTER') ?: 'Brother DCP-T830DW B5',
-        'python' => getenv('PAPERBELL_PYTHON_PATH') ?: (PHP_OS_FAMILY==='Windows'?'C:/Users/Herman Taniwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe':'python3'),
+        'python' => getenv('PAPERBELL_PYTHON_PATH') ?: (PHP_OS_FAMILY==='Windows'?'C:/Users/Herman Taniwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe':(is_file(__DIR__.'/.venv/bin/python')?__DIR__.'/.venv/bin/python':'python3')),
     ],
     'scanner' => [
         // WFScanner's Python 3.11 environment already contains pytwain, Pillow, and pywin32.
