@@ -181,7 +181,8 @@ touch "${app_dir}/storage/print-worker.log"
 chown www-data:www-data "${app_dir}/storage/print-worker.log"
 chmod 0664 "${app_dir}/storage/print-worker.log"
 systemctl daemon-reload
-systemctl enable --now paperbell-print-worker.service
+systemctl enable paperbell-print-worker.service
+systemctl restart paperbell-print-worker.service
 sleep 2
 systemctl --no-pager --full status paperbell-print-worker.service
 
