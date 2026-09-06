@@ -16,7 +16,7 @@ final class PrintQueueService
 
     public function overview():array
     {
-        $jobs=$this->db->query("SELECT id,job_type,order_sn,original_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path) x ORDER BY id DESC LIMIT 100")->fetchAll();
+        $jobs=$this->db->query("SELECT id,job_type,order_sn,order_process_id,original_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path) x ORDER BY id DESC LIMIT 100")->fetchAll();
         foreach($jobs as &$row){$row['createdText']=date('d M Y H:i',(int)$row['created_at']);}
         unset($row);
         $spooler=$this->spoolerState();

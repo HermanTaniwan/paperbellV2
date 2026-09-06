@@ -1261,7 +1261,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button v-if="!queuePanelOpen" class="printer-queue-fab" :class="{'has-incident':unacknowledgedPrinterIncidents().length}" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
           <span class="printer-queue-fab-icon" aria-hidden="true">&#128424;</span>
           <span class="printer-queue-fab-copy">
-            <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+(queueData.spooler?.length||0))+' job aktif'}}</b>
+            <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+(queueData.spooler?.length||0))+' job berjalan'}}</b>
             <small>{{unacknowledgedPrinterIncidents().length?'Segera periksa printer':queueWidgetPrinterSummary}}</small>
           </span>
           <span class="printer-queue-fab-count">{{unacknowledgedPrinterIncidents().length||(queueWidgetAppJobs.length+(queueData.spooler?.length||0))}}</span>
@@ -1280,7 +1280,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </div>
 
           <div class="printer-queue-totals">
-            <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Antrean aplikasi</span></div>
+            <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Job aplikasi</span></div>
             <div><strong>{{queueData.spooler?.length||0}}</strong><span>Windows spooler</span></div>
           </div>
 
@@ -1322,20 +1322,21 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </div>
 
           <div class="printer-queue-section">
-            <h3>Job aktif</h3>
+            <h3>Job berjalan</h3>
             <div class="printer-queue-jobs">
               <article v-for="job in queueWidgetAppJobs" :key="job.id" class="printer-queue-job">
                 <div>
                   <b>#{{job.id}} · {{commandLabel('print_'+job.job_type)}}</b>
                   <small class="printer-queue-job-name">{{job.order_sn||job.original_name||'Dokumen'}}</small>
                   <small>{{job.printer||'Printer belum dipilih'}}</small>
+                  <small>{{job.message||'Menunggu pembaruan status'}}</small>
                 </div>
-                <span class="badge" :class="statusClass(job.status)">{{job.status}}</span>
+                <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
                 <div class="printer-queue-job-actions">
-                  <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
+                  <button v-if="['queued','processing'].includes(job.status)" class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
                 </div>
               </article>
-              <p v-if="!queueWidgetAppJobs.length" class="printer-queue-empty">Tidak ada job aplikasi yang aktif.</p>
+              <p v-if="!queueWidgetAppJobs.length" class="printer-queue-empty">Tidak ada job yang sedang berjalan.</p>
             </div>
           </div>
 
