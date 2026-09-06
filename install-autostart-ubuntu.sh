@@ -82,9 +82,21 @@ WantedBy=multi-user.target
 SERVICE
 
     systemctl stop paperbell-google-drive-mount.service 2>/dev/null || true
+    while read -r mount_pid mount_command; do
+        [[ "${mount_command}" == "/usr/bin/rclone mount ${drive_remote} ${drive_mount}"* ]] || continue
+        kill "${mount_pid}"
+    done < <(ps -u "${drive_user}" -o pid=,args=)
     if mountpoint -q "${drive_mount}"; then
-        runuser -u "${drive_user}" -- fusermount3 -u "${drive_mount}"
+        runuser -u "${drive_user}" -- fusermount3 -uz "${drive_mount}"
     fi
+    for _ in {1..20}; do
+        mountpoint -q "${drive_mount}" || break
+        sleep 1
+    done
+    mountpoint -q "${drive_mount}" && {
+        echo "Mount Google Drive lama tidak dapat dihentikan: ${drive_mount}" >&2
+        exit 1
+    }
     install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
     systemctl daemon-reload
     systemctl enable --now paperbell-google-drive-mount.service
