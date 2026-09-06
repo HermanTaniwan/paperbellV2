@@ -52,7 +52,7 @@ if (( ${#printers[@]} == 0 )); then
 fi
 
 if command -v rclone >/dev/null && [[ -f "/home/${drive_user}/.config/rclone/rclone.conf" ]]; then
-    for command_name in fusermount3 mountpoint runuser setfacl; do
+    for command_name in findmnt fusermount3 mountpoint runuser setfacl; do
         command -v "${command_name}" >/dev/null || {
             echo "Perintah mount wajib tidak ditemukan: ${command_name}" >&2
             exit 1
@@ -81,27 +81,34 @@ RestartSec=5
 WantedBy=multi-user.target
 SERVICE
 
-    systemctl stop paperbell-google-drive-mount.service 2>/dev/null || true
-    while read -r mount_pid mount_command; do
-        [[ "${mount_command}" == "/usr/bin/rclone mount ${drive_remote} ${drive_mount}"* ]] || continue
-        kill "${mount_pid}"
-    done < <(ps -u "${drive_user}" -o pid=,args=)
-    if mountpoint -q "${drive_mount}"; then
-        runuser -u "${drive_user}" -- fusermount3 -uz "${drive_mount}"
+    mount_ready=false
+    if systemctl is-active --quiet paperbell-google-drive-mount.service && mountpoint -q "${drive_mount}"; then
+        current_options="$(findmnt -T "${drive_mount}" -n -o OPTIONS || true)"
+        [[ ",${current_options}," == *,allow_other,* ]] && mount_ready=true
     fi
-    for _ in {1..90}; do
-        mountpoint -q "${drive_mount}" || break
-        sleep 1
-    done
-    mountpoint -q "${drive_mount}" && {
-        echo "Mount Google Drive lama tidak dapat dihentikan: ${drive_mount}" >&2
-        exit 1
-    }
-    install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
+    if [[ "${mount_ready}" != true ]]; then
+        systemctl stop paperbell-google-drive-mount.service 2>/dev/null || true
+        while read -r mount_pid mount_command; do
+            [[ "${mount_command}" == "/usr/bin/rclone mount ${drive_remote} ${drive_mount}"* ]] || continue
+            kill "${mount_pid}"
+        done < <(ps -u "${drive_user}" -o pid=,args=)
+        if mountpoint -q "${drive_mount}"; then
+            runuser -u "${drive_user}" -- fusermount3 -uz "${drive_mount}"
+        fi
+        for _ in {1..90}; do
+            mountpoint -q "${drive_mount}" || break
+            sleep 1
+        done
+        mountpoint -q "${drive_mount}" && {
+            echo "Mount Google Drive lama tidak dapat dihentikan: ${drive_mount}" >&2
+            exit 1
+        }
+        install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
+    fi
     systemctl daemon-reload
     systemctl enable --now paperbell-google-drive-mount.service
     setfacl -m u:www-data:x "/home/${drive_user}"
-    for _ in {1..20}; do
+    for _ in {1..90}; do
         runuser -u www-data -- test -r "${ubuntu_print_root}" && break
         sleep 1
     done
