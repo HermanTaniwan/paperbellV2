@@ -77,6 +77,14 @@ sudo ./tools/install-server-health-timer.sh
 
 Installer memasang `python3-venv` melalui APT bila belum tersedia, mengelola mount `gdrive:` sebagai `paperbell-google-drive-mount.service` dengan akses FUSE untuk Apache, membaca environment database Paperbell dari konfigurasi Apache, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR`, `PAPERBELL_APACHE_CONFIG`, `PAPERBELL_DRIVE_USER`, `PAPERBELL_UBUNTU_DRIVE_MOUNT`, atau `PAPERBELL_RCLONE_REMOTE` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
 
+Untuk mengaktifkan HTTPS lokal gratis pada `app.paperbell.id`, jalankan installer berikut satu kali di server Ubuntu:
+
+```bash
+sudo ./tools/install-local-https.sh
+```
+
+Installer membuat CA lokal dan sertifikat server di `/etc/paperbell/tls`, mengaktifkan port 443 Apache, serta menyediakan CA publik di `http://app.paperbell.id/paperbell-local-ca.crt`. Private key tidak disalin ke web root. Instal CA tersebut satu kali sebagai CA tepercaya pada setiap laptop/HP, lalu buka `https://app.paperbell.id/`. HTTP tetap mengizinkan unduhan CA dan mengarahkan request lainnya ke HTTPS.
+
 Random Pages, pembacaan XLSX, dan penyiapan resi memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl`, `pypdf`, Pillow, dan `reportlab`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.
 
 Pada detail order, setiap item memiliki **Pengaturan cetak item** untuk memilih range halaman, semua/ganjil/genap, simplex/duplex, ukuran kertas, copies total, dan printer tujuan. Nilai awal mengikuti mapping produk × qty order dan dapat dioverride sebelum cetak per item maupun cetak seluruh order. Seperti desktop, ganjil/genap selalu memakai simplex; B5 memakai aturan printer khusus.
