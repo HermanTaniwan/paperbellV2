@@ -10,9 +10,12 @@ function expectContains(array $values,string $expected):void
 }
 
 $options=cupsOptions('2-7,odd,duplexlong,noscale,paper=B5,bin=261','EPSON_WF_C5390_Series');
-foreach(['page-ranges=2-7','page-set=odd','sides=two-sided-long-edge','scaling=100','media=B5','InputSlot=Rear'] as $expected){
+foreach(['page-ranges=2-7','page-set=odd','sides=two-sided-long-edge','scaling=100','media=B5','InputSlot=Rear','cupsPrintQuality=High'] as $expected){
     expectContains($options,$expected);
 }
+
+$brotherOptions=cupsOptions('1-,simplex,noscale','Brother_DCP_T830DW');
+if(in_array('cupsPrintQuality=High',$brotherOptions,true))throw new RuntimeException('High quality must only be forced for WF printers.');
 
 $label=labelPrintSettings('Brother_DCP_T830DW');
 if(PHP_OS_FAMILY!=='Windows'&&!str_contains($label,'paper=Custom.105x182mm')){

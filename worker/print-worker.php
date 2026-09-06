@@ -340,6 +340,7 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif($lower==='bin=258')$options[]='InputSlot=ByPassTray';
         elseif($lower==='bin=261')$options[]='InputSlot=Rear';
     }
+    if(stripos($printer,'WF')!==false)$options[]='cupsPrintQuality=High';
     return array_values(array_unique($options));
 }
 
