@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 final class PrintService
 {
+    private const AVAILABLE_FILE_CACHE_TTL = 604800;
+    private const MISSING_FILE_CACHE_TTL = 900;
+
     private ?array $installedCache = null;
     private ?array $settingsCache = null;
     private string $installedCacheFile;
@@ -166,7 +169,7 @@ final class PrintService
             if($path==='')$ready=false;
             else{
                 $cachedAvailability=$fileAvailability[$path]??null;
-                $cacheTtl=($cachedAvailability['available']??false)?21600:30;
+                $cacheTtl=($cachedAvailability['available']??false)?self::AVAILABLE_FILE_CACHE_TTL:self::MISSING_FILE_CACHE_TTL;
                 if(is_array($cachedAvailability)&&(int)($cachedAvailability['checked_at']??0)>=time()-$cacheTtl)$ready=(bool)$cachedAvailability['available'];
                 else{$ready=is_file($path);$fileAvailability[$path]=['available'=>$ready,'checked_at'=>time()];$fileAvailabilityChanged=true;}
             }

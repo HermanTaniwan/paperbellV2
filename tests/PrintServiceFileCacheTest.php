@@ -22,6 +22,9 @@ try {
     $method = new ReflectionMethod(PrintService::class, 'fileAvailabilityCache');
     $cache = $method->invoke($service);
 
+    $reflection = new ReflectionClass(PrintService::class);
+    assert($reflection->getConstant('AVAILABLE_FILE_CACHE_TTL') === 604800);
+    assert($reflection->getConstant('MISSING_FILE_CACHE_TTL') === 900);
     assert($cache['/legacy/ready.pdf'] === ['available' => true, 'checked_at' => $savedAt]);
     assert($cache['/current/missing.pdf'] === ['available' => false, 'checked_at' => $savedAt + 30]);
     echo "PrintService file cache tests passed\n";
