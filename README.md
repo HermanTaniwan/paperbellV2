@@ -69,6 +69,12 @@ Untuk memasang dependensi Python serta worker cetak dan pengambilan resi sebagai
 sudo ./install-autostart-ubuntu.sh
 ```
 
+Server Health di Ubuntu membaca CPU, RAM, uptime, filesystem, block device, dan sensor suhu yang tersedia dari kernel Linux. Pasang timer collector satu kali agar cache metrik diperbarui setiap menit di luar sandbox Apache:
+
+```bash
+sudo ./tools/install-server-health-timer.sh
+```
+
 Installer memasang `python3-venv` melalui APT bila belum tersedia, mengelola mount `gdrive:` sebagai `paperbell-google-drive-mount.service` dengan akses FUSE untuk Apache, membaca environment database Paperbell dari konfigurasi Apache, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR`, `PAPERBELL_APACHE_CONFIG`, `PAPERBELL_DRIVE_USER`, `PAPERBELL_UBUNTU_DRIVE_MOUNT`, atau `PAPERBELL_RCLONE_REMOTE` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
 
 Random Pages, pembacaan XLSX, dan penyiapan resi memakai Python host. Path default sudah diarahkan ke runtime yang tersedia pada komputer ini; jika dipindahkan ke host lain, set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki paket `openpyxl`, `pypdf`, Pillow, dan `reportlab`. Spreadsheet mapping dapat diganti melalui `PAPERBELL_MAPPING_SHEET_ID` dan `PAPERBELL_MAPPING_SHEET_GID`.

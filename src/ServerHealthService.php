@@ -14,7 +14,8 @@ final class ServerHealthService
 
         // The scheduled task normally keeps this cache warm. Refreshing here as a
         // fallback makes the page self-healing when that task has not been installed.
-        if(in_array(PHP_OS_FAMILY,['Windows','Linux'],true)&&($lastAttempt===0||$now-$lastAttempt>=$cacheSeconds)){
+        $canRefresh=PHP_OS_FAMILY==='Windows'||(PHP_OS_FAMILY==='Linux'&&is_readable('/proc/stat'));
+        if($canRefresh&&($lastAttempt===0||$now-$lastAttempt>=$cacheSeconds)){
             $lock=$this->lock($path.'.lock');
             if($lock!==null){
                 try{
@@ -77,7 +78,7 @@ PS;
         $cpuPercent=$totalDelta>0?round((1-($idleDelta/$totalDelta))*100,1):null;
 
         $memory=[];
-        foreach(file('/proc/meminfo',FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[] as $line){
+        foreach(preg_split('/\R/',$this->linuxSystemFile('/proc/meminfo'),-1,PREG_SPLIT_NO_EMPTY)?:[] as $line){
             if(preg_match('/^([A-Za-z_()]+):\s+(\d+)\s+kB$/',$line,$match))$memory[$match[1]]=(int)$match[2]*1024;
         }
         $memoryTotal=max(0,(int)($memory['MemTotal']??0));
@@ -95,16 +96,30 @@ PS;
             'memory_usage_percent'=>$memoryTotal?round(($memoryUsed/$memoryTotal)*100,1):null,
             'hostname'=>gethostname()?:php_uname('n'),
             'server_time'=>date('c'),
-            'uptime_seconds'=>(int)(float)(explode(' ',trim((string)@file_get_contents('/proc/uptime')))[0]??0),
+            'uptime_seconds'=>(int)(float)(explode(' ',trim($this->linuxSystemFile('/proc/uptime')))[0]??0),
             'disks'=>$this->linuxDisks(),
             'physical_disks'=>$this->linuxPhysicalDisks(),
         ];
     }
     private function linuxCpuTimes(): array {
-        $line=(string)@file('/proc/stat',FILE_IGNORE_NEW_LINES)[0];
+        $line=strtok($this->linuxSystemFile('/proc/stat'),"\r\n")?:'';
         $values=array_map('intval',preg_split('/\s+/',trim(substr($line,3)))?:[]);
         if(count($values)<4)throw new RuntimeException('Statistik CPU Linux tidak dapat dibaca.');
         return ['idle'=>($values[3]??0)+($values[4]??0),'total'=>array_sum($values)];
+    }
+    private function linuxSystemFile(string $path): string {
+        $contents=@file_get_contents($path);
+        if($contents!==false)return $contents;
+        return $this->linuxCommand(['/bin/cat','--',$path]);
+    }
+    private function linuxCommand(array $command): string {
+        $pipes=[];
+        $process=proc_open($command,[1=>['pipe','w'],2=>['pipe','w']],$pipes,$this->root,null,['bypass_shell'=>true]);
+        if(!is_resource($process))throw new RuntimeException('Collector Linux tidak dapat dimulai.');
+        $stdout=stream_get_contents($pipes[1]);$stderr=stream_get_contents($pipes[2]);
+        fclose($pipes[1]);fclose($pipes[2]);
+        if(proc_close($process)!==0)throw new RuntimeException(trim($stderr)?:'Perintah collector Linux gagal.');
+        return (string)$stdout;
     }
     private function linuxCpuTemperature(): ?float {
         $values=[];
@@ -124,15 +139,14 @@ PS;
         return $values===[]?null:round(max($values),1);
     }
     private function linuxDisks(): array {
-        $disks=[];$seen=[];
-        foreach(file('/proc/mounts',FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[] as $line){
-            $parts=preg_split('/\s+/',$line);
-            $device=$parts[0]??'';$mount=str_replace(['\\040','\\011','\\134'],[' ','\t','\\'],$parts[1]??'');
-            if(!str_starts_with($device,'/dev/')||isset($seen[$mount]))continue;
-            $total=@disk_total_space($mount);$free=@disk_free_space($mount);
-            if($total===false||$free===false||$total<=0)continue;
-            $seen[$mount]=true;$used=$total-$free;
-            $disks[]=['letter'=>$mount,'device'=>$device,'total_bytes'=>(int)$total,'free_bytes'=>(int)$free,'used_bytes'=>(int)$used,'usage_percent'=>round(($used/$total)*100,1)];
+        $disks=[];
+        $output=$this->linuxCommand(['/usr/bin/df','-B1','-P','-x','tmpfs','-x','devtmpfs']);
+        foreach(array_slice(preg_split('/\R/',$output,-1,PREG_SPLIT_NO_EMPTY)?:[],1) as $line){
+            $parts=preg_split('/\s+/',$line,6);
+            if(count($parts)!==6)continue;
+            [$device,$total,$used,$free,$percent,$mount]=$parts;
+            if(!str_starts_with($device,'/dev/')||(int)$total<=0)continue;
+            $disks[]=['letter'=>$mount,'device'=>$device,'total_bytes'=>(int)$total,'free_bytes'=>(int)$free,'used_bytes'=>(int)$used,'usage_percent'=>(float)rtrim($percent,'%')];
         }
         return $disks;
     }
