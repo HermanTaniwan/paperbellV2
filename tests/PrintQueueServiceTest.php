@@ -16,6 +16,16 @@ assert($requests === [
     'Backup-7'=>true,
 ]);
 
+$progressMethod=new ReflectionMethod(PrintQueueService::class,'cupsPageProgress');
+$progress=$progressMethod->invoke($service,implode("\n",[
+    'EPSON_WF_C5390_Series-119 www-data 3325952 Mon Sep 7 05:10:57 2026',
+    '    Status: cfFilterGhostscript: Processing page 10...',
+    '    Alerts: job-printing',
+    'EPSON_WF_C5390_Series-120 www-data 3325952 Mon Sep 7 05:10:58 2026',
+    '    Alerts: none',
+]));
+assert($progress === ['EPSON_WF_C5390_Series-119'=>10]);
+
 $completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
 $completed=$completedMethod->invoke($service,[
     ['id'=>101,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>68],

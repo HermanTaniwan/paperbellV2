@@ -299,7 +299,7 @@ final class PrintQueueService
     {
         try{
             $printerOutput=$this->cupsCommand(['lpstat','-p','-d']);
-            $jobOutput=$this->cupsCommand(['lpstat','-W','not-completed','-o']);
+            $jobOutput=$this->cupsCommand(['lpstat','-W','not-completed','-l','-o']);
             $visibleRaw=(string)($this->db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn()?:'');
             $visible=json_decode($visibleRaw,true);$visible=is_array($visible)?array_flip(array_map('strval',$visible)):[];
             $default='';if(preg_match('/^system default destination:\s*(\S+)/mi',$printerOutput,$match))$default=$match[1];
@@ -318,12 +318,12 @@ final class PrintQueueService
                 elseif(str_contains($lower,'offline')||str_contains($lower,'unable to locate')){$status='Offline';$errorType='printer_offline';}
                 $printers[]=['name'=>$name,'active'=>$errorType==='','status'=>$status,'status_code'=>$disabled?6:3,'error_type'=>$errorType,'diagnostic'=>$detail,'is_default'=>$name===$default,'port'=>'CUPS','queue_count'=>0];
             }
-            $printerNames=array_column($printers,'name');usort($printerNames,fn($a,$b)=>strlen($b)<=>strlen($a));$jobs=[];$jobCounts=[];
+            $printerNames=array_column($printers,'name');usort($printerNames,fn($a,$b)=>strlen($b)<=>strlen($a));$jobs=[];$jobCounts=[];$pageProgress=$this->cupsPageProgress($jobOutput);
             foreach(preg_split('/\R/',trim($jobOutput))?:[] as $line){
                 $line=trim($line);if($line===''||!preg_match('/^(\S+)-(\d+)\s+(\S+)\s+(\d+)\s*(.*)$/',$line,$match))continue;
                 $requestName=$match[1];$printer=$requestName;foreach($printerNames as $candidate)if($candidate===$requestName){$printer=$candidate;break;}
                 if($visible&&!isset($visible[$printer]))continue;$jobId=(int)$match[2];$jobCounts[$printer]=($jobCounts[$printer]??0)+1;
-                $requestId=$requestName.'-'.$jobId;$jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestId,'status'=>isset($printingRequests[$requestId])?'Sedang mencetak':'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>0,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>false];
+                $requestId=$requestName.'-'.$jobId;$printed=(int)($pageProgress[$requestId]??0);$jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestId,'status'=>isset($printingRequests[$requestId])?'Sedang mencetak':'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>$printed,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>$printed>0];
             }
             foreach($printers as &$printer)$printer['queue_count']=(int)($jobCounts[$printer['name']]??0);unset($printer);
             usort($printers,fn($a,$b)=>(int)$b['active']<=>(int)$a['active']?:strnatcasecmp($a['name'],$b['name']));
@@ -335,6 +335,17 @@ final class PrintQueueService
     {
         preg_match_all('/^printer\s+\S+\s+(?:is\s+)?now\s+printing\s+(\S+?-\d+)(?:\.\s|\s|$)/mi',$printerOutput,$matches);
         return array_fill_keys(array_map('strval',$matches[1]??[]),true);
+    }
+
+    private function cupsPageProgress(string $jobOutput):array
+    {
+        $progress=[];$requestId='';
+        foreach(preg_split('/\R/',$jobOutput)?:[] as $line){
+            $line=trim($line);
+            if(preg_match('/^(\S+-\d+)\s+\S+\s+\d+\s+/',$line,$match)){$requestId=(string)$match[1];continue;}
+            if($requestId!==''&&preg_match('/^Status:.*Processing page\s+(\d+)/i',$line,$match))$progress[$requestId]=(int)$match[1];
+        }
+        return$progress;
     }
 
     private function cupsCommand(array $command):string

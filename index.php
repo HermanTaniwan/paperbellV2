@@ -15,7 +15,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/app.css?v=28">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
-  <link rel="stylesheet" href="assets/features.css?v=26">
+  <link rel="stylesheet" href="assets/features.css?v=27">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
   <link rel="stylesheet" href="assets/theme-pastel.css?v=13">
@@ -1332,6 +1332,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <div class="printer-queue-job-status">
                   <span class="badge" :class="appJobStatusClass(job)">{{appJobStatusLabel(job)}}</span>
                   <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
+                  <small v-if="appJobProgressText(job)" class="printer-queue-progress">{{appJobProgressText(job)}}</small>
                 </div>
                 <div v-if="appJobMoveTargets(job).length" class="printer-queue-move">
                   <select :value="appJobSpooler(job)?.move_printer||''" :disabled="!!queueActionKey" aria-label="Printer tujuan" @focus="beginQueueMoveSelection" @change="selectAppJobMove(job,$event)" @blur="endQueueMoveSelection">
@@ -1530,7 +1531,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=126">
+<script src="assets/app.js?v=127">
 </script>
 </body>
 </html>
