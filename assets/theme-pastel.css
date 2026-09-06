@@ -231,8 +231,6 @@ button:not(:disabled):not(.printer-queue-scrim):hover,
   background: rgba(51, 58, 86, .22);
   color: transparent;
   border: 0;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   filter: none;
   transform: none;
 }

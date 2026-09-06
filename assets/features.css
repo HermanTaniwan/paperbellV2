@@ -102,7 +102,7 @@
 .printer-queue-fab-copy{display:none}.printer-queue-fab-copy b,.printer-queue-fab-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .printer-queue-fab-copy b{font-size:12px}.printer-queue-fab-copy small{margin-top:3px;color:#bcd0c4;font-size:9px;font-weight:500}
 .printer-queue-fab-count{position:absolute;top:-7px;right:-7px;width:auto;min-width:23px;height:23px;padding:0 6px;display:grid;place-items:center;border:2px solid #fff;border-radius:99px;background:#d8ec5e;color:#173322;font-size:10px;font-weight:800;box-shadow:0 4px 10px rgba(15,39,28,.2)}
-.printer-queue-scrim{position:fixed;inset:0;z-index:80;width:100%;height:100%;padding:0;border:0;border-radius:0;background:rgba(13,27,19,.28);backdrop-filter:blur(2px)}
+.printer-queue-scrim{position:fixed;inset:0;z-index:80;width:100%;height:100%;padding:0;border:0;border-radius:0;background:rgba(13,27,19,.28)}
 .printer-queue-scrim:hover{transform:none;filter:none}
 .printer-queue-drawer{position:fixed;z-index:81;top:0;right:0;width:min(420px,100vw);height:100dvh;padding:24px;background:#f5f7f4;border-left:1px solid var(--line);box-shadow:-24px 0 60px rgba(21,38,28,.18);overflow-y:auto;transform:translateX(105%);visibility:hidden;transition:transform .24s ease,visibility .24s}
 .printer-queue-drawer.open{transform:translateX(0);visibility:visible}

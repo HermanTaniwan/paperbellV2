@@ -455,7 +455,10 @@ do {
         $state = $db->prepare('SELECT status FROM print_jobs WHERE id=?');
         $state->execute([$job['id']]);
         if ($state->fetchColumn() === 'cancel_requested') {
-            logLine("Job #{$job['id']} cancellation recorded after submission");
+            if(!isWindowsPrintHost()&&$spoolerJobId!==null)runProcess(['cancel',$printPrinter.'-'.$spoolerJobId],'Gagal membatalkan job yang sudah dikirim ke CUPS.');
+            $cancelled=$db->prepare("UPDATE print_jobs SET status='cancelled',message='Pembatalan selesai',completed_at=?,submitted_at=?,spooler_job_id=? WHERE id=? AND status='cancel_requested'");
+            $cancelledAt=time();$cancelled->execute([$cancelledAt,$cancelledAt,$spoolerJobId,$job['id']]);
+            logLine("Job #{$job['id']} cancelled after submission to {$spoolerName}");
             continue;
         }
 

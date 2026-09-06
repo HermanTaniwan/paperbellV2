@@ -15,10 +15,10 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/app.css?v=28">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
-  <link rel="stylesheet" href="assets/features.css?v=24">
+  <link rel="stylesheet" href="assets/features.css?v=25">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
-  <link rel="stylesheet" href="assets/theme-pastel.css?v=12">
+  <link rel="stylesheet" href="assets/theme-pastel.css?v=13">
   <link rel="stylesheet" href="assets/stock-recommendations.css?v=7">
   <link rel="stylesheet" href="assets/pdf-drawer.css?v=3">
   <link rel="stylesheet" href="assets/motion.css?v=1">
@@ -1269,7 +1269,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 
         <button v-if="queuePanelOpen" class="printer-queue-scrim" type="button" aria-label="Tutup panel Printer Job" @click="closeQueuePanel"></button>
 
-        <section v-if="queuePanelOpen" id="printer-queue-drawer" class="printer-queue-drawer open" role="dialog" aria-modal="true" aria-label="Printer Job">
+        <section v-if="queuePanelOpen" id="printer-queue-drawer" class="printer-queue-drawer open" role="dialog" aria-modal="true" aria-label="Printer Job" @scroll.passive="handleWindowScroll">
           <div class="printer-queue-drawer-head">
             <div>
               <span class="eyebrow">PRINTER LIVE</span>
@@ -1281,7 +1281,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 
           <div class="printer-queue-totals">
             <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Job aplikasi</span></div>
-            <div><strong>{{queueData.spooler?.length||0}}</strong><span>Windows spooler</span></div>
+            <div><strong>{{queueData.spooler?.length||0}}</strong><span>Antrean CUPS</span></div>
           </div>
 
           <div v-if="(queueData.incidents||[]).length" class="printer-queue-section printer-incident-section">
@@ -1341,7 +1341,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </div>
 
           <div class="printer-queue-section">
-            <h3>Windows spooler</h3>
+            <h3>Antrean CUPS</h3>
             <div class="printer-queue-jobs">
               <article v-for="job in (queueData.spooler||[])" :key="job.printer+'-'+job.job_id" class="printer-queue-job">
                 <div>
@@ -1363,7 +1363,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                   <button class="danger-button" type="button" :disabled="!!queueActionKey" @click="spoolerAction(job,'cancel')">Cancel</button>
                 </div>
               </article>
-              <p v-if="!queueData.spooler?.length" class="printer-queue-empty">Tidak ada job pada Windows spooler.</p>
+              <p v-if="!queueData.spooler?.length" class="printer-queue-empty">Tidak ada job pada antrean CUPS.</p>
             </div>
           </div>
         </section>
@@ -1523,7 +1523,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=121">
+<script src="assets/app.js?v=122">
 </script>
 </body>
 </html>

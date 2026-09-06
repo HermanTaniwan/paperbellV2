@@ -18,11 +18,12 @@ final class PrintQueueService
     {
         $spooler=$this->spoolerState();
         $this->reconcileSubmittedJobs($spooler);
+        $this->reconcileCancelledRequests();
         $select="SELECT id,job_type,order_sn,order_process_id,original_name,item_name,model_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name,o.item_name,o.model_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path LEFT JOIN order_process o ON o.id=p.order_process_id) x";
         $activeStatuses="'queued','processing','submitted','moving','cancel_requested'";
         $jobs=$this->db->query("{$select} WHERE status IN ({$activeStatuses}) ORDER BY id DESC")->fetchAll();
-        $recent=$this->db->query("{$select} WHERE status NOT IN ({$activeStatuses}) ORDER BY id DESC LIMIT 20")->fetchAll();
-        $jobs=array_merge($jobs,$recent);usort($jobs,fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']);
+        $failed=$this->db->query("{$select} WHERE status='failed' ORDER BY id DESC LIMIT 10")->fetchAll();
+        $jobs=array_merge($jobs,$failed);usort($jobs,fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']);
         foreach($jobs as &$row){$row['createdText']=date('d M Y H:i',(int)$row['created_at']);}
         unset($row);
         $appJobsBySpooler=[];
@@ -119,6 +120,12 @@ final class PrintQueueService
     {
         $stmt=$this->db->prepare("UPDATE print_jobs SET status='cancelled',message='Dibatalkan dari antrean printer',completed_at=? WHERE printer=? AND spooler_job_id=? AND status='submitted'");
         $stmt->execute([time(),$printer,$jobId]);
+    }
+
+    private function reconcileCancelledRequests():void
+    {
+        $stmt=$this->db->prepare("UPDATE print_jobs SET status='cancelled',message='Pembatalan selesai',completed_at=? WHERE status='cancel_requested' AND completed_at IS NOT NULL AND completed_at<?");
+        $now=time();$stmt->execute([$now,$now-600]);
     }
 
     public function moveSpoolerJob(string $printer,int $jobId,string $targetPrinter):array
