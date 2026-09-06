@@ -86,7 +86,7 @@
 .order-tracking-number b{font-size:10px}
 
 /* Keep search and its related filters/actions available while a list scrolls. */
-.search-toolbar{position:sticky;top:88px;z-index:9;margin-top:-12px;padding:12px 0;background:rgba(245,247,244,.96);border-bottom:1px solid transparent;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.search-toolbar{position:sticky;top:88px;z-index:9;margin-top:-12px;padding:12px 0;background:var(--paper);border-bottom:1px solid transparent}
 .search-toolbar:after{content:"";position:absolute;right:0;bottom:-1px;left:0;height:1px;background:var(--line)}
 @media(min-width:1181px){.labels-content .label-preview{top:169px;height:calc(100vh - 193px)}}
 @media(min-width:1101px) and (max-width:1180px){.labels-content .label-preview{top:161px;height:calc(100vh - 185px)}}

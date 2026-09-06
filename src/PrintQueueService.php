@@ -18,7 +18,11 @@ final class PrintQueueService
     {
         $spooler=$this->spoolerState();
         $this->reconcileSubmittedJobs($spooler);
-        $jobs=$this->db->query("SELECT id,job_type,order_sn,order_process_id,original_name,item_name,model_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name,o.item_name,o.model_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path LEFT JOIN order_process o ON o.id=p.order_process_id) x ORDER BY id DESC LIMIT 100")->fetchAll();
+        $select="SELECT id,job_type,order_sn,order_process_id,original_name,item_name,model_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name,o.item_name,o.model_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path LEFT JOIN order_process o ON o.id=p.order_process_id) x";
+        $activeStatuses="'queued','processing','submitted','moving','cancel_requested'";
+        $jobs=$this->db->query("{$select} WHERE status IN ({$activeStatuses}) ORDER BY id DESC")->fetchAll();
+        $recent=$this->db->query("{$select} WHERE status NOT IN ({$activeStatuses}) ORDER BY id DESC LIMIT 20")->fetchAll();
+        $jobs=array_merge($jobs,$recent);usort($jobs,fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']);
         foreach($jobs as &$row){$row['createdText']=date('d M Y H:i',(int)$row['created_at']);}
         unset($row);
         $appJobsBySpooler=[];

@@ -12,10 +12,10 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=27">
+  <link rel="stylesheet" href="assets/app.css?v=28">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=26">
-  <link rel="stylesheet" href="assets/features.css?v=23">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
+  <link rel="stylesheet" href="assets/features.css?v=24">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
   <link rel="stylesheet" href="assets/theme-pastel.css?v=12">
@@ -1269,7 +1269,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 
         <button v-if="queuePanelOpen" class="printer-queue-scrim" type="button" aria-label="Tutup panel Printer Job" @click="closeQueuePanel"></button>
 
-        <section id="printer-queue-drawer" class="printer-queue-drawer" :class="{open:queuePanelOpen}" role="dialog" aria-modal="true" aria-label="Printer Job" :aria-hidden="queuePanelOpen?'false':'true'" :inert="!queuePanelOpen">
+        <section v-if="queuePanelOpen" id="printer-queue-drawer" class="printer-queue-drawer open" role="dialog" aria-modal="true" aria-label="Printer Job">
           <div class="printer-queue-drawer-head">
             <div>
               <span class="eyebrow">PRINTER LIVE</span>
@@ -1523,7 +1523,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=120">
+<script src="assets/app.js?v=121">
 </script>
 </body>
 </html>
