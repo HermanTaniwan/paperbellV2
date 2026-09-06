@@ -78,7 +78,13 @@ final class PrintService
     private function fileAvailabilityCache(): array
     {
         if(!is_file($this->fileAvailabilityCacheFile))return[];$cached=json_decode((string)@file_get_contents($this->fileAvailabilityCacheFile),true);
-        return is_array($cached)&&is_array($cached['paths']??null)&&(int)($cached['saved_at']??0)>=time()-60?$cached['paths']:[];
+        if(!is_array($cached)||!is_array($cached['paths']??null))return[];
+        $savedAt=(int)($cached['saved_at']??0);$paths=[];
+        foreach($cached['paths'] as $path=>$entry){
+            if(is_array($entry))$paths[(string)$path]=['available'=>(bool)($entry['available']??false),'checked_at'=>(int)($entry['checked_at']??$savedAt)];
+            else $paths[(string)$path]=['available'=>(bool)$entry,'checked_at'=>$savedAt];
+        }
+        return$paths;
     }
 
     private function writeFileAvailabilityCache(array $paths): void
@@ -158,8 +164,12 @@ final class PrintService
             $requiredQty=max(1,(int)$line['qty']);
             $path=(string)($mapping['file_path']??'');
             if($path==='')$ready=false;
-            elseif(array_key_exists($path,$fileAvailability))$ready=(bool)$fileAvailability[$path];
-            else{$ready=is_file($path);$fileAvailability[$path]=$ready;$fileAvailabilityChanged=true;}
+            else{
+                $cachedAvailability=$fileAvailability[$path]??null;
+                $cacheTtl=($cachedAvailability['available']??false)?21600:30;
+                if(is_array($cachedAvailability)&&(int)($cachedAvailability['checked_at']??0)>=time()-$cacheTtl)$ready=(bool)$cachedAvailability['available'];
+                else{$ready=is_file($path);$fileAvailability[$path]=['available'=>$ready,'checked_at'=>time()];$fileAvailabilityChanged=true;}
+            }
             $defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
         }
         if($fileAvailabilityChanged)$this->writeFileAvailabilityCache($fileAvailability);
