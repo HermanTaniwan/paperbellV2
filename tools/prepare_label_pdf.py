@@ -255,9 +255,9 @@ def prepare_label(
     max_source_width = max(float(page.mediabox.width) for page, _ in crop_heights)
     max_source_height = max(float(page.mediabox.height) for page, _ in crop_heights)
     if driver_page_mode == "a6":
-        # Preserve the marketplace label's natural size. Long content is split
-        # vertically across physical A6 sheets instead of being shrunk.
-        base_scale = min(1.0, PAPER_WIDTH_POINTS / max_source_width)
+        # Render the marketplace label at 75% of its natural size. Content that
+        # still exceeds the physical A6 sheet is split vertically.
+        base_scale = min(1.0, PAPER_WIDTH_POINTS / max_source_width) * 0.75
     else:
         reference_fit = min(
             PAPER_WIDTH_POINTS / max_source_width,

@@ -40,7 +40,7 @@ final class LabelPdfPreparer
             (string)filesize($sourcePath),
             (string)filemtime($this->script),
             (string)filemtime($this->banner),
-            'a6-v1',
+            'a6-v2-scale75',
         ]);
         $output=$this->root.'/storage/print-labels/previews/label-preview-'.hash('sha256',$fingerprint).'.pdf';
         return$this->prepareTo($sourcePath,$output,'2','a6');

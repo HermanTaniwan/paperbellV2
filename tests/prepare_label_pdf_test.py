@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory(prefix="paperbell-a6-label-") as directory:
 
     long_source = root / "long.pdf"
     long_output = root / "long-ready.pdf"
-    source_pdf(long_source, 280, 276)
+    source_pdf(long_source, 375, 370)
     prepare_label(str(long_source), str(long_output), 2, "a6")
     long_pages = PdfReader(str(long_output)).pages
     assert len(long_pages) == 2

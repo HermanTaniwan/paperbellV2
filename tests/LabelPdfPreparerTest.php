@@ -18,7 +18,7 @@ try{
         (string)filesize($source),
         (string)filemtime($root.'/tools/prepare_label_pdf.py'),
         (string)filemtime($root.'/assets/label-unboxing.jpeg'),
-        'a6-v1',
+        'a6-v2-scale75',
     ]);
     $expected=$root.'/storage/print-labels/previews/label-preview-'.hash('sha256',$fingerprint).'.pdf';
     file_put_contents($expected,'prepared preview');
