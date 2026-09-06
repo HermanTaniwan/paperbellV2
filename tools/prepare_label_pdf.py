@@ -14,6 +14,7 @@ from reportlab.pdfgen import canvas
 MM_TO_POINTS = 72 / 25.4
 PAPER_WIDTH_POINTS = 105 * MM_TO_POINTS
 PAPER_HEIGHT_POINTS = 182 * MM_TO_POINTS
+A6_HEIGHT_POINTS = 148 * MM_TO_POINTS
 LETTER_WIDTH_POINTS = 215.9 * MM_TO_POINTS
 LETTER_HEIGHT_POINTS = 279.4 * MM_TO_POINTS
 B6_WIDTH_POINTS = 128.02 * MM_TO_POINTS
@@ -197,8 +198,8 @@ def prepare_label(
 ) -> None:
     if top_margin_mm < 0 or top_margin_mm >= 20:
         raise ValueError("Margin atas harus antara 0 dan kurang dari 20 mm")
-    if driver_page_mode not in ("custom", "letter", "b6"):
-        raise ValueError("Mode halaman driver harus custom, letter, atau b6")
+    if driver_page_mode not in ("custom", "letter", "b6", "a6"):
+        raise ValueError("Mode halaman driver harus custom, letter, b6, atau a6")
 
     output_width = PAPER_WIDTH_POINTS
     output_height = PAPER_HEIGHT_POINTS
@@ -208,8 +209,10 @@ def prepare_label(
     elif driver_page_mode == "b6":
         output_width = B6_WIDTH_POINTS
         output_height = B6_HEIGHT_POINTS
+    elif driver_page_mode == "a6":
+        output_height = A6_HEIGHT_POINTS
     physical_left = max(0, (output_width - PAPER_WIDTH_POINTS) / 2)
-    physical_bottom = output_height - PAPER_HEIGHT_POINTS
+    physical_bottom = 0 if driver_page_mode == "a6" else output_height - PAPER_HEIGHT_POINTS
 
     reader = PdfReader(source_path)
     if reader.is_encrypted:
@@ -251,11 +254,16 @@ def prepare_label(
 
     max_source_width = max(float(page.mediabox.width) for page, _ in crop_heights)
     max_source_height = max(float(page.mediabox.height) for page, _ in crop_heights)
-    reference_fit = min(
-        PAPER_WIDTH_POINTS / max_source_width,
-        REFERENCE_A6_HEIGHT_POINTS / max_source_height,
-    )
-    base_scale = reference_fit * LABEL_SCALE
+    if driver_page_mode == "a6":
+        # Preserve the marketplace label's natural size. Long content is split
+        # vertically across physical A6 sheets instead of being shrunk.
+        base_scale = min(1.0, PAPER_WIDTH_POINTS / max_source_width)
+    else:
+        reference_fit = min(
+            PAPER_WIDTH_POINTS / max_source_width,
+            REFERENCE_A6_HEIGHT_POINTS / max_source_height,
+        )
+        base_scale = reference_fit * LABEL_SCALE
 
     label_top = output_height - (top_margin_mm * MM_TO_POINTS)
     scale = base_scale
@@ -327,23 +335,24 @@ def prepare_label(
         max(0, PAPER_WIDTH_POINTS - promo_width),
     )
     promo_y = cursor_top - PROMO_GAP_POINTS - promo_height
-    if promo_y < page_bottom - 0.1:
+    if promo_y < page_bottom - 0.1 and driver_page_mode != "a6":
         output_page = new_output_page()
         promo_y = label_top - promo_height
-    if promo_y < page_bottom - 0.1:
+    if promo_y < page_bottom - 0.1 and driver_page_mode != "a6":
         raise RuntimeError("Gambar pemberitahuan unboxing melebihi tinggi kertas 182 mm")
-    promo_y = max(page_bottom, promo_y)
-    output_page.merge_page(
-        promo_overlay(
-            promo_image,
-            promo_x,
-            promo_y,
-            promo_width,
-            promo_height,
-            output_width,
-            output_height,
+    if promo_y >= page_bottom - 0.1:
+        promo_y = max(page_bottom, promo_y)
+        output_page.merge_page(
+            promo_overlay(
+                promo_image,
+                promo_x,
+                promo_y,
+                promo_width,
+                promo_height,
+                output_width,
+                output_height,
+            )
         )
-    )
     writer = PdfWriter()
     for output_page in output_pages:
         writer.add_page(output_page)
@@ -354,7 +363,7 @@ def prepare_label(
 if __name__ == "__main__":
     if len(sys.argv) not in (3, 4, 5):
         raise SystemExit(
-            "usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm] [custom|letter|b6]"
+            "usage: prepare_label_pdf.py source.pdf output.pdf [top_margin_mm] [custom|letter|b6|a6]"
         )
     prepare_label(
         sys.argv[1],

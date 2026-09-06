@@ -17,6 +17,7 @@ final class LabelPdfPreparer
     public function prepare(string $sourcePath,string $printer):array
     {
         $isL3210=stripos($printer,'L3210')!==false;
+        if($isL3210&&PHP_OS_FAMILY!=='Windows')return$this->preparePreview($sourcePath);
         $topMarginMm=$isL3210?'4':'2';
         $driverPageMode=$isL3210?'b6':'custom';
         $fingerprint=implode('|',[
@@ -39,9 +40,10 @@ final class LabelPdfPreparer
             (string)filesize($sourcePath),
             (string)filemtime($this->script),
             (string)filemtime($this->banner),
+            'a6-v1',
         ]);
         $output=$this->root.'/storage/print-labels/previews/label-preview-'.hash('sha256',$fingerprint).'.pdf';
-        return$this->prepareTo($sourcePath,$output,'2','custom');
+        return$this->prepareTo($sourcePath,$output,'2','a6');
     }
 
     private function prepareTo(string $sourcePath,string $output,string $topMarginMm,string $driverPageMode):array
