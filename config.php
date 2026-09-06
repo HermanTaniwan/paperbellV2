@@ -18,7 +18,7 @@ return [
     ],
     'printing' => [
         'sumatra' => getenv('PAPERBELL_SUMATRA_PATH') ?: (PHP_OS_FAMILY==='Windows'?((getenv('LOCALAPPDATA') ?: '') . '/SumatraPDF/SumatraPDF.exe'):''),
-        'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: 'EPSON L3210 Series',
+        'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: (PHP_OS_FAMILY==='Windows'?'EPSON L3210 Series':'L3210-Series'),
         'brother_b5_printer' => getenv('PAPERBELL_BROTHER_B5_PRINTER') ?: 'Brother DCP-T830DW B5',
         'python' => getenv('PAPERBELL_PYTHON_PATH') ?: (PHP_OS_FAMILY==='Windows'?'C:/Users/Herman Taniwan/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe':(is_file(__DIR__.'/.venv/bin/python')?__DIR__.'/.venv/bin/python':'python3')),
     ],
