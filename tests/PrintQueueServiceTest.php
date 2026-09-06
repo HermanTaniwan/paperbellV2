@@ -26,6 +26,17 @@ $progress=$progressMethod->invoke($service,implode("\n",[
 ]));
 assert($progress === ['EPSON_WF_C5390_Series-119'=>10]);
 
+$ippProgressMethod=new ReflectionMethod(PrintQueueService::class,'cupsIppProgressRows');
+$ippProgress=$ippProgressMethod->invoke($service,implode("\n",[
+    'job-id,job-state,job-impressions-completed,job-media-sheets-completed',
+    '119,processing,20,10',
+    '120,pending,0,0',
+]),'EPSON_WF_C5390_Series');
+assert($ippProgress === [
+    'EPSON_WF_C5390_Series-119'=>10,
+    'EPSON_WF_C5390_Series-120'=>0,
+]);
+
 $completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
 $completed=$completedMethod->invoke($service,[
     ['id'=>101,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>68],
