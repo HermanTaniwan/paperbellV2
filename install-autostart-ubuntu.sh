@@ -15,13 +15,21 @@ drive_user="${PAPERBELL_DRIVE_USER:-herman}"
 drive_mount="${PAPERBELL_UBUNTU_DRIVE_MOUNT:-/home/herman/GoogleDrive}"
 drive_remote="${PAPERBELL_RCLONE_REMOTE:-gdrive:}"
 ubuntu_print_root="${PAPERBELL_UBUNTU_PRINT_ROOT:-${drive_mount}/Paperbell/Print}"
+wf_queue="${PAPERBELL_WF_QUEUE:-EPSON_WF_C5390_Series}"
+wf_uri="${PAPERBELL_WF_URI:-ipp://192.168.1.6/ipp/print}"
 
-for command_name in php python3 lp lpstat cancel systemctl; do
+for command_name in php python3 lp lpadmin lpstat cancel cupsenable cupsaccept systemctl; do
     command -v "${command_name}" >/dev/null || {
         echo "Perintah wajib tidak ditemukan: ${command_name}" >&2
         exit 1
     }
 done
+
+# Keep Paperbell mappings on a stable queue name while avoiding temporary
+# implicitclass:// queues created by cups-browsed discovery.
+lpadmin -p "${wf_queue}" -E -v "${wf_uri}" -m everywhere
+cupsenable "${wf_queue}"
+cupsaccept "${wf_queue}"
 
 if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
     command -v apt-get >/dev/null || {
@@ -186,4 +194,4 @@ systemctl restart paperbell-print-worker.service
 sleep 2
 systemctl --no-pager --full status paperbell-print-worker.service
 
-echo "Worker Paperbell Ubuntu aktif. Printer CUPS: ${printers[*]}"
+echo "Worker Paperbell Ubuntu aktif. Printer CUPS: ${printers[*]}. WF permanen: ${wf_queue} -> ${wf_uri}"

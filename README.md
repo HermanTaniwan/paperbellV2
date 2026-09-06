@@ -57,6 +57,8 @@ Job berstatus `submitted` berarti file sudah diterima spooler Windows atau CUPS,
 
 Pada Ubuntu, instal dan aktifkan CUPS beserta printer host terlebih dahulu. Paperbell memakai `lpstat` untuk deteksi/status, `lp` untuk mengirim PDF, dan `cancel` untuk membatalkan job. Set `PAPERBELL_PYTHON_PATH` ke Python yang memiliki `pypdf`, `reportlab`, Pillow, dan `openpyxl` agar penyiapan label serta fitur PDF dapat berjalan.
 
+Installer Ubuntu membuat queue `EPSON_WF_C5390_Series` permanen ke `ipp://192.168.1.6/ipp/print`, sehingga mapping lama tetap berlaku tanpa bergantung pada queue sementara `implicitclass://` dari `cups-browsed`. Nama queue dan URI dapat dioverride melalui `PAPERBELL_WF_QUEUE` dan `PAPERBELL_WF_URI`.
+
 Job Paperbell yang dikirim ke printer Epson WF melalui CUPS otomatis memakai kualitas `High`. Printer lain mengikuti kualitas default drivernya.
 
 Path Data Mapping Windows tetap disimpan dalam bentuk `H:\My Drive\Paperbell\Print\...`. Saat berjalan di Ubuntu, Paperbell menerjemahkannya ke `/home/herman/GoogleDrive/Paperbell/Print/...` tanpa mengubah data sumber, sehingga database yang sama tetap kompatibel dengan Windows. Root tersebut dapat dioverride melalui `PAPERBELL_WINDOWS_PRINT_ROOT` dan `PAPERBELL_UBUNTU_PRINT_ROOT`.
