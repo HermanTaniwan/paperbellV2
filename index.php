@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=27">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=25">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=26">
   <link rel="stylesheet" href="assets/features.css?v=23">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -378,6 +378,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <div class="toolbar search-toolbar">
 <div class="search">⌕<input v-model="query" @input="debouncedLoad" placeholder="Cari Order SN, No. Resi, pembeli, atau produk…">
 </div>
+<div class="order-filter-navigation" aria-label="Filter order">
 <div class="filters">
 <button v-for="f in orderFilters" :class="{active:filter===f.id}" :disabled="loading" @click="changeOrderFilter(f.id)">{{ loading&&filter===f.id ? 'Memuat…' : f.label }}</button>
 </div>
@@ -388,10 +389,13 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="filters paper-order-filters" aria-label="Filter jenis kertas">
 <button v-for="f in paperFilters" :class="{active:paperFilter===f.id}" :disabled="loading" @click="changePaperFilter(f.id)">{{f.label}}</button>
 </div>
+</div>
+<div class="order-toolbar-actions" aria-label="Aksi order">
 <button class="ghost marketplace-sync-button manual-order-add-button" @click="openManualOrder">+ Tambah order cetak</button>
 <button class="ghost marketplace-sync-button" :disabled="loading" @click="openRandomPrint">? Cetak Random Pages</button>
 <button class="ghost marketplace-sync-button" @click="queue('shopee_sync','')" :disabled="busy">↻ Sync Shopee</button>
 <button class="ghost marketplace-sync-button" @click="queue('tiktok_sync','')" :disabled="busy">↻ Sync TikTok</button>
+</div>
 </div>
         <section v-if="pageData.shippingSummary" class="shipping-today-summary" :class="{'is-complete':pageData.shippingSummary.total>0&&pageData.shippingSummary.unprinted===0}" aria-live="polite">
           <div class="shipping-summary-main">
