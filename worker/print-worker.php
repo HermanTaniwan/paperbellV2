@@ -223,6 +223,10 @@ function prepareLabelPdf(array $job): string
 {
     global $labelPreparer;
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
+    if ($isL3210 && !isWindowsPrintHost()) {
+        logLine("Job #{$job['id']} memakai PDF resi asli untuk profil CUPS A6 L3210");
+        return (string)$job['file_path'];
+    }
     $result=$labelPreparer->prepare((string)$job['file_path'],(string)$job['printer']);
     if ($isL3210) {
         logLine("Job #{$job['id']} memakai cache ".($result['cached']?'siap':'baru')." B6 dengan area label 105 x 182 mm untuk L3210");
@@ -308,7 +312,13 @@ function labelPrintSettings(string $printer): string
 {
     $parts = ['1-', 'simplex', 'monochrome', 'noscale'];
     if (stripos($printer, 'L3210') !== false) {
-        $parts[] = 'paperkind=88'; // B6 JIS 128 x 182 mm, ukuran native terdekat.
+        if (!isWindowsPrintHost()) {
+            $parts[] = 'paper=A6';
+            $parts[] = 'media-type=PLAIN_NORMAL';
+            $parts[] = 'ink=MONO';
+        } else {
+            $parts[] = 'paperkind=88'; // Pertahankan profil Windows yang sudah ada.
+        }
     } elseif (stripos($printer, 'Brother DCP') !== false) {
         $parts[] = 'bin=258'; // MP Tray, sama dengan aplikasi desktop.
     } elseif (stripos($printer, 'WF') !== false) {
@@ -324,6 +334,7 @@ function cupsOptions(string $printSettings,string $printer): array
 {
     $options=[];
     $brother=stripos($printer,'Brother')!==false;
+    $l3210=stripos($printer,'L3210')!==false;
     foreach(array_filter(array_map('trim',explode(',',$printSettings))) as $token){
         $lower=strtolower($token);
         if(preg_match('/^\d+(?:-\d*)?$/',$token))$options[]='page-ranges='.$token;
@@ -331,14 +342,19 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif($lower==='simplex')$options[]=$brother?'Duplex=None':'sides=one-sided';
         elseif($lower==='duplexlong')$options[]=$brother?'Duplex=DuplexNoTumble':'sides=two-sided-long-edge';
         elseif($lower==='duplexshort')$options[]=$brother?'Duplex=DuplexTumble':'sides=two-sided-short-edge';
+        elseif($lower==='monochrome'&&$l3210)$options[]='Ink=MONO';
         elseif($lower==='monochrome'){$options[]='print-color-mode=monochrome';$options[]='ColorModel=Gray';}
         elseif($lower==='color')$options[]='print-color-mode=color';
+        elseif($lower==='noscale'&&$l3210)$options[]='print-scaling=none';
         elseif($lower==='noscale'&&!$brother)$options[]='scaling=100';
         elseif($lower==='paper=a5'&&$brother){$options[]='PageSize=A5';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
         elseif($lower==='paper=b5'&&$brother){$options[]='PageSize=Custom.182x257mm';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
         elseif($lower==='paper=a5')$options[]='media=iso_a5_148x210mm';
+        elseif($lower==='paper=a6'&&$l3210)$options[]='PageSize=A6';
         elseif($lower==='paper=b5')$options[]='media=Custom.182x257mm';
         elseif(str_starts_with($lower,'paper='))$options[]='media='.substr($token,6);
+        elseif(str_starts_with($lower,'media-type='))$options[]='MediaType='.substr($token,11);
+        elseif(str_starts_with($lower,'ink='))$options[]='Ink='.substr($token,4);
         elseif($lower==='paperkind=13')$options[]='media=Custom.182x257mm';
         elseif($lower==='paperkind=88')$options[]=stripos($printer,'L3210')!==false?'PageSize=B6':'media=B6';
         elseif($lower==='bin=7')$options[]='InputSlot=Auto';

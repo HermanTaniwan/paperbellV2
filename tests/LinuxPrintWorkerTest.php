@@ -35,8 +35,10 @@ if(PHP_OS_FAMILY!=='Windows'&&!str_contains($label,'paper=Custom.105x182mm')){
 
 $l3210Label=labelPrintSettings('L3210-Series');
 if(PHP_OS_FAMILY!=='Windows'){
-    if(str_contains($l3210Label,'paper=Custom.105x182mm'))throw new RuntimeException('L3210 must use its native B6 page instead of a custom media size.');
-    expectContains(cupsOptions($l3210Label,'L3210-Series'),'PageSize=B6');
+    if(str_contains($l3210Label,'paper=Custom.105x182mm'))throw new RuntimeException('L3210 must use its proven A6 profile instead of a custom media size.');
+    $l3210Options=cupsOptions($l3210Label,'L3210-Series');
+    foreach(['PageSize=A6','MediaType=PLAIN_NORMAL','Ink=MONO','print-scaling=none'] as $expected)expectContains($l3210Options,$expected);
+    foreach(['PageSize=B6','scaling=100'] as $unexpected)if(in_array($unexpected,$l3210Options,true))throw new RuntimeException("Unexpected legacy L3210 option: {$unexpected}");
 }
 
 echo "Linux print worker tests passed\n";
