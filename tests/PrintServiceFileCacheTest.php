@@ -21,12 +21,16 @@ try {
     $property->setValue($service, $path);
     $method = new ReflectionMethod(PrintService::class, 'fileAvailabilityCache');
     $cache = $method->invoke($service);
+    $checkMethod = new ReflectionMethod(PrintService::class, 'checkFileAvailability');
+    $availability = $checkMethod->invoke($service, [$path, $path . '.missing']);
 
     $reflection = new ReflectionClass(PrintService::class);
     assert($reflection->getConstant('AVAILABLE_FILE_CACHE_TTL') === 604800);
     assert($reflection->getConstant('MISSING_FILE_CACHE_TTL') === 900);
     assert($cache['/legacy/ready.pdf'] === ['available' => true, 'checked_at' => $savedAt]);
     assert($cache['/current/missing.pdf'] === ['available' => false, 'checked_at' => $savedAt + 30]);
+    assert($availability[$path] === true);
+    assert($availability[$path . '.missing'] === false);
     echo "PrintService file cache tests passed\n";
 } finally {
     @unlink($path);
