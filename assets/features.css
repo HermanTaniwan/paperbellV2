@@ -119,6 +119,9 @@
 .printer-queue-printers b,.printer-queue-jobs b{font-size:10px}.printer-queue-printers small,.printer-queue-jobs small{margin-top:4px;color:var(--muted);font-size:9px}
 .printer-queue-jobs .printer-queue-job{align-items:flex-start;flex-wrap:wrap}
 .printer-queue-jobs .printer-queue-job-name{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.45;color:var(--ink)}
+.printer-queue-job-copy{align-self:center}
+.printer-queue-job-status{display:grid;flex:0 0 auto!important;max-width:145px;justify-items:end;gap:5px;text-align:right}
+.printer-queue-job-status small{max-width:145px;margin-top:0!important;font-size:8px!important}
 .printer-queue-job>.badge{flex:0 0 auto}
 .printer-queue-move{display:grid!important;grid-template-columns:minmax(0,1fr) auto;flex:0 0 100%!important;gap:6px;padding-top:4px}.printer-queue-move select{min-width:0;padding:7px 9px;font-size:9px}.printer-queue-move button{padding:7px 12px;font-size:9px}
 .printer-queue-job-actions{display:flex;flex:0 0 100%!important;gap:6px;padding-top:2px}

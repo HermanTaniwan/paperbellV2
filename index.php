@@ -15,7 +15,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/app.css?v=28">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
-  <link rel="stylesheet" href="assets/features.css?v=25">
+  <link rel="stylesheet" href="assets/features.css?v=26">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
   <link rel="stylesheet" href="assets/theme-pastel.css?v=13">
@@ -1325,13 +1325,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             <h3>Job berjalan</h3>
             <div class="printer-queue-jobs">
               <article v-for="job in queueWidgetAppJobs" :key="job.id" class="printer-queue-job">
-                <div>
-                  <b>#{{job.id}} · {{commandLabel('print_'+job.job_type)}}</b>
-                  <small class="printer-queue-job-name">{{job.order_sn||job.original_name||'Dokumen'}}</small>
-                  <small>{{job.printer||'Printer belum dipilih'}}</small>
-                  <small>{{job.message||'Menunggu pembaruan status'}}</small>
+                <div class="printer-queue-job-copy">
+                  <b>No. Order: {{job.order_sn||'-'}}</b>
+                  <small class="printer-queue-job-name" :title="spoolerProductLabel(job,false)">{{spoolerProductLabel(job)}}</small>
                 </div>
-                <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
+                <div class="printer-queue-job-status">
+                  <span class="badge" :class="statusClass(job.status)">{{job.status==='submitted'?'dikirim ke printer':job.status}}</span>
+                  <small :title="job.printer||''">{{job.printer||'Printer belum dipilih'}}</small>
+                </div>
                 <div class="printer-queue-job-actions">
                   <button v-if="['queued','processing'].includes(job.status)" class="danger-button" type="button" :disabled="!!queueActionKey" @click="jobAction(job,'cancel')">Cancel</button>
                 </div>
@@ -1523,7 +1524,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=122">
+<script src="assets/app.js?v=123">
 </script>
 </body>
 </html>
