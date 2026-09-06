@@ -1346,8 +1346,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <article v-for="job in (queueData.spooler||[])" :key="job.printer+'-'+job.job_id" class="printer-queue-job">
                 <div>
                   <b>Spooler #{{job.job_id}}</b>
-                  <small class="printer-queue-job-name">{{job.document||'Dokumen'}}</small>
-                  <small>{{job.printer}}</small>
+                  <small class="printer-queue-job-name">No. Order: {{job.order_sn||'-'}}</small>
+                  <small :title="spoolerProductLabel(job,false)">{{spoolerProductLabel(job)}}</small>
                 </div>
                 <span class="badge blue">{{job.status||'Queued'}}</span>
                 <div v-if="job.print_job_id&&spoolerMoveTargets(job).length" class="printer-queue-move">
@@ -1523,7 +1523,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=117">
+<script src="assets/app.js?v=118">
 </script>
 </body>
 </html>

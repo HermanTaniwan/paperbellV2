@@ -16,18 +16,23 @@ final class PrintQueueService
 
     public function overview():array
     {
-        $jobs=$this->db->query("SELECT id,job_type,order_sn,order_process_id,original_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path) x ORDER BY id DESC LIMIT 100")->fetchAll();
+        $jobs=$this->db->query("SELECT id,job_type,order_sn,order_process_id,original_name,item_name,model_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name,o.item_name,o.model_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path LEFT JOIN order_process o ON o.id=p.order_process_id) x ORDER BY id DESC LIMIT 100")->fetchAll();
         foreach($jobs as &$row){$row['createdText']=date('d M Y H:i',(int)$row['created_at']);}
         unset($row);
         $spooler=$this->spoolerState();
         $appJobsBySpooler=[];
         foreach($jobs as $job){
             $spoolerJobId=(int)($job['spooler_job_id']??0);
-            if($spoolerJobId>0&&(string)$job['status']==='submitted')$appJobsBySpooler[(string)$job['printer'].'|'.$spoolerJobId]=(int)$job['id'];
+            if($spoolerJobId>0&&(string)$job['status']==='submitted')$appJobsBySpooler[(string)$job['printer'].'|'.$spoolerJobId]=[
+                'print_job_id'=>(int)$job['id'],
+                'order_sn'=>(string)($job['order_sn']??''),
+                'item_name'=>(string)($job['item_name']??''),
+                'model_name'=>(string)($job['model_name']??''),
+            ];
         }
         foreach($spooler['jobs'] as &$spoolerJob){
             $key=(string)($spoolerJob['printer']??'').'|'.(int)($spoolerJob['job_id']??0);
-            $spoolerJob['print_job_id']=$appJobsBySpooler[$key]??null;
+            $spoolerJob=array_merge($spoolerJob,$appJobsBySpooler[$key]??['print_job_id'=>null]);
         }
         unset($spoolerJob);
         $heartbeat=(int)($this->meta('print_worker_heartbeat')?:0);
