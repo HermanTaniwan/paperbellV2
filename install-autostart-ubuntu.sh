@@ -52,7 +52,7 @@ if (( ${#printers[@]} == 0 )); then
 fi
 
 if command -v rclone >/dev/null && [[ -f "/home/${drive_user}/.config/rclone/rclone.conf" ]]; then
-    for command_name in fusermount3 mountpoint runuser; do
+    for command_name in fusermount3 mountpoint runuser setfacl; do
         command -v "${command_name}" >/dev/null || {
             echo "Perintah mount wajib tidak ditemukan: ${command_name}" >&2
             exit 1
@@ -100,6 +100,7 @@ SERVICE
     install -d -o "${drive_user}" -g "${drive_user}" -m 0775 "${drive_mount}"
     systemctl daemon-reload
     systemctl enable --now paperbell-google-drive-mount.service
+    setfacl -m u:www-data:x "/home/${drive_user}"
     for _ in {1..20}; do
         runuser -u www-data -- test -r "${ubuntu_print_root}" && break
         sleep 1
