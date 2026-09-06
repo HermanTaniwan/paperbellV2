@@ -268,6 +268,7 @@ final class PrintQueueService
             $visibleRaw=(string)($this->db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn()?:'');
             $visible=json_decode($visibleRaw,true);$visible=is_array($visible)?array_flip(array_map('strval',$visible)):[];
             $default='';if(preg_match('/^system default destination:\s*(\S+)/mi',$printerOutput,$match))$default=$match[1];
+            $printingRequests=$this->cupsPrintingRequests($printerOutput);
             preg_match_all('/^printer\s+(\S+)\s+/mi',$printerOutput,$availableMatches);$availableNames=$availableMatches[1]??[];
             if($visible&&!array_intersect(array_keys($visible),$availableNames))$visible=[];
             $printers=[];
@@ -287,12 +288,18 @@ final class PrintQueueService
                 $line=trim($line);if($line===''||!preg_match('/^(\S+)-(\d+)\s+(\S+)\s+(\d+)\s*(.*)$/',$line,$match))continue;
                 $requestName=$match[1];$printer=$requestName;foreach($printerNames as $candidate)if($candidate===$requestName){$printer=$candidate;break;}
                 if($visible&&!isset($visible[$printer]))continue;$jobId=(int)$match[2];$jobCounts[$printer]=($jobCounts[$printer]??0)+1;
-                $jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestName.'-'.$jobId,'status'=>'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>0,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>false];
+                $requestId=$requestName.'-'.$jobId;$jobs[]=['printer'=>$printer,'job_id'=>$jobId,'document'=>$requestId,'status'=>isset($printingRequests[$requestId])?'Sedang mencetak':'Menunggu di CUPS','status_mask'=>0,'size'=>(int)$match[4],'pages_printed'=>0,'total_pages'=>0,'age_seconds'=>0,'progress_observed'=>false];
             }
             foreach($printers as &$printer)$printer['queue_count']=(int)($jobCounts[$printer['name']]??0);unset($printer);
             usort($printers,fn($a,$b)=>(int)$b['active']<=>(int)$a['active']?:strnatcasecmp($a['name'],$b['name']));
             $result=['jobs'=>$jobs,'printers'=>$printers,'available'=>true];$this->writeSpoolerCache($result);return$result;
         }catch(Throwable){return($cached['data']??['jobs'=>[],'printers'=>[]])+['available'=>false];}
+    }
+
+    private function cupsPrintingRequests(string $printerOutput):array
+    {
+        preg_match_all('/^printer\s+\S+\s+(?:is\s+)?now\s+printing\s+(\S+?-\d+)(?:\.\s|\s|$)/mi',$printerOutput,$matches);
+        return array_fill_keys(array_map('strval',$matches[1]??[]),true);
     }
 
     private function cupsCommand(array $command):string
