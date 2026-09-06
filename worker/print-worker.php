@@ -224,8 +224,9 @@ function prepareLabelPdf(array $job): string
     global $labelPreparer;
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
     if ($isL3210 && !isWindowsPrintHost()) {
-        logLine("Job #{$job['id']} memakai PDF resi asli untuk profil CUPS A6 L3210");
-        return (string)$job['file_path'];
+        $result=$labelPreparer->preparePreview((string)$job['file_path']);
+        logLine("Job #{$job['id']} memakai PDF yang sama dengan preview resi untuk profil CUPS A6 L3210");
+        return (string)$result['path'];
     }
     $result=$labelPreparer->prepare((string)$job['file_path'],(string)$job['printer']);
     if ($isL3210) {

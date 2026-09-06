@@ -134,54 +134,8 @@ function streamPdf(string $path, string $downloadName): never {
 }
 
 function preparedLabelPdf(string $sourcePath, array $printingConfig): string {
-    $script = __DIR__ . '/tools/prepare_label_pdf.py';
-    $banner = __DIR__ . '/assets/label-unboxing.jpeg';
-    foreach ([$sourcePath, $script, $banner] as $required) {
-        if (!is_file($required)) throw new RuntimeException('Bahan PDF label tidak lengkap: ' . basename($required));
-    }
-
-    $cacheDir = __DIR__ . '/storage/print-labels/previews';
-    if (!is_dir($cacheDir) && !mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
-        throw new RuntimeException('Folder cache preview label tidak dapat dibuat.');
-    }
-    $fingerprint = implode('|', [
-        realpath($sourcePath) ?: $sourcePath,
-        (string)filemtime($sourcePath),
-        (string)filesize($sourcePath),
-        (string)filemtime($script),
-        (string)filemtime($banner),
-    ]);
-    $output = $cacheDir . '/label-preview-' . hash('sha256', $fingerprint) . '.pdf';
-    if (is_file($output) && filesize($output) > 0) return $output;
-
-    $temporary = $output . '.' . bin2hex(random_bytes(5)) . '.tmp';
-    $command = [
-        (string)($printingConfig['python'] ?? 'python'),
-        $script,
-        $sourcePath,
-        $temporary,
-    ];
-    $pipes = [];
-    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, __DIR__, null, ['bypass_shell' => true]);
-    if (!is_resource($process)) throw new RuntimeException('Python penyiapan preview label tidak dapat dijalankan.');
-    $stdout = stream_get_contents($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $exit = proc_close($process);
-    if ($exit !== 0 || !is_file($temporary) || filesize($temporary) < 1) {
-        @unlink($temporary);
-        $detail = trim((string)$stderr) ?: trim((string)$stdout);
-        throw new RuntimeException('Preview label gagal disiapkan.' . ($detail !== '' ? ' ' . $detail : ''));
-    }
-    if (!@rename($temporary, $output)) {
-        if (is_file($output) && filesize($output) > 0) @unlink($temporary);
-        else {
-            @unlink($temporary);
-            throw new RuntimeException('Preview label siap pakai tidak dapat disimpan.');
-        }
-    }
-    return $output;
+    $result=(new LabelPdfPreparer($printingConfig,__DIR__))->preparePreview($sourcePath);
+    return(string)$result['path'];
 }
 
 $action = $_GET['action'] ?? 'dashboard';

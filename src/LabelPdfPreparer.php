@@ -16,13 +16,6 @@ final class LabelPdfPreparer
 
     public function prepare(string $sourcePath,string $printer):array
     {
-        foreach([$sourcePath,$this->script,$this->banner] as $required){
-            if(!is_file($required))throw new RuntimeException('Bahan PDF label tidak lengkap: '.basename($required));
-        }
-        if(!is_dir($this->cacheDir)&&!mkdir($this->cacheDir,0775,true)&&!is_dir($this->cacheDir)){
-            throw new RuntimeException('Folder cache label siap cetak tidak dapat dibuat.');
-        }
-
         $isL3210=stripos($printer,'L3210')!==false;
         $topMarginMm=$isL3210?'4':'2';
         $driverPageMode=$isL3210?'b6':'custom';
@@ -35,6 +28,31 @@ final class LabelPdfPreparer
             $driverPageMode,
         ]);
         $output=$this->cacheDir.'/label-ready-'.hash('sha256',$fingerprint).'.pdf';
+        return$this->prepareTo($sourcePath,$output,$topMarginMm,$driverPageMode);
+    }
+
+    public function preparePreview(string $sourcePath):array
+    {
+        $fingerprint=implode('|',[
+            realpath($sourcePath)?:$sourcePath,
+            (string)filemtime($sourcePath),
+            (string)filesize($sourcePath),
+            (string)filemtime($this->script),
+            (string)filemtime($this->banner),
+        ]);
+        $output=$this->root.'/storage/print-labels/previews/label-preview-'.hash('sha256',$fingerprint).'.pdf';
+        return$this->prepareTo($sourcePath,$output,'2','custom');
+    }
+
+    private function prepareTo(string $sourcePath,string $output,string $topMarginMm,string $driverPageMode):array
+    {
+        foreach([$sourcePath,$this->script,$this->banner] as $required){
+            if(!is_file($required))throw new RuntimeException('Bahan PDF label tidak lengkap: '.basename($required));
+        }
+        $outputDir=dirname($output);
+        if(!is_dir($outputDir)&&!mkdir($outputDir,0775,true)&&!is_dir($outputDir)){
+            throw new RuntimeException('Folder cache label siap cetak tidak dapat dibuat.');
+        }
         if(is_file($output)&&filesize($output)>0)return['path'=>$output,'cached'=>true];
 
         $temporary=$output.'.'.bin2hex(random_bytes(5)).'.tmp';
