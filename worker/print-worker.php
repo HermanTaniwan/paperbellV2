@@ -323,16 +323,19 @@ function labelPrintSettings(string $printer): string
 function cupsOptions(string $printSettings,string $printer): array
 {
     $options=[];
+    $brother=stripos($printer,'Brother')!==false;
     foreach(array_filter(array_map('trim',explode(',',$printSettings))) as $token){
         $lower=strtolower($token);
         if(preg_match('/^\d+(?:-\d*)?$/',$token))$options[]='page-ranges='.$token;
         elseif(in_array($lower,['odd','even'],true))$options[]='page-set='.$lower;
-        elseif($lower==='simplex')$options[]='sides=one-sided';
-        elseif($lower==='duplexlong')$options[]='sides=two-sided-long-edge';
-        elseif($lower==='duplexshort')$options[]='sides=two-sided-short-edge';
+        elseif($lower==='simplex')$options[]=$brother?'Duplex=None':'sides=one-sided';
+        elseif($lower==='duplexlong')$options[]=$brother?'Duplex=DuplexNoTumble':'sides=two-sided-long-edge';
+        elseif($lower==='duplexshort')$options[]=$brother?'Duplex=DuplexTumble':'sides=two-sided-short-edge';
         elseif($lower==='monochrome'){$options[]='print-color-mode=monochrome';$options[]='ColorModel=Gray';}
         elseif($lower==='color')$options[]='print-color-mode=color';
-        elseif($lower==='noscale')$options[]='scaling=100';
+        elseif($lower==='noscale'&&!$brother)$options[]='scaling=100';
+        elseif($lower==='paper=a5'&&$brother){$options[]='PageSize=A5';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
+        elseif($lower==='paper=b5'&&$brother){$options[]='PageSize=Custom.182x257mm';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
         elseif($lower==='paper=a5')$options[]='media=iso_a5_148x210mm';
         elseif($lower==='paper=b5')$options[]='media=Custom.182x257mm';
         elseif(str_starts_with($lower,'paper='))$options[]='media='.substr($token,6);
