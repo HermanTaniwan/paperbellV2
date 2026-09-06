@@ -602,7 +602,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 
       <section v-if="view==='server-health'" class="content server-health-page">
         <article v-if="serverHealth" class="panel health-overview" :class="serverHealth.status">
-          <div><span class="eyebrow">WINDOWS HOST</span><h2>Server Health</h2><p>Data dikumpulkan di server dan di-cache selama satu menit.</p></div>
+          <div><span class="eyebrow">{{(serverHealth.platform||'SERVER')+' HOST'}}</span><h2>Server Health</h2><p>Data dikumpulkan di server dan di-cache selama satu menit.</p></div>
           <strong class="health-badge" :class="serverHealth.status">{{healthStatus(serverHealth.status)}}</strong>
         </article>
         <p v-else class="health-empty">Memuat metrik server…</p>
@@ -614,7 +614,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             <article class="panel health-card"><span>Uptime</span><strong class="health-uptime">{{uptimeText(serverHealth.uptime_seconds)}}</strong><small>{{serverHealth.hostname||'N/A'}}</small></article>
           </section>
           <article class="panel health-storage"><div class="panel-head"><div><h3>Storage</h3><p>Kapasitas seluruh drive lokal/fixed.</p></div></div><div class="health-disk-grid"><div v-for="disk in serverHealth.disks||[]" :key="disk.letter" class="health-disk"><div><b>{{disk.letter}}</b><strong>{{healthPercent(disk.usage_percent)}}</strong></div><i><em :style="{width:Math.min(100,Number(disk.usage_percent)||0)+'%'}"></em></i><small>{{bytes(disk.used_bytes)}} / {{bytes(disk.total_bytes)}} · bebas {{bytes(disk.free_bytes)}}</small></div><p v-if="!(serverHealth.disks||[]).length">Tidak ada disk yang dapat dibaca.</p></div></article>
-          <article class="panel health-hardware"><div class="panel-head"><div><h3>Hardware</h3><p>Sensor yang tidak tersedia ditampilkan sebagai N/A.</p></div></div><dl><div><dt>CPU Temperature</dt><dd>{{serverHealth.cpu_temperature===null?'N/A':serverHealth.cpu_temperature+'°C'}}</dd></div><div v-for="disk in serverHealth.physical_disks||[]" :key="disk.name"><dt>{{disk.name||'Physical disk'}}</dt><dd>{{disk.health||'N/A'}}<template v-if="disk.temperature!==null"> · {{disk.temperature}}°C</template></dd></div><div v-if="!(serverHealth.physical_disks||[]).length"><dt>Disk health</dt><dd>N/A</dd></div></dl></article>
+          <article class="panel health-hardware"><div class="panel-head"><div><h3>Hardware</h3><p>Sensor yang tidak tersedia ditampilkan sebagai N/A.</p></div></div><dl><div><dt>CPU Temperature</dt><dd>{{serverHealth.cpu_temperature===null?'N/A':serverHealth.cpu_temperature+'°C'}}</dd></div><div v-for="disk in serverHealth.physical_disks||[]" :key="disk.device||disk.name"><dt>{{disk.name||disk.device||'Physical disk'}}</dt><dd>{{disk.health||disk.operational_status||'N/A'}}<template v-if="disk.temperature!==null"> · {{disk.temperature}}°C</template></dd></div><div v-if="!(serverHealth.physical_disks||[]).length"><dt>Disk health</dt><dd>N/A</dd></div></dl></article>
           <article class="panel health-server"><dl><div><dt>Hostname</dt><dd>{{serverHealth.hostname||'N/A'}}</dd></div><div><dt>Server time</dt><dd>{{serverHealth.server_time?new Date(serverHealth.server_time).toLocaleString('id-ID'):'N/A'}}</dd></div><div><dt>Last health check</dt><dd>{{timeText(serverHealth.checked_at)}}<template v-if="serverHealth.age_seconds!==null"> · {{serverHealth.age_seconds}} dtk lalu</template></dd></div></dl></article>
         </template>
       </section>
