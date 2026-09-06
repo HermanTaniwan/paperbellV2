@@ -16,4 +16,15 @@ assert($requests === [
     'Backup-7'=>true,
 ]);
 
+$completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
+$completed=$completedMethod->invoke($service,[
+    ['id'=>101,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>68],
+    ['id'=>102,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>69],
+    ['id'=>103,'printer'=>'Legacy','spooler_job_id'=>null,'submitted_at'=>time()-601],
+    ['id'=>104,'printer'=>'Unknown','spooler_job_id'=>null,'submitted_at'=>time()],
+],[
+    ['printer'=>'EPSON_WF_C5390_Series','job_id'=>68],
+]);
+assert($completed === [102,103]);
+
 echo "Print queue service tests passed\n";

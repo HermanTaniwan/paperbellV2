@@ -16,10 +16,11 @@ final class PrintQueueService
 
     public function overview():array
     {
+        $spooler=$this->spoolerState();
+        $this->reconcileSubmittedJobs($spooler);
         $jobs=$this->db->query("SELECT id,job_type,order_sn,order_process_id,original_name,item_name,model_name,status,message,error,printer,print_settings,copies,attempts,created_by,created_at,started_at,completed_at,submitted_at,spooler_job_id FROM (SELECT p.*,m.original_name,o.item_name,o.model_name FROM print_jobs p LEFT JOIN manual_pdfs m ON p.job_type IN ('manual','random') AND p.file_path=m.file_path LEFT JOIN order_process o ON o.id=p.order_process_id) x ORDER BY id DESC LIMIT 100")->fetchAll();
         foreach($jobs as &$row){$row['createdText']=date('d M Y H:i',(int)$row['created_at']);}
         unset($row);
-        $spooler=$this->spoolerState();
         $appJobsBySpooler=[];
         foreach($jobs as $job){
             $spoolerJobId=(int)($job['spooler_job_id']??0);
@@ -61,7 +62,7 @@ final class PrintQueueService
             $stmt=$this->db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE id=?");$stmt->execute([$id]);
             $resolve=$this->db->prepare("UPDATE printer_incidents SET status='resolved',active_key=NULL,resolved_at=?,healthy_count=2 WHERE print_job_id=? AND status IN ('pending','active')");$resolve->execute([time(),$id]);
         }
-        elseif($action==='delete'){if(in_array($status,['queued','processing'],true))throw new RuntimeException('Job aktif tidak dapat dihapus.');$stmt=$this->db->prepare('DELETE FROM print_jobs WHERE id=?');$stmt->execute([$id]);}
+        elseif($action==='delete'){if(in_array($status,['queued','processing','submitted','moving','cancel_requested'],true))throw new RuntimeException('Job aktif tidak dapat dihapus.');$stmt=$this->db->prepare('DELETE FROM print_jobs WHERE id=?');$stmt->execute([$id]);}
         else throw new InvalidArgumentException('Aksi job tidak valid.');return['ok'=>true];
     }
 
@@ -74,7 +75,7 @@ final class PrintQueueService
         return['ok'=>true];
     }
 
-    public function clearCompleted():int{$stmt=$this->db->prepare("DELETE FROM print_jobs WHERE status IN ('completed','submitted')");$stmt->execute();return$stmt->rowCount();}
+    public function clearCompleted():int{$stmt=$this->db->prepare("DELETE FROM print_jobs WHERE status='completed'");$stmt->execute();return$stmt->rowCount();}
 
     public function spoolerAction(string $printer,int $jobId,string $action):array
     {
@@ -82,7 +83,7 @@ final class PrintQueueService
             if($printer===''||$jobId<=0)throw new InvalidArgumentException('Printer dan ID spooler wajib diisi.');
             $request=$printer.'-'.$jobId;
             $command=match($action){'pause'=>['lp','-i',$request,'-H','hold'],'resume'=>['lp','-i',$request,'-H','resume'],'cancel'=>['cancel',$request],default=>throw new InvalidArgumentException('Aksi spooler tidak valid.')};
-            $this->cupsCommand($command);@unlink($this->spoolerCacheFile);return['ok'=>true];
+            $this->cupsCommand($command);if($action==='cancel')$this->markSpoolerJobCancelled($printer,$jobId);@unlink($this->spoolerCacheFile);return['ok'=>true];
         }
         if($printer===''||$jobId<=0)throw new InvalidArgumentException('Printer dan ID spooler wajib diisi.');$verb=match($action){'pause'=>'Suspend-PrintJob','resume'=>'Resume-PrintJob','cancel'=>'Remove-PrintJob',default=>throw new InvalidArgumentException('Aksi spooler tidak valid.')};
         $p64=base64_encode(mb_convert_encoding($printer,'UTF-16LE','UTF-8'));
@@ -90,7 +91,30 @@ final class PrintQueueService
         $script.=$action==='cancel'
             ? "Remove-PrintJob -PrinterName \$p -ID {$jobId} -ErrorAction Stop"
             : "Get-PrintJob -PrinterName \$p -ID {$jobId} | {$verb} -ErrorAction Stop";
-        $this->powershell($script);@unlink($this->spoolerCacheFile);return['ok'=>true];
+        $this->powershell($script);if($action==='cancel')$this->markSpoolerJobCancelled($printer,$jobId);@unlink($this->spoolerCacheFile);return['ok'=>true];
+    }
+
+    private function reconcileSubmittedJobs(array $spooler):void
+    {
+        if(!(bool)($spooler['available']??false))return;
+        $submitted=$this->db->query("SELECT id,printer,spooler_job_id,submitted_at FROM print_jobs WHERE status='submitted'")->fetchAll();
+        $complete=$this->db->prepare("UPDATE print_jobs SET status='completed',message='Selesai diproses CUPS',completed_at=? WHERE id=? AND status='submitted'");$now=time();
+        foreach($this->completedSubmittedJobIds($submitted,$spooler['jobs']??[]) as $id)$complete->execute([$now,$id]);
+    }
+
+    private function completedSubmittedJobIds(array $submitted,array $spoolerJobs):array
+    {
+        $active=[];
+        foreach($spoolerJobs as $job)$active[(string)($job['printer']??'').'|'.(int)($job['job_id']??0)]=true;
+        $completed=[];$unknownCutoff=time()-600;
+        foreach($submitted as $job){$spoolerJobId=(int)($job['spooler_job_id']??0);if($spoolerJobId<=0){if((int)($job['submitted_at']??0)>0&&(int)$job['submitted_at']<$unknownCutoff)$completed[]=(int)$job['id'];continue;}$key=(string)$job['printer'].'|'.$spoolerJobId;if(!isset($active[$key]))$completed[]=(int)$job['id'];}
+        return$completed;
+    }
+
+    private function markSpoolerJobCancelled(string $printer,int $jobId):void
+    {
+        $stmt=$this->db->prepare("UPDATE print_jobs SET status='cancelled',message='Dibatalkan dari antrean printer',completed_at=? WHERE printer=? AND spooler_job_id=? AND status='submitted'");
+        $stmt->execute([time(),$printer,$jobId]);
     }
 
     public function moveSpoolerJob(string $printer,int $jobId,string $targetPrinter):array

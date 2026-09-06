@@ -169,7 +169,7 @@ final class PrintService
         $inventory=[];$inventoryCandidates=array_values(array_unique($inventoryCandidates));
         if($inventoryCandidates){$inventoryMarks=implode(',',array_fill(0,count($inventoryCandidates),'?'));$inventoryStmt=$this->db->prepare("SELECT item_key,qty FROM product_inventory WHERE item_key IN ($inventoryMarks)");$inventoryStmt->execute($inventoryCandidates);foreach($inventoryStmt->fetchAll() as $stock)$inventory[$this->norm((string)$stock['item_key'])]=(int)$stock['qty'];}
         $activeLineIds=[];
-        $active=$this->db->query("SELECT order_process_id FROM print_jobs WHERE job_type='product' AND order_process_id IS NOT NULL AND status IN ('queued','processing')");
+        $active=$this->db->query("SELECT order_process_id FROM print_jobs WHERE job_type='product' AND order_process_id IS NOT NULL AND status IN ('queued','processing','submitted','moving','cancel_requested')");
         foreach($active->fetchAll(PDO::FETCH_COLUMN) as $lineId)$activeLineIds[(int)$lineId]=true;
         $printers=$this->configuredPrinters();$result=[];$fileAvailability=$this->fileAvailabilityCache();$now=time();$pathsToCheck=[];
         foreach($resolved as $entry){$path=(string)($entry['mapping']['file_path']??'');if($path==='')continue;$cachedAvailability=$fileAvailability[$path]??null;$cacheTtl=($cachedAvailability['available']??false)?self::AVAILABLE_FILE_CACHE_TTL:self::MISSING_FILE_CACHE_TTL;if(!is_array($cachedAvailability)||(int)($cachedAvailability['checked_at']??0)<$now-$cacheTtl)$pathsToCheck[$path]=true;}
@@ -255,8 +255,15 @@ final class PrintService
 
     private function insertJob(string $type,string $sn,?int $lineId,string $file,string $printer,string $settings,int $copies,string $user): int
     {
-        $dup=$this->db->prepare("SELECT id FROM print_jobs WHERE job_type=? AND order_sn=? AND COALESCE(order_process_id,0)=COALESCE(?,0) AND file_path=? AND status IN ('queued','processing') LIMIT 1");$dup->execute([$type,$sn,$lineId,$file]);$id=$dup->fetchColumn();if($id!==false)return(int)$id;
-        $stmt=$this->db->prepare("INSERT INTO print_jobs(job_type,order_sn,order_process_id,file_path,printer,print_settings,copies,status,message,error,created_by,created_at) VALUES(?,?,?,?,?,?,?,'queued','Menunggu worker printer','',?,?)");$stmt->execute([$type,$sn,$lineId,$file,$printer,$settings,$copies,$user,time()]);return(int)$this->db->lastInsertId();
+        $lockName='paperbell:print:'.sha1(implode('|',[$type,$sn,(string)($lineId??0),$file]));
+        $lock=$this->db->prepare('SELECT GET_LOCK(?,5)');$lock->execute([$lockName]);
+        if((int)$lock->fetchColumn()!==1)throw new RuntimeException('Permintaan cetak sedang diproses. Tunggu sebentar lalu muat ulang antrean.');
+        try{
+            $dup=$this->db->prepare("SELECT id FROM print_jobs WHERE job_type=? AND order_sn=? AND COALESCE(order_process_id,0)=COALESCE(?,0) AND file_path=? AND status IN ('queued','processing','submitted','moving','cancel_requested') ORDER BY id DESC LIMIT 1");$dup->execute([$type,$sn,$lineId,$file]);$id=$dup->fetchColumn();if($id!==false)return(int)$id;
+            $stmt=$this->db->prepare("INSERT INTO print_jobs(job_type,order_sn,order_process_id,file_path,printer,print_settings,copies,status,message,error,created_by,created_at) VALUES(?,?,?,?,?,?,?,'queued','Menunggu worker printer','',?,?)");$stmt->execute([$type,$sn,$lineId,$file,$printer,$settings,$copies,$user,time()]);return(int)$this->db->lastInsertId();
+        }finally{
+            $release=$this->db->prepare('SELECT RELEASE_LOCK(?)');$release->execute([$lockName]);
+        }
     }
 
     private function resolveMapping(array $line): ?array
