@@ -511,42 +511,42 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <div class="inline-item-summary">
 <b>{{line.qty}} pcs</b>
-<span class="badge" :class="line.queued?'blue':(line.printed?'green':(line.print_ready?'amber':'red'))">{{line.queued?'Dalam antrean':(line.printed?'Tercetak':(line.print_ready?'Siap cetak':'Tidak siap'))}}</span>
+<span class="badge" :class="itemPrintActive(line)?'blue':(line.printed?'green':(line.print_ready?'amber':'red'))">{{itemPrintActive(line)?'Dalam antrean':(line.printed?'Tercetak':(line.print_ready?'Siap cetak':'Tidak siap'))}}</span>
 <small v-if="line.printed&&line.printed_at">Dicetak {{timeText(line.printed_at)}}</small>
 <small v-if="line.printed_odd||line.printed_even">Ganjil {{line.printed_odd?'✓':'—'}} · Genap {{line.printed_even?'✓':'—'}}</small>
 </div>
-<label class="inline-printer">Printer<select v-model="line.selected_printer" :disabled="!line.print_ready||line.queued">
+<label class="inline-printer">Printer<select v-model="line.selected_printer" :disabled="!line.print_ready||itemPrintActive(line)">
 <option value="">Pilih printer…</option>
 <option v-for="printer in pageData.printers" :value="printer">{{printer}}</option>
 </select>
 <small v-if="!line.printer_available&&line.default_printer" class="text-warning">Default mapping tidak tersedia</small>
 </label>
 <div class="inline-item-actions">
-<button class="inline-print-button" :class="{ghost:line.printed}" :disabled="!line.print_ready||!line.selected_printer||line.queueing||line.queued" @click="printItem(line)">{{line.queueing?'Mengantre…':(line.printed?'Cetak ulang':'Cetak item')}}</button>
+<button class="inline-print-button" :class="{ghost:line.printed}" :disabled="!line.print_ready||!line.selected_printer||itemPrintActive(line)" @click="printItem(line)">{{line.queueing?'Mengantre…':(itemPrintActive(line)?'Dalam antrean…':(line.printed?'Cetak ulang':'Cetak item'))}}</button>
 <button class="ghost mark-printed-button" :class="{revert:line.printed}" :disabled="line.marking_printed" @click="setOrderItemPrinted(line,!line.printed)">{{line.marking_printed?'Menyimpan…':(line.printed?'Belum tercetak':'Sudah dicetak')}}</button>
 <button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" @click="useInventory(line)">Gunakan inventory ({{line.inventory_qty}})</button>
 </div>
 <details class="advanced-print inline-advanced">
 <summary>Pengaturan cetak item</summary>
 <div class="print-options-grid">
-<label>Halaman dari<input type="number" min="1" v-model.number="line.print_options.page_from" :disabled="line.queued">
+<label>Halaman dari<input type="number" min="1" v-model.number="line.print_options.page_from" :disabled="itemPrintActive(line)">
 </label>
-<label>Sampai<input type="number" min="0" v-model.number="line.print_options.page_to" :disabled="line.queued">
+<label>Sampai<input type="number" min="0" v-model.number="line.print_options.page_to" :disabled="itemPrintActive(line)">
 <small>0 = akhir PDF</small>
 </label>
-<label>Pilihan halaman<select v-model="line.print_options.parity" :disabled="line.queued" @change="normalizePrintSide(line)">
+<label>Pilihan halaman<select v-model="line.print_options.parity" :disabled="itemPrintActive(line)" @change="normalizePrintSide(line)">
 <option value="all">Semua halaman</option>
 <option value="odd">Ganjil saja</option>
 <option value="even">Genap saja</option>
 </select>
 </label>
-<label>Sisi cetak<select v-model="line.print_options.duplex" :disabled="line.queued||line.print_options.parity!=='all'">
+<label>Sisi cetak<select v-model="line.print_options.duplex" :disabled="itemPrintActive(line)||line.print_options.parity!=='all'">
 <option value="simplex">Simplex / satu sisi</option>
 <option value="duplexlong">Duplex sisi panjang</option>
 <option value="duplexshort">Duplex sisi pendek</option>
 </select>
 </label>
-<label>Ukuran kertas<select v-model="line.print_options.paper" :disabled="line.queued">
+<label>Ukuran kertas<select v-model="line.print_options.paper" :disabled="itemPrintActive(line)">
 <option value="DEFAULT">Default / ikuti driver</option>
 <option value="A4">A4</option>
 <option value="A5">A5</option>
@@ -554,7 +554,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <option value="B5">B5 JIS</option>
 </select>
 </label>
-<label>Copies total<input type="number" min="1" max="99" v-model.number="line.print_options.copies" :disabled="line.queued">
+<label>Copies total<input type="number" min="1" max="99" v-model.number="line.print_options.copies" :disabled="itemPrintActive(line)">
 </label>
 </div>
 </details>
