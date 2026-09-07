@@ -6,6 +6,7 @@ final class PrintQueueService
     private string $spoolerCacheFile;
     private string $notificationScript;
     private string $cupsProgressTest;
+    private string $cupsPrinterStateTest;
 
     public function __construct(private PDO $db)
     {
@@ -13,6 +14,7 @@ final class PrintQueueService
         $this->spoolerCacheFile=$root.'/storage/printer-spooler-cache.json';
         $this->notificationScript=$root.'/tools/show-printer-notification.ps1';
         $this->cupsProgressTest=$root.'/tools/cups-job-progress.test';
+        $this->cupsPrinterStateTest=$root.'/tools/cups-printer-state.test';
         $this->ensureIncidentTable();
     }
 
@@ -323,6 +325,13 @@ final class PrintQueueService
             $printingRequests=$this->cupsPrintingRequests($printerOutput);
             preg_match_all('/^printer\s+(\S+)\s+/mi',$printerOutput,$availableMatches);$availableNames=$availableMatches[1]??[];
             if($visible&&!array_intersect(array_keys($visible),$availableNames))$visible=[];
+            $printerStates=[];
+            if(is_file($this->cupsPrinterStateTest)&&is_executable('/usr/bin/ipptool')){
+                foreach($availableNames as $printerName){
+                    if($visible&&!isset($visible[$printerName]))continue;
+                    try{$printerStates[$printerName]=$this->cupsPrinterStateRows($this->cupsCommand(['ipptool','-c',$this->cupsLocalPrinterUri($printerName),$this->cupsPrinterStateTest]));}catch(Throwable){}
+                }
+            }
             $printers=[];
             foreach(preg_split('/\R/',trim($printerOutput))?:[] as $line){
                 if(!preg_match('/^printer\s+(\S+)\s+(.+)$/i',trim($line),$match))continue;
@@ -333,6 +342,13 @@ final class PrintQueueService
                 if(str_contains($lower,'paper jam')){$status='Kertas tersangkut';$errorType='paper_jam';}
                 elseif(str_contains($lower,'out of paper')||str_contains($lower,'media-empty')){$status='Kertas habis';$errorType='out_of_paper';}
                 elseif(str_contains($lower,'offline')||str_contains($lower,'unable to locate')){$status='Offline';$errorType='printer_offline';}
+                $ipp=$printerStates[$name]??[];$reason=strtolower((string)($ipp['printer-state-reasons']??''));$message=trim((string)($ipp['printer-state-message']??''));
+                if(preg_match('/(?:media-empty|media-needed|out[- ]of[- ]paper)/',$reason.' '.$message)){$status='Kertas habis';$errorType='out_of_paper';}
+                elseif(preg_match('/(?:media-jam|paper-jam|jammed)/',$reason.' '.$message)){$status='Kertas tersangkut';$errorType='paper_jam';}
+                elseif(str_contains($reason,'paused')){$status='Dijeda';$errorType='paused';}
+                elseif(preg_match('/(?:door-open|shutdown|stopped|other-error)/',$reason)){$status='Printer memerlukan tindakan';$errorType='printer_error';}
+                if($message!==''&&strtolower($message)!==strtolower($detail))$detail.=' · IPP: '.$message;
+                if($reason!==''&&$reason!=='none')$detail.=' · Alasan IPP: '.$reason;
                 $printers[]=['name'=>$name,'active'=>$errorType==='','status'=>$status,'status_code'=>$disabled?6:3,'error_type'=>$errorType,'diagnostic'=>$detail,'is_default'=>$name===$default,'port'=>'CUPS','queue_count'=>0];
             }
             $printerNames=array_column($printers,'name');usort($printerNames,fn($a,$b)=>strlen($b)<=>strlen($a));$jobs=[];$jobCounts=[];$pageProgress=$this->cupsPageProgress($jobOutput);
@@ -363,6 +379,18 @@ final class PrintQueueService
             if($requestId!==''&&preg_match('/^Status:.*Processing page\s+(\d+)/i',$line,$match))$progress[$requestId]=(int)$match[1];
         }
         return$progress;
+    }
+
+    private function cupsLocalPrinterUri(string $printer):string
+    {
+        return 'ipp://localhost:631/printers/'.rawurlencode($printer);
+    }
+
+    private function cupsPrinterStateRows(string $csv):array
+    {
+        $lines=array_values(array_filter(preg_split('/\R/',trim($csv))?:[],fn(string $line):bool=>trim($line)!==''));if(count($lines)<2)return[];
+        $headers=str_getcsv(array_shift($lines));$values=str_getcsv($lines[0]);$row=array_combine($headers,array_slice(array_pad($values,count($headers),''),0,count($headers)));
+        return is_array($row)?array_map('strval',$row):[];
     }
 
     private function cupsDirectPrinterUri(string $printer,string $deviceOutput):string

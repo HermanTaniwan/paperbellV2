@@ -41,6 +41,20 @@ $ippProgress=$ippProgressMethod->invoke($service,implode("\n",[
 ]));
 assert($ippProgress === 10);
 
+$printerStateMethod=new ReflectionMethod(PrintQueueService::class,'cupsPrinterStateRows');
+$printerState=$printerStateMethod->invoke($service,implode("\n",[
+    'printer-state,printer-state-reasons,printer-state-message',
+    '5,media-empty,Load paper in Tray 1',
+]));
+assert($printerState === [
+    'printer-state'=>'5',
+    'printer-state-reasons'=>'media-empty',
+    'printer-state-message'=>'Load paper in Tray 1',
+]);
+
+$printerUriMethod=new ReflectionMethod(PrintQueueService::class,'cupsLocalPrinterUri');
+assert($printerUriMethod->invoke($service,'EPSON WF-C5390') === 'ipp://localhost:631/printers/EPSON%20WF-C5390');
+
 $completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
 $completed=$completedMethod->invoke($service,[
     ['id'=>101,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>68],
