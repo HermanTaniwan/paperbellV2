@@ -9,6 +9,11 @@ function expectContains(array $values,string $expected):void
     if(!in_array($expected,$values,true))throw new RuntimeException("Missing CUPS option: {$expected}");
 }
 
+function expectSame(array $actual,array $expected,string $message):void
+{
+    if($actual!==$expected)throw new RuntimeException($message.' Expected '.json_encode($expected).', got '.json_encode($actual));
+}
+
 $options=cupsOptions('2-7,odd,duplexlong,noscale,paper=B5,bin=261','EPSON_WF_C5390_Series');
 foreach(['page-ranges=2-7','page-set=odd','sides=two-sided-long-edge','scaling=100','media=Custom.182x257mm','InputSlot=Rear','cupsPrintQuality=High'] as $expected){
     expectContains($options,$expected);
@@ -22,6 +27,20 @@ foreach(['page-ranges=3-4','Duplex=DuplexNoTumble','PageSize=A5','InputSlot=Tray
 foreach(['sides=two-sided-long-edge','scaling=100','media=iso_a5_148x210mm'] as $unexpected){
     if(in_array($unexpected,$brotherOptions,true))throw new RuntimeException("Unexpected generic Brother option: {$unexpected}");
 }
+
+// Multiple packs must stay together: the printer must receive an explicit
+// collation request, rather than relying on the queue default (often page 1
+// x N, then page 2 x N).
+$command=cupsPrintCommand('EPSON_WF_C5390_Series','1-,simplex',5,'/tmp/hiragana.pdf');
+expectSame($command,[
+    'lp','-d','EPSON_WF_C5390_Series','-n','5',
+    '-o','Collate=True',
+    '-o','multiple-document-handling=separate-documents-collated-copies',
+    '-o','page-ranges=1-',
+    '-o','sides=one-sided',
+    '-o','cupsPrintQuality=High',
+    '/tmp/hiragana.pdf',
+],'CUPS copies command is not collated.');
 
 $brotherB5Options=cupsOptions('1-,simplex,noscale,paper=B5','Brother_DCP_T830DW');
 foreach(['Duplex=None','PageSize=Custom.182x257mm','InputSlot=Tray1','MediaType=Stationery'] as $expected){

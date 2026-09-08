@@ -366,15 +366,34 @@ function cupsOptions(string $printSettings,string $printer): array
     return array_values(array_unique($options));
 }
 
+function cupsPrintCommand(string $printer,string $printSettings,int $copies,string $path): array
+{
+    $copies=max(1,$copies);
+    $command=['lp','-d',$printer,'-n',(string)$copies];
+    // Some CUPS/IPP printer profiles default multiple copies to uncollated
+    // output (page 1 x N, then page 2 x N).  State collation explicitly so
+    // each pack is printed as one complete document before the next pack.
+    // Keep both spellings: Collate is understood by PPD-based queues while
+    // multiple-document-handling is the standard IPP attribute used by
+    // driverless queues.
+    if ($copies > 1) {
+        $command[]='-o';
+        $command[]='Collate=True';
+        $command[]='-o';
+        $command[]='multiple-document-handling=separate-documents-collated-copies';
+    }
+    foreach(cupsOptions($printSettings,$printer) as $option){$command[]='-o';$command[]=$option;}
+    $command[]=$path;
+    return $command;
+}
+
 function submitPdfToHost(string $sumatra,string $printer,string $printSettings,int $copies,string $path):?int
 {
     if(isWindowsPrintHost()){
         runProcess([$sumatra,'-print-to',$printer,'-print-settings',$printSettings,'-silent',$path],'Gagal menjalankan SumatraPDF.');
         return null;
     }
-    $command=['lp','-d',$printer,'-n',(string)max(1,$copies)];
-    foreach(cupsOptions($printSettings,$printer) as $option){$command[]='-o';$command[]=$option;}
-    $command[]=$path;
+    $command=cupsPrintCommand($printer,$printSettings,$copies,$path);
     $output=runProcess($command,'Gagal mengirim dokumen ke CUPS.');
     return preg_match('/request id is\s+\S+-(\d+)/i',$output,$match)?(int)$match[1]:null;
 }
