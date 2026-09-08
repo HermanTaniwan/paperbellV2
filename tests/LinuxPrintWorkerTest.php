@@ -34,7 +34,7 @@ foreach(['sides=two-sided-long-edge','scaling=100','media=iso_a5_148x210mm'] as 
 $command=cupsPrintCommand('EPSON_WF_C5390_Series','1-,simplex',5,'/tmp/hiragana.pdf');
 expectSame($command,[
     'lp','-d','EPSON_WF_C5390_Series','-n','5',
-    '-o','outputorder=normal',
+    '-o','outputorder=reverse',
     '-o','Collate=True',
     '-o','multiple-document-handling=separate-documents-collated-copies',
     '-o','page-ranges=1-',
@@ -42,6 +42,9 @@ expectSame($command,[
     '-o','cupsPrintQuality=High',
     '/tmp/hiragana.pdf',
 ],'CUPS copies command is not collated.');
+
+$duplexCommand=cupsPrintCommand('EPSON_WF_C5390_Series','1-,duplexlong',1,'/tmp/hiragana.pdf');
+expectContains($duplexCommand,'outputorder=normal');
 
 $brotherB5Options=cupsOptions('1-,simplex,noscale,paper=B5','Brother_DCP_T830DW');
 foreach(['Duplex=None','PageSize=Custom.182x257mm','InputSlot=Tray1','MediaType=Stationery'] as $expected){
