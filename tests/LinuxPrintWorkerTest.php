@@ -34,6 +34,7 @@ foreach(['sides=two-sided-long-edge','scaling=100','media=iso_a5_148x210mm'] as 
 $command=cupsPrintCommand('EPSON_WF_C5390_Series','1-,simplex',5,'/tmp/hiragana.pdf');
 expectSame($command,[
     'lp','-d','EPSON_WF_C5390_Series','-n','5',
+    '-o','outputorder=normal',
     '-o','Collate=True',
     '-o','multiple-document-handling=separate-documents-collated-copies',
     '-o','page-ranges=1-',

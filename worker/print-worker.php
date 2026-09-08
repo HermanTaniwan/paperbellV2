@@ -370,6 +370,10 @@ function cupsPrintCommand(string $printer,string $printSettings,int $copies,stri
 {
     $copies=max(1,$copies);
     $command=['lp','-d',$printer,'-n',(string)$copies];
+    // Do not inherit a queue/driver preference that ejects the final page
+    // first. Product PDFs must leave the printer in document order: 1 → 20.
+    $command[]='-o';
+    $command[]='outputorder=normal';
     // Some CUPS/IPP printer profiles default multiple copies to uncollated
     // output (page 1 x N, then page 2 x N).  State collation explicitly so
     // each pack is printed as one complete document before the next pack.
