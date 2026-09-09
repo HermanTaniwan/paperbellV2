@@ -116,6 +116,35 @@ function readableProcessError(string $rawError, string $fallback): string
     return $fallback;
 }
 
+function isCupsEpsonThrottledPrinter(string $printer): bool
+{
+    return PHP_OS_FAMILY !== 'Windows' && preg_match('/epson[ _-]*wf[ _-]*c[ _-]*5390/i', $printer) === 1;
+}
+
+function cupsEpsonSubmissionGateReason(string $printer,string $printerOutput,string $jobOutput): ?string
+{
+    if (!isCupsEpsonThrottledPrinter($printer)) return null;
+    if (preg_match('/^printer\s+'.preg_quote($printer,'/').'\s+.*\bdisabled\b/mi',$printerOutput)) {
+        return 'Antrean CUPS Epson dijeda; job ditahan sampai printer diaktifkan ulang.';
+    }
+    if (preg_match('/^'.preg_quote($printer,'/').'-\d+\s+/mi',$jobOutput)) {
+        return 'Menunggu CUPS Epson kosong (maksimum 1 job aktif).';
+    }
+    return null;
+}
+
+function cupsSubmissionGateReason(string $printer): ?string
+{
+    if (!isCupsEpsonThrottledPrinter($printer)) return null;
+    try {
+        $printerOutput=runProcess(['lpstat','-p',$printer],'Gagal membaca status antrean CUPS Epson.');
+        $jobOutput=runProcess(['lpstat','-W','not-completed','-o',$printer],'Gagal membaca job aktif CUPS Epson.');
+        return cupsEpsonSubmissionGateReason($printer,$printerOutput,$jobOutput);
+    } catch (Throwable) {
+        return 'Status CUPS Epson belum dapat dibaca; job ditahan agar tidak menambah antrean printer.';
+    }
+}
+
 function powershellEncoded(string $script, string $failureMessage): string
 {
     $encoded = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
@@ -422,11 +451,22 @@ do {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
         $db->beginTransaction();
-        $job = $db->query("SELECT * FROM print_jobs WHERE status='queued' ORDER BY id LIMIT 1 FOR UPDATE")->fetch();
+        $candidates = $db->query("SELECT * FROM print_jobs WHERE status='queued' ORDER BY id LIMIT 25 FOR UPDATE")->fetchAll();
+        $gateMessages=[];
+        foreach($candidates as $candidate){
+            $candidatePrinter=printPrinterForJob($candidate,(string)$candidate['print_settings']);
+            $gateReason=cupsSubmissionGateReason($candidatePrinter);
+            if($gateReason===null){$job=$candidate;break;}
+            $gateMessages[(int)$candidate['id']]=$gateReason;
+        }
         if (!$job) {
+            if($gateMessages){
+                $waiting=$db->prepare("UPDATE print_jobs SET message=? WHERE id=? AND status='queued' AND message<>?");
+                foreach($gateMessages as $id=>$message)$waiting->execute([$message,$id,$message]);
+            }
             $db->commit();
             if ($once) break;
-            usleep(500000);
+            usleep(1000000);
             continue;
         }
         $claim = $db->prepare("UPDATE print_jobs SET status='processing',message='Menyiapkan dokumen',started_at=?,attempts=attempts+1 WHERE id=? AND status='queued'");

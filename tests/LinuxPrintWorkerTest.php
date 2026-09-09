@@ -14,6 +14,13 @@ function expectSame(array $actual,array $expected,string $message):void
     if($actual!==$expected)throw new RuntimeException($message.' Expected '.json_encode($expected).', got '.json_encode($actual));
 }
 
+if(!isCupsEpsonThrottledPrinter('EPSON_WF-C5390'))throw new RuntimeException('WF-C5390 queue must be throttled on CUPS.');
+if(!isCupsEpsonThrottledPrinter('EPSON_WF_C5390_Series'))throw new RuntimeException('Legacy WF-C5390 queue must be throttled on CUPS.');
+if(isCupsEpsonThrottledPrinter('Brother_DCP_T830DW'))throw new RuntimeException('Only WF-C5390 queues must be throttled.');
+expectSame([cupsEpsonSubmissionGateReason('EPSON_WF-C5390','printer EPSON_WF-C5390 disabled since now','')],['Antrean CUPS Epson dijeda; job ditahan sampai printer diaktifkan ulang.'],'Paused Epson queue must be held.');
+expectSame([cupsEpsonSubmissionGateReason('EPSON_WF-C5390','printer EPSON_WF-C5390 is idle','EPSON_WF-C5390-269 www-data 100 now')],['Menunggu CUPS Epson kosong (maksimum 1 job aktif).'],'Busy Epson queue must be held.');
+expectSame([cupsEpsonSubmissionGateReason('EPSON_WF-C5390','printer EPSON_WF-C5390 is idle','')],[null],'Idle Epson queue must accept one job.');
+
 $options=cupsOptions('2-7,odd,duplexlong,noscale,paper=B5,bin=261','EPSON_WF_C5390_Series');
 foreach(['page-ranges=2-7','page-set=odd','sides=two-sided-long-edge','scaling=100','media=Custom.182x257mm','InputSlot=Rear','cupsPrintQuality=High'] as $expected){
     expectContains($options,$expected);
