@@ -19,5 +19,6 @@
 .loyalty-tooltip span{margin-top:4px;color:#d8dce4;font-size:9px;font-weight:500}
 .loyalty-tooltip small{margin-top:5px;color:#f2f3f6;font-size:9px;font-weight:650}
 .loyalty-badge:hover .loyalty-tooltip,.loyalty-badge:focus .loyalty-tooltip{display:block}
-.order-group{overflow:visible}
+/* content-visibility creates paint containment, which clips badge tooltips. */
+.order-group{content-visibility:visible;contain-intrinsic-size:auto;overflow:visible}
 @media(max-width:700px){.customer-identity-line{align-items:flex-start}.customer-loyalty-badges{flex-basis:100%}.customer-order-date{margin-left:0}.loyalty-tooltip{left:0;max-width:min(290px,calc(100vw - 54px));transform:none}.loyalty-tooltip:before{left:13px;transform:rotate(45deg)}}
