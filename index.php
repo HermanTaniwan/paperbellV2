@@ -12,7 +12,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=29">
+  <link rel="stylesheet" href="assets/app.css?v=30">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
   <link rel="stylesheet" href="assets/features.css?v=27">
