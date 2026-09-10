@@ -115,7 +115,6 @@ button:not(:disabled):not(.link):not(.customer-history-link):not(.copy-url):not(
 .table-card,
 .printer-status-card,
 .finance-month,
-  .metric-line-card,
 .inline-print-item {
   transition:
     transform var(--motion-base) var(--motion-ease),
@@ -127,8 +126,7 @@ button:not(:disabled):not(.link):not(.customer-history-link):not(.copy-url):not(
 .panel-grid > .panel:hover,
 .feature-grid > .panel:hover,
 .printer-status-card:hover,
-.finance-month:hover,
-.metric-line-card:hover {
+.finance-month:hover {
   transform: translateY(-3px);
   border-color: rgba(82, 101, 143, .3);
   box-shadow: 0 13px 28px rgba(51, 58, 86, .09);
