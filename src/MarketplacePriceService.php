@@ -78,7 +78,7 @@ final class MarketplacePriceService
     }
     private function matchesTitle(string $title): bool { return preg_match('/loose\s*leaf|jurnal|journal/iu',$title)===1; }
     private function price(mixed $value): ?int { return is_numeric($value)&&(float)$value>0?(int)round((float)$value):null; }
-    private function shopeePrice(array $model): ?int { foreach(['original_price','current_price'] as $key)if(($price=$this->price($model['price_info'][$key] ?? $model[$key] ?? null))!==null)return$price; return null; }
+    private function shopeePrice(array $model): ?int { $info=$model['price_info']??[];if(isset($info[0])&&is_array($info[0]))$info=$info[0];foreach(['original_price','current_price'] as $key)if(($price=$this->price($info[$key] ?? $model[$key] ?? null))!==null)return$price; return null; }
     private function tiktokPrice(array $sku): ?int { foreach(['original_price','sale_price','list_price'] as $key)if(($price=$this->price($sku['price'][$key] ?? $sku[$key] ?? null))!==null)return$price; return null; }
     private function shopee(string $method,string $path,array $extra,?array $body,array $auth): array
     {
