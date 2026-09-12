@@ -53,20 +53,26 @@ final class MarketplacePriceService
         $result=['ok'=>true,'providers'=>[]];foreach($groups as $provider=>$items){if(!$items){$result['providers'][$provider]=['reverted'=>0,'errors'=>[]];continue;}$auth=$this->oauth->credentials($provider);$data=$provider==='shopee'?$this->applyShopee($items,$auth,$user,'reverted'):$this->applyTikTok($items,$auth,$user,'reverted');$result['providers'][$provider]=['reverted'=>count($data['updated']),'errors'=>$data['errors']];}return$result;
     }
 
-    private function raiseShopee(int $increment, string $user): array
+    public function raiseExplicitProductsOnce(string $user): array
+    {
+        $filter=fn(string $title): bool => preg_match('/sketsa.*fashion|fashion.*sketsa|pembatas.*binder|\bhsk\b|workbook.*kaligrafi|workbook.*calligraphy|rekap.*tagihan|sudoku/iu',$title)===1;
+        return ['ok'=>true,'increment'=>500,'providers'=>['shopee'=>$this->raiseShopee(500,$user,$filter,true),'tiktok'=>$this->raiseTikTok(500,$user,$filter,true)]];
+    }
+
+    private function raiseShopee(int $increment, string $user, ?Closure $filter=null, bool $onlyUnraised=false): array
     {
         $auth=$this->oauth->credentials('shopee'); $ids=[];
         foreach (['NORMAL','UNLIST'] as $status) { $offset=0; do { $json=$this->shopee('GET','/api/v2/product/get_item_list',['offset'=>$offset,'page_size'=>100,'item_status'=>$status],null,$auth); $items=$json['response']['item'] ?? $json['response']['item_list'] ?? []; foreach($items as $item)if(!empty($item['item_id']))$ids[(string)$item['item_id']]=$item; $offset+=count($items); $more=(bool)($json['response']['has_next_page'] ?? false); } while($more && $offset<10000); }
         $base=[]; foreach(array_chunk(array_keys($ids),50) as $batch) { $json=$this->shopee('GET','/api/v2/product/get_item_base_info',['item_id_list'=>implode(',',$batch)],null,$auth); foreach(($json['response']['item_list'] ?? []) as $item)$base[(string)$item['item_id']]=$item; }
-        $groups=[]; foreach(array_keys($ids) as $itemId) { $title=trim((string)($base[$itemId]['item_name'] ?? $ids[$itemId]['item_name'] ?? '')); if(!$this->matchesTitle($title))continue; $json=$this->shopee('GET','/api/v2/product/get_model_list',['item_id'=>$itemId],null,$auth); $models=$json['response']['model'] ?? []; if(!$models)$models=[['model_id'=>0,'price_info'=>$base[$itemId]['price_info'] ?? []]]; foreach($models as $model) { $before=$this->shopeePrice($model); if($before===null)continue; $groups[$itemId][]=['product_id'=>$itemId,'sku_id'=>(string)($model['model_id'] ?? 0),'product_name'=>$title,'price_before'=>$before,'price_after'=>$before+$increment]; } }
+        $groups=[]; foreach(array_keys($ids) as $itemId) { $title=trim((string)($base[$itemId]['item_name'] ?? $ids[$itemId]['item_name'] ?? '')); if(!($filter?$filter($title):$this->matchesTitle($title)))continue; $json=$this->shopee('GET','/api/v2/product/get_model_list',['item_id'=>$itemId],null,$auth); $models=$json['response']['model'] ?? []; if(!$models)$models=[['model_id'=>0,'price_info'=>$base[$itemId]['price_info'] ?? []]]; foreach($models as $model) { $skuId=(string)($model['model_id'] ?? 0);if($onlyUnraised&&!$this->needsPriceIncrease('shopee',$itemId,$skuId))continue;$before=$this->shopeePrice($model); if($before===null)continue; $groups[$itemId][]=['product_id'=>$itemId,'sku_id'=>$skuId,'product_name'=>$title,'price_before'=>$before,'price_after'=>$before+$increment]; } }
         return $this->applyShopee($groups,$auth,$user);
     }
 
-    private function raiseTikTok(int $increment, string $user): array
+    private function raiseTikTok(int $increment, string $user, ?Closure $filter=null, bool $onlyUnraised=false): array
     {
         $auth=$this->oauth->credentials('tiktok'); $products=[]; $token='';
         do { $query=['page_size'=>100]; if($token!=='')$query['page_token']=$token; $json=$this->tiktok('POST','/product/202309/products/search',$query,[],$auth); foreach(($json['data']['products'] ?? []) as $product)if(!empty($product['id']))$products[(string)$product['id']]=$product; $token=(string)($json['data']['next_page_token'] ?? ''); } while($token!=='' && count($products)<10000);
-        $groups=[]; foreach($products as $productId=>$summary) { $productId=(string)$productId; $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!$this->matchesTitle($title))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId==='')continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'currency'=>(string)($sku['price']['currency'] ?? 'IDR'),'price_before'=>$before,'price_after'=>$before+$increment]; } }
+        $groups=[]; foreach($products as $productId=>$summary) { $productId=(string)$productId; $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!($filter?$filter($title):$this->matchesTitle($title)))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId===''||($onlyUnraised&&!$this->needsPriceIncrease('tiktok',$productId,$skuId)))continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'currency'=>(string)($sku['price']['currency'] ?? 'IDR'),'price_before'=>$before,'price_after'=>$before+$increment]; } }
         return $this->applyTikTok($groups,$auth,$user);
     }
 
@@ -84,6 +90,7 @@ final class MarketplacePriceService
     {
         $stmt=$this->db->prepare('INSERT INTO marketplace_price_updates(provider,product_id,sku_id,product_name,price_before,price_after,status,error,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)'); $now=time(); foreach($rows as $row)$stmt->execute([$provider,$row['product_id'],$row['sku_id'],mb_substr($row['product_name'],0,500),$row['price_before'],$row['price_after'],$status,mb_substr($error,0,2000),mb_substr($user,0,100),$now]);
     }
+    private function needsPriceIncrease(string $provider,string $productId,string $skuId): bool{$stmt=$this->db->prepare('SELECT status FROM marketplace_price_updates WHERE provider=? AND product_id=? AND sku_id=? ORDER BY id DESC LIMIT 1');$stmt->execute([$provider,$productId,$skuId]);return (string)($stmt->fetchColumn()?:'')!=='updated';}
     private function matchesTitle(string $title): bool { return preg_match('/loose\s*leaf|jurnal|journal/iu',$title)===1; }
     private function price(mixed $value): ?int { return is_numeric($value)&&(float)$value>0?(int)round((float)$value):null; }
     private function shopeePrice(array $model): ?int { $info=$model['price_info']??[];if(isset($info[0])&&is_array($info[0]))$info=$info[0];foreach(['original_price','current_price'] as $key)if(($price=$this->price($info[$key] ?? $model[$key] ?? null))!==null)return$price; return null; }
