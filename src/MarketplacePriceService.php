@@ -8,6 +8,13 @@ final class MarketplacePriceService
         $this->db->exec("CREATE TABLE IF NOT EXISTS marketplace_price_updates (id BIGINT AUTO_INCREMENT PRIMARY KEY, provider VARCHAR(20) NOT NULL, product_id VARCHAR(80) NOT NULL, sku_id VARCHAR(80) NOT NULL DEFAULT '', product_name VARCHAR(500) NOT NULL, price_before BIGINT NOT NULL, price_after BIGINT NOT NULL, status VARCHAR(20) NOT NULL, error TEXT NOT NULL, created_by VARCHAR(100) NOT NULL, created_at BIGINT NOT NULL, INDEX ix_marketplace_price_updates_created(created_at)) ENGINE=InnoDB");
     }
 
+    public function recentUpdates(int $limit = 500): array
+    {
+        $limit = max(1, min(500, $limit));
+        $rows=$this->db->query("SELECT provider,product_id,sku_id,product_name,price_before,price_after,status,error,created_at FROM marketplace_price_updates ORDER BY id DESC LIMIT {$limit}")->fetchAll();
+        return ['items'=>array_reverse($rows)];
+    }
+
     /** Increase every SKU belonging to a looseleaf or journal product. */
     public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {
