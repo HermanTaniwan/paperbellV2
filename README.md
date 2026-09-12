@@ -115,6 +115,12 @@ Buka **Koneksi Marketplace** dari sidebar. Credential aplikasi dan token disimpa
 
 Jangan bagikan `storage/secrets/oauth.key`. File tersebut diblokir oleh Apache dan diabaikan Git.
 
+## Prosedur harga marketplace
+
+Saat diminta menaikkan harga produk looseleaf/jurnal, gunakan kenaikan **Rp500 per SKU** di Shopee dan TikTok Shop. Ringbinder, stiker/sticker, dan sampul/cover adalah pengecualian dan harus tetap pada harga semula. Produk seperti buku sketsa fashion, pembatas binder, HSK, workbook kaligrafi, rekap tagihan, dan sudoku termasuk target kenaikan bila belum pernah dinaikkan.
+
+Setiap perubahan harga dicatat di audit Paperbell bersama harga sebelum dan sesudahnya. Sebelum menjalankan permintaan berikutnya, periksa audit tersebut dan hanya ubah SKU yang belum tercatat naik—jangan menaikkan SKU dua kali. Bila ada pengecualian yang terlanjur naik, rollback ke harga sebelum kenaikan dari audit, bukan dengan mengurangi harga secara perkiraan.
+
 ## Akses komputer lain
 
 Pastikan komputer berada di jaringan yang sama, Apache diizinkan pada Windows Firewall, lalu buka `http://IP-KOMPUTER-UTAMA/paperbell/`. Komputer utama dan print worker harus tetap menyala untuk pencetakan. Aplikasi Paperbell desktop tidak diperlukan oleh runtime web.
