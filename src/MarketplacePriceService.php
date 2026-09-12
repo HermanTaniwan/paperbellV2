@@ -9,11 +9,12 @@ final class MarketplacePriceService
     }
 
     /** Increase every SKU belonging to a looseleaf or journal product. */
-    public function raiseLooseleafAndJournalPrices(int $increment, string $user): array
+    public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {
         if ($increment !== 500) throw new InvalidArgumentException('Kenaikan harga dikunci Rp500 untuk operasi ini.');
+        if ($onlyProvider !== null && !in_array($onlyProvider, ['shopee', 'tiktok'], true)) throw new InvalidArgumentException('Marketplace tidak didukung.');
         $report = ['ok'=>true, 'increment'=>$increment, 'providers'=>[]];
-        foreach (['shopee', 'tiktok'] as $provider) {
+        foreach ($onlyProvider === null ? ['shopee', 'tiktok'] : [$onlyProvider] as $provider) {
             $lock = 'paperbell_price_'.$provider;
             if ((int)$this->db->query('SELECT GET_LOCK('.$this->db->quote($lock).',0)')->fetchColumn() !== 1) throw new RuntimeException('Update harga '.$provider.' sedang berjalan.');
             try { $report['providers'][$provider] = $provider === 'shopee' ? $this->raiseShopee($increment, $user) : $this->raiseTikTok($increment, $user); }
@@ -35,7 +36,7 @@ final class MarketplacePriceService
     {
         $auth=$this->oauth->credentials('tiktok'); $products=[]; $token='';
         do { $query=['page_size'=>100]; if($token!=='')$query['page_token']=$token; $json=$this->tiktok('POST','/product/202309/products/search',$query,[],$auth); foreach(($json['data']['products'] ?? []) as $product)if(!empty($product['id']))$products[(string)$product['id']]=$product; $token=(string)($json['data']['next_page_token'] ?? ''); } while($token!=='' && count($products)<10000);
-        $groups=[]; foreach($products as $productId=>$summary) { $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!$this->matchesTitle($title))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId==='')continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'price_before'=>$before,'price_after'=>$before+$increment]; } }
+        $groups=[]; foreach($products as $productId=>$summary) { $productId=(string)$productId; $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!$this->matchesTitle($title))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId==='')continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'price_before'=>$before,'price_after'=>$before+$increment]; } }
         return $this->applyTikTok($groups,$auth,$user);
     }
 
