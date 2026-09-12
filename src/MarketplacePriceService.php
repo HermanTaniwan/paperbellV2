@@ -45,6 +45,14 @@ final class MarketplacePriceService
         return $report;
     }
 
+    /** Restore only the explicitly excluded product types to their audited pre-increase price. */
+    public function rollbackExcludedProducts(string $user): array
+    {
+        $sql="SELECT p.provider,p.product_id,p.sku_id,p.product_name,p.price_before,p.price_after FROM marketplace_price_updates p JOIN (SELECT provider,product_id,sku_id,MAX(id) id FROM marketplace_price_updates GROUP BY provider,product_id,sku_id) latest ON latest.id=p.id WHERE p.status='updated' AND LOWER(p.product_name) REGEXP 'ring[[:space:]-]*binder|sticker|stiker|sampul|cover'";
+        $groups=['shopee'=>[],'tiktok'=>[]];foreach($this->db->query($sql)->fetchAll() as $row){$provider=(string)$row['provider'];$groups[$provider][(string)$row['product_id']][]=['product_id'=>(string)$row['product_id'],'sku_id'=>(string)$row['sku_id'],'product_name'=>(string)$row['product_name'],'currency'=>'IDR','price_before'=>(int)$row['price_after'],'price_after'=>(int)$row['price_before']];}
+        $result=['ok'=>true,'providers'=>[]];foreach($groups as $provider=>$items){if(!$items){$result['providers'][$provider]=['reverted'=>0,'errors'=>[]];continue;}$auth=$this->oauth->credentials($provider);$data=$provider==='shopee'?$this->applyShopee($items,$auth,$user,'reverted'):$this->applyTikTok($items,$auth,$user,'reverted');$result['providers'][$provider]=['reverted'=>count($data['updated']),'errors'=>$data['errors']];}return$result;
+    }
+
     private function raiseShopee(int $increment, string $user): array
     {
         $auth=$this->oauth->credentials('shopee'); $ids=[];
@@ -62,14 +70,14 @@ final class MarketplacePriceService
         return $this->applyTikTok($groups,$auth,$user);
     }
 
-    private function applyShopee(array $groups,array $auth,string $user): array
+    private function applyShopee(array $groups,array $auth,string $user,string $auditStatus='updated'): array
     {
-        $updated=[];$errors=[]; foreach($groups as $itemId=>$rows) { try { $this->shopee('POST','/api/v2/product/update_price',[],['item_id'=>(int)$itemId,'price_list'=>array_map(fn($row)=>['model_id'=>(int)$row['sku_id'],'original_price'=>$row['price_after']],$rows)],$auth); $this->audit('shopee',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('shopee',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$itemId,'message'=>$e->getMessage()]; } }
+        $updated=[];$errors=[]; foreach($groups as $itemId=>$rows) { try { $this->shopee('POST','/api/v2/product/update_price',[],['item_id'=>(int)$itemId,'price_list'=>array_map(fn($row)=>['model_id'=>(int)$row['sku_id'],'original_price'=>$row['price_after']],$rows)],$auth); $this->audit('shopee',$rows,$auditStatus,'',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('shopee',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$itemId,'message'=>$e->getMessage()]; } }
         return ['products_scanned'=>count($groups),'variations_matched'=>array_sum(array_map('count',$groups)),'updated'=>$updated,'errors'=>$errors];
     }
-    private function applyTikTok(array $groups,array $auth,string $user): array
+    private function applyTikTok(array $groups,array $auth,string $user,string $auditStatus='updated'): array
     {
-        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { $productId=(string)$productId; try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'price'=>['amount'=>(string)$row['price_after'],'currency'=>$row['currency']]],$rows)],$auth); $this->audit('tiktok',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
+        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { $productId=(string)$productId; try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'price'=>['amount'=>(string)$row['price_after'],'currency'=>$row['currency']]],$rows)],$auth); $this->audit('tiktok',$rows,$auditStatus,'',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
         return ['products_scanned'=>count($groups),'variations_matched'=>array_sum(array_map('count',$groups)),'updated'=>$updated,'errors'=>$errors];
     }
     private function audit(string $provider,array $rows,string $status,string $error,string $user): void
