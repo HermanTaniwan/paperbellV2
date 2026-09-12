@@ -25,8 +25,9 @@ final class MarketplacePriceService
         $auth=$this->oauth->credentials('shopee');$ids=[];
         foreach(['NORMAL','UNLIST'] as $status){$offset=0;do{$json=$this->shopee('GET','/api/v2/product/get_item_list',['offset'=>$offset,'page_size'=>100,'item_status'=>$status],null,$auth);$items=$json['response']['item']??$json['response']['item_list']??[];foreach($items as $item)if(!empty($item['item_id']))$ids[(string)$item['item_id']]=true;$offset+=count($items);$more=(bool)($json['response']['has_next_page']??false);}while($more&&$offset<10000);}
         $base=[];foreach(array_chunk(array_keys($ids),50) as $batch){$json=$this->shopee('GET','/api/v2/product/get_item_base_info',['item_id_list'=>implode(',',$batch)],null,$auth);foreach(($json['response']['item_list']??[]) as $item)$base[]=$item;}
-        $sample=[];foreach($base as $item){$sample[]=['keys'=>array_keys($item),'title'=>(string)($item['item_name']??$item['name']??''),'sku'=>(string)($item['item_sku']??'')];if(count($sample)>=10)break;}
-        return ['listed_items'=>count($ids),'base_items'=>count($base),'sample'=>$sample];
+        $sample=[];$candidate=null;foreach($base as $item){$title=(string)($item['item_name']??$item['name']??'');$sample[]=['keys'=>array_keys($item),'title'=>$title,'sku'=>(string)($item['item_sku']??'')];if($candidate===null&&$this->matchesTitle($title))$candidate=$item;if(count($sample)>=10)break;}
+        $modelSample=[];if($candidate!==null){$models=$this->shopee('GET','/api/v2/product/get_model_list',['item_id'=>$candidate['item_id']],null,$auth)['response']['model']??[];foreach(array_slice($models,0,2) as $model)$modelSample[]=['keys'=>array_keys($model),'price_info'=>$model['price_info']??null];}
+        return ['listed_items'=>count($ids),'base_items'=>count($base),'sample'=>$sample,'model_sample'=>$modelSample];
     }
 
     /** Increase every SKU belonging to a looseleaf or journal product. */
