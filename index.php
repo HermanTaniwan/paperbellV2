@@ -12,7 +12,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=30">
+  <link rel="stylesheet" href="assets/app.css?v=31">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
   <link rel="stylesheet" href="assets/features.css?v=27">
@@ -173,7 +173,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <span v-if="showAnalyticsLabel(day,analytics.items)">{{day.label}}</span>
             </div>
             <i v-if="analyticsTooltip?.type==='orders'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
-            <div v-if="analyticsTooltip?.type==='orders'" class="metric-tooltip google-chart-tooltip analytics-bar-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
+            <div v-if="analyticsTooltip?.type==='orders'" class="metric-tooltip google-chart-tooltip analytics-bar-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong></div><span>{{analyticsTooltip.detail}}</span></div>
           </div></div>
           <section v-if="analytics?.summary?.total" class="metric-line-grid">
             <article class="metric-line-card revenue-card">
@@ -190,7 +190,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Omzet</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='revenue'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
-              <div v-if="analyticsTooltip?.type==='revenue'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
+              <div v-if="analyticsTooltip?.type==='revenue'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
             <article class="metric-line-card">
               <div class="metric-line-head"><div><span>Item terjual</span><strong>{{number(analytics.summary.items)}}</strong></div><small>Total quantity item</small></div>
@@ -204,7 +204,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='soldItems'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
-              <div v-if="analyticsTooltip?.type==='soldItems'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
+              <div v-if="analyticsTooltip?.type==='soldItems'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
             <article class="metric-line-card">
               <div class="metric-line-head"><div><span>Item per order</span><strong>{{number(analytics.summary.itemsPerOrder)}}</strong></div><small>Rata-rata quantity per order</small></div>
@@ -218,7 +218,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item / order</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='ratio'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
-              <div v-if="analyticsTooltip?.type==='ratio'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><strong>{{analyticsTooltip.value}}</strong><b>{{analyticsTooltip.date}}</b></div><span>{{analyticsTooltip.detail}}</span></div>
+              <div v-if="analyticsTooltip?.type==='ratio'" class="metric-tooltip google-chart-tooltip" :class="{pinned:analyticsTooltip.pinned}" :style="{left:analyticsTooltip.left+'px',top:analyticsTooltip.top+'px'}"><div><b>{{analyticsTooltip.date}}</b><strong>{{analyticsTooltip.value}}</strong></div><span>{{analyticsTooltip.detail}}</span></div>
             </article>
           </section>
         </article>
