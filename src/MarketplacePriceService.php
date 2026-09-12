@@ -15,6 +15,11 @@ final class MarketplacePriceService
         return ['items'=>array_reverse($rows)];
     }
 
+    public function updateSummary(): array
+    {
+        return ['items'=>$this->db->query('SELECT provider,status,COUNT(*) variations,COUNT(DISTINCT product_id) products,MIN(created_at) first_at,MAX(created_at) last_at FROM marketplace_price_updates GROUP BY provider,status ORDER BY provider,status')->fetchAll()];
+    }
+
     /** Increase every SKU belonging to a looseleaf or journal product. */
     public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {
