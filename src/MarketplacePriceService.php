@@ -20,6 +20,15 @@ final class MarketplacePriceService
         return ['items'=>$this->db->query('SELECT provider,status,COUNT(*) variations,COUNT(DISTINCT product_id) products,MIN(created_at) first_at,MAX(created_at) last_at FROM marketplace_price_updates GROUP BY provider,status ORDER BY provider,status')->fetchAll()];
     }
 
+    public function shopeeCatalogDiagnostics(): array
+    {
+        $auth=$this->oauth->credentials('shopee');$ids=[];
+        foreach(['NORMAL','UNLIST'] as $status){$offset=0;do{$json=$this->shopee('GET','/api/v2/product/get_item_list',['offset'=>$offset,'page_size'=>100,'item_status'=>$status],null,$auth);$items=$json['response']['item']??$json['response']['item_list']??[];foreach($items as $item)if(!empty($item['item_id']))$ids[(string)$item['item_id']]=true;$offset+=count($items);$more=(bool)($json['response']['has_next_page']??false);}while($more&&$offset<10000);}
+        $base=[];foreach(array_chunk(array_keys($ids),50) as $batch){$json=$this->shopee('GET','/api/v2/product/get_item_base_info',['item_id_list'=>implode(',',$batch)],null,$auth);foreach(($json['response']['item_list']??[]) as $item)$base[]=$item;}
+        $sample=[];foreach($base as $item){$sample[]=['keys'=>array_keys($item),'title'=>(string)($item['item_name']??$item['name']??''),'sku'=>(string)($item['item_sku']??'')];if(count($sample)>=10)break;}
+        return ['listed_items'=>count($ids),'base_items'=>count($base),'sample'=>$sample];
+    }
+
     /** Increase every SKU belonging to a looseleaf or journal product. */
     public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {

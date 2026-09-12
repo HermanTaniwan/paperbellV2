@@ -230,6 +230,7 @@ try {
     if ($action === 'marketplace_raise_looseleaf_journal_prices') { $input=body();$provider=trim((string)($input['provider']??''));respond((new MarketplacePriceService($mysql,$oauthService()))->raiseLooseleafAndJournalPrices((int)($input['increment']??500),(string)$_SESSION['paperbell_user'],$provider===''?null:strtolower($provider))); }
     if ($action === 'marketplace_price_updates') respond((new MarketplacePriceService($mysql,$oauthService()))->recentUpdates((int)($_GET['limit']??500)));
     if ($action === 'marketplace_price_update_summary') respond((new MarketplacePriceService($mysql,$oauthService()))->updateSummary());
+    if ($action === 'marketplace_shopee_catalog_diagnostics') respond((new MarketplacePriceService($mysql,$oauthService()))->shopeeCatalogDiagnostics());
 
     if ($action === 'label_pdf') {
         $stmt=$mysql->prepare('SELECT pdf_path FROM order_resi WHERE order_sn=?');$stmt->execute([(string)($_GET['order_sn']??'')]);$path=(string)($stmt->fetchColumn()?:'');
