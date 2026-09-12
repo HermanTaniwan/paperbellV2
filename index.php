@@ -12,7 +12,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=31">
+  <link rel="stylesheet" href="assets/app.css?v=32">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
   <link rel="stylesheet" href="assets/features.css?v=27">
@@ -186,7 +186,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <polyline class="metric-line shopee-payout" :points="analyticsLinePoints('shopeePayout')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point revenue" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'revenue')" r="3"><title>{{day.label}}: {{currency(day.revenue)}}</title></circle></g>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="'payout-'+day.date" class="metric-point shopee-payout" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'shopeePayout')" r="3"><title>{{day.label}}: {{currency(day.shopeePayout)}}</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'revenue-hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showCombinedRevenueTooltip($event,day)" @pointermove="showCombinedRevenueTooltip($event,day)" @click.stop="showCombinedRevenueTooltip($event,day,true)" @pointerleave="hideAnalyticsTooltip"><title>{{day.label}}: {{currency(day.revenue)}}</title></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'revenue-hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showCombinedRevenueTooltip($event,day)" @pointermove="showCombinedRevenueTooltip($event,day)" @click.stop="showCombinedRevenueTooltip($event,day,true)" @pointerleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Omzet</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='revenue'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
@@ -200,7 +200,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <g class="x-ticks"><g v-for="tick in analyticsLineDateTicks()" :key="tick.index"><line :x1="analyticsLineX(tick.index)" y1="135" :x2="analyticsLineX(tick.index)" y2="140"></line><text :x="analyticsLineX(tick.index)" y="153" text-anchor="middle">{{tick.label}}</text></g></g>
                 <polyline class="metric-line sold-items" :points="analyticsLinePoints('soldItems')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point sold-items" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'soldItems')" r="4"><title>{{day.label}}: {{day.items}} item</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showAnalyticsTooltip($event,day,'soldItems')" @pointermove="showAnalyticsTooltip($event,day,'soldItems')" @click.stop="showAnalyticsTooltip($event,day,'soldItems',true)" @pointerleave="hideAnalyticsTooltip"><title>{{day.label}}: {{number(day.items)}} item</title></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showAnalyticsTooltip($event,day,'soldItems')" @pointermove="showAnalyticsTooltip($event,day,'soldItems')" @click.stop="showAnalyticsTooltip($event,day,'soldItems',true)" @pointerleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='soldItems'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
@@ -214,7 +214,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <g class="x-ticks"><g v-for="tick in analyticsLineDateTicks()" :key="tick.index"><line :x1="analyticsLineX(tick.index)" y1="135" :x2="analyticsLineX(tick.index)" y2="140"></line><text :x="analyticsLineX(tick.index)" y="153" text-anchor="middle">{{tick.label}}</text></g></g>
                 <polyline class="metric-line ratio" :points="analyticsLinePoints('ratio')"></polyline>
                 <g v-if="analytics.items.length<=31"><circle v-for="(day,index) in analytics.items" :key="day.date" class="metric-point ratio" :cx="analyticsLineX(index)" :cy="analyticsLineY(day,'ratio')" r="4"><title>{{day.label}}: {{number(analyticsLineValue(day,'ratio'))}} item/order</title></circle></g>
-                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showAnalyticsTooltip($event,day,'ratio')" @pointermove="showAnalyticsTooltip($event,day,'ratio')" @click.stop="showAnalyticsTooltip($event,day,'ratio',true)" @pointerleave="hideAnalyticsTooltip"><title>{{day.label}}: {{number(analyticsLineValue(day,'ratio'))}} item/order</title></rect>
+                <rect v-for="(day,index) in analytics.items" :key="'hover-'+day.date" class="metric-hover-zone" :x="analyticsLineZoneLeft(index)" y="20" :width="analyticsLineZoneWidth(index)" height="115" @pointerenter="showAnalyticsTooltip($event,day,'ratio')" @pointermove="showAnalyticsTooltip($event,day,'ratio')" @click.stop="showAnalyticsTooltip($event,day,'ratio',true)" @pointerleave="hideAnalyticsTooltip"></rect>
                 <text class="axis-title" x="318" y="181" text-anchor="middle">Tanggal</text><text class="axis-title" x="13" y="78" text-anchor="middle" transform="rotate(-90 13 78)">Item / order</text>
               </svg>
               <i v-if="analyticsTooltip?.type==='ratio'" class="chart-selection-guide" :style="{left:analyticsTooltip.guideLeft+'px',top:analyticsTooltip.guideTop+'px',height:analyticsTooltip.guideHeight+'px'}"></i>
@@ -1531,7 +1531,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=136">
+<script src="assets/app.js?v=137">
 </script>
 </body>
 </html>
