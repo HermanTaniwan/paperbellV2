@@ -43,7 +43,7 @@ final class MarketplacePriceService
     {
         $auth=$this->oauth->credentials('tiktok'); $products=[]; $token='';
         do { $query=['page_size'=>100]; if($token!=='')$query['page_token']=$token; $json=$this->tiktok('POST','/product/202309/products/search',$query,[],$auth); foreach(($json['data']['products'] ?? []) as $product)if(!empty($product['id']))$products[(string)$product['id']]=$product; $token=(string)($json['data']['next_page_token'] ?? ''); } while($token!=='' && count($products)<10000);
-        $groups=[]; foreach($products as $productId=>$summary) { $productId=(string)$productId; $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!$this->matchesTitle($title))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId==='')continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'price_before'=>$before,'price_after'=>$before+$increment]; } }
+        $groups=[]; foreach($products as $productId=>$summary) { $productId=(string)$productId; $json=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth); $product=$json['data']['product'] ?? $json['data'] ?? []; $title=trim((string)($product['title'] ?? $product['product_name'] ?? $summary['name'] ?? '')); if(!$this->matchesTitle($title))continue; foreach(($product['skus'] ?? []) as $sku) { $before=$this->tiktokPrice($sku); $skuId=(string)($sku['id'] ?? ''); if($before===null||$skuId==='')continue; $groups[$productId][]=['product_id'=>$productId,'sku_id'=>$skuId,'product_name'=>$title,'currency'=>(string)($sku['price']['currency'] ?? 'IDR'),'price_before'=>$before,'price_after'=>$before+$increment]; } }
         return $this->applyTikTok($groups,$auth,$user);
     }
 
@@ -54,7 +54,7 @@ final class MarketplacePriceService
     }
     private function applyTikTok(array $groups,array $auth,string $user): array
     {
-        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { $productId=(string)$productId; try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'original_price'=>(string)$row['price_after']],$rows)],$auth); $this->audit('tiktok',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
+        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { $productId=(string)$productId; try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'price'=>['amount'=>(string)$row['price_after'],'currency'=>$row['currency']]],$rows)],$auth); $this->audit('tiktok',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
         return ['products_scanned'=>count($groups),'variations_matched'=>array_sum(array_map('count',$groups)),'updated'=>$updated,'errors'=>$errors];
     }
     private function audit(string $provider,array $rows,string $status,string $error,string $user): void
