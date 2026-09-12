@@ -54,7 +54,7 @@ final class MarketplacePriceService
     }
     private function applyTikTok(array $groups,array $auth,string $user): array
     {
-        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'original_price'=>(string)$row['price_after']],$rows)],$auth); $this->audit('tiktok',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
+        $updated=[];$errors=[]; foreach($groups as $productId=>$rows) { $productId=(string)$productId; try { $this->tiktok('POST','/product/202309/products/'.rawurlencode($productId).'/prices/update',[],['skus'=>array_map(fn($row)=>['id'=>$row['sku_id'],'original_price'=>(string)$row['price_after']],$rows)],$auth); $this->audit('tiktok',$rows,'updated','',$user); array_push($updated,...$rows); } catch(Throwable $e) { $this->audit('tiktok',$rows,'failed',$e->getMessage(),$user); $errors[]=['product_id'=>$productId,'message'=>$e->getMessage()]; } }
         return ['products_scanned'=>count($groups),'variations_matched'=>array_sum(array_map('count',$groups)),'updated'=>$updated,'errors'=>$errors];
     }
     private function audit(string $provider,array $rows,string $status,string $error,string $user): void
