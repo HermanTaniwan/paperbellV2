@@ -121,6 +121,28 @@ Saat diminta menaikkan harga produk looseleaf/jurnal, gunakan kenaikan **Rp500 p
 
 Setiap perubahan harga dicatat di audit Paperbell bersama harga sebelum dan sesudahnya. Sebelum menjalankan permintaan berikutnya, periksa audit tersebut dan hanya ubah SKU yang belum tercatat naik—jangan menaikkan SKU dua kali. Bila ada pengecualian yang terlanjur naik, rollback ke harga sebelum kenaikan dari audit, bukan dengan mengurangi harga secara perkiraan.
 
+### Runbook teknis pembaruan harga
+
+Implementasi berada di `src/MarketplacePriceService.php`; API internalnya didefinisikan di `api.php`. Gunakan `MarketplaceOAuthService::credentials()` agar token terenkripsi, partner key, app secret, dan shop cipher tidak pernah disalin ke skrip atau request manual.
+
+1. Ambil katalog dan harga saat ini. Shopee: `GET /api/v2/product/get_item_list`, `GET /api/v2/product/get_item_base_info`, lalu `GET /api/v2/product/get_model_list`. Harga variasi Shopee ada pada entri pertama `model.price_info`, misalnya `price_info[0].original_price`. TikTok: `POST /product/202309/products/search`, lalu `GET /product/202309/products/{product_id}`; harga SKU diambil dari objek `sku.price`.
+2. Cocokkan judul produk sesuai permintaan, lalu cek `marketplace_price_updates` untuk status audit SKU terakhir. Jangan update jika status terakhirnya `updated`; SKU yang berstatus `reverted` dapat dinaikkan lagi hanya bila memang diminta.
+3. Update Shopee dengan `POST /api/v2/product/update_price`. Request ditandatangani dengan basis `partner_id + path + timestamp + access_token + shop_id` dan payloadnya seperti berikut:
+
+```json
+{"item_id":123,"price_list":[{"model_id":456,"original_price":15500}]}
+```
+
+4. Update TikTok dengan `POST /product/202309/products/{product_id}/prices/update`. Gunakan header `x-tts-access-token`; signature mencakup path, query terurut, dan JSON body. Payloadnya harus memakai objek `price`, bukan `original_price` langsung:
+
+```json
+{"skus":[{"id":"173...","price":{"amount":"15500","currency":"IDR"}}]}
+```
+
+5. Setelah marketplace menerima update, simpan setiap SKU ke `marketplace_price_updates` dengan `price_before`, `price_after`, provider, product/SKU ID, dan status `updated`. Untuk rollback, gunakan nilai audit secara terbalik dan simpan status `reverted`.
+
+Endpoint Paperbell yang tersedia: `marketplace_raise_looseleaf_journal_prices`, `marketplace_raise_explicit_products`, `marketplace_rollback_excluded_prices`, dan endpoint audit `marketplace_price_update_summary`. Jalankan melalui aplikasi Paperbell yang aktif agar memakai koneksi OAuth dan database host yang sama.
+
 ## Akses komputer lain
 
 Pastikan komputer berada di jaringan yang sama, Apache diizinkan pada Windows Firewall, lalu buka `http://IP-KOMPUTER-UTAMA/paperbell/`. Komputer utama dan print worker harus tetap menyala untuk pencetakan. Aplikasi Paperbell desktop tidak diperlukan oleh runtime web.
