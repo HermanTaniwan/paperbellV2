@@ -54,7 +54,7 @@ $duplexCommand=cupsPrintCommand('EPSON_WF_C5390_Series','1-,duplexlong',1,'/tmp/
 expectContains($duplexCommand,'outputorder=normal');
 
 $brotherB5Options=cupsOptions('1-,simplex,noscale,paper=B5','Brother_DCP_T830DW');
-foreach(['Duplex=None','PageSize=Custom.182x257mm','InputSlot=Tray1','MediaType=Stationery'] as $expected){
+foreach(['Duplex=None','PageSize=Custom.182x257mm','InputSlot=ByPassTray','MediaType=Stationery'] as $expected){
     expectContains($brotherB5Options,$expected);
 }
 

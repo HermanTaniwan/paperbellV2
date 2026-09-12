@@ -378,7 +378,7 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif($lower==='noscale'&&$l3210)$options[]='print-scaling=none';
         elseif($lower==='noscale'&&!$brother)$options[]='scaling=100';
         elseif($lower==='paper=a5'&&$brother){$options[]='PageSize=A5';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
-        elseif($lower==='paper=b5'&&$brother){$options[]='PageSize=Custom.182x257mm';$options[]='InputSlot=Tray1';$options[]='MediaType=Stationery';}
+        elseif($lower==='paper=b5'&&$brother){$options[]='PageSize=Custom.182x257mm';$options[]='InputSlot=ByPassTray';$options[]='MediaType=Stationery';}
         elseif($lower==='paper=a5')$options[]='media=iso_a5_148x210mm';
         elseif($lower==='paper=a6'&&$l3210)$options[]='PageSize=A6';
         elseif($lower==='paper=b5')$options[]='media=Custom.182x257mm';
