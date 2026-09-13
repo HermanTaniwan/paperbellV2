@@ -45,11 +45,16 @@ final class ShopeeStockService
         if ($modelId === 0 && !$models) $model = ['model_id'=>0, 'model_name'=>'', 'stock_info_v2'=>$item['stock_info_v2'] ?? []];
         if ($model === null) throw new RuntimeException('Variasi Shopee tidak ditemukan pada produk yang terhubung.');
         $before = $this->stock($model['stock_info_v2'] ?? []);
+        $sellerStock = $model['stock_info_v2']['seller_stock'] ?? [];
+        if (!is_array($sellerStock) || count($sellerStock) !== 1 || !is_array($sellerStock[0] ?? null)) {
+            throw new RuntimeException('Produk memiliki konfigurasi gudang Shopee yang tidak dapat diperbarui otomatis.');
+        }
+        $sellerStock[0]['stock'] = $quantity;
 
         try {
             $this->shopee('POST', '/api/v2/product/update_stock', [], [
                 'item_id' => $itemId,
-                'stock_list' => [['model_id' => $modelId, 'normal_stock' => $quantity]],
+                'stock_list' => [['model_id' => $modelId, 'seller_stock' => $sellerStock]],
             ], $auth);
             $updated = $this->product($itemId);
             $confirmed = null;
