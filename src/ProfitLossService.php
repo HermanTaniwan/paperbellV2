@@ -30,7 +30,10 @@ final class ProfitLossService
     {
         $configured=[];foreach($this->db->query('SELECT sku_id,unit_cost FROM product_costs')->fetchAll() as $row)$configured[(string)$row['sku_id']]=(float)$row['unit_cost'];
         $categories=[];foreach(self::CATEGORY_COSTS as $id=>$label){$key='category:'.$id;$categories[]=['key'=>$key,'label'=>$label,'unit_cost'=>$configured[$key]??0,'configured'=>isset($configured[$key])];}
-        $stickers=[];foreach($this->db->query("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id<>'' ORDER BY product_name,variation_name")->fetchAll() as $mapping){$category=self::categoryFor($mapping);if(($category['type']??'')!=='sticker')continue;$key=(string)$category['key'];$stickers[]=['key'=>$key,'sku_id'=>(string)$mapping['sku_id'],'product_name'=>(string)$mapping['product_name'],'variation_name'=>(string)$mapping['variation_name'],'unit_cost'=>$configured[$key]??0,'configured'=>isset($configured[$key])];}
+        $stickers=[];$addSticker=function(array $mapping)use(&$stickers,$configured):void{$category=self::categoryFor($mapping);if(($category['type']??'')!=='sticker')return;$key=(string)$category['key'];if(isset($stickers[$key]))return;$stickers[$key]=['key'=>$key,'sku_id'=>(string)$mapping['sku_id'],'product_name'=>(string)$mapping['product_name'],'variation_name'=>(string)$mapping['variation_name'],'unit_cost'=>$configured[$key]??0,'configured'=>isset($configured[$key])];};
+        foreach($this->db->query("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id<>'' ORDER BY product_name,variation_name")->fetchAll() as $mapping)$addSticker($mapping);
+        foreach($this->db->query("SELECT item_key,model_sku,item_sku,item_name,model_name FROM order_process WHERE item_name LIKE '%STIKER%' OR item_name LIKE '%STICKER%' OR model_name LIKE '%STIKER%' OR model_name LIKE '%STICKER%' GROUP BY item_key,model_sku,item_sku,item_name,model_name ORDER BY item_name,model_name")->fetchAll() as $line)$addSticker($this->lineAsMapping($line));
+        $stickers=array_values($stickers);
         return ['categories'=>$categories,'stickers'=>$stickers];
     }
 
@@ -38,7 +41,7 @@ final class ProfitLossService
     {
         $key=trim($key);if($key===''||$cost<0)throw new InvalidArgumentException($key===''?'Kategori HPP wajib dipilih.':'HPP tidak boleh negatif.');
         if(str_starts_with($key,'category:')){if(!isset(self::CATEGORY_COSTS[substr($key,9)]))throw new InvalidArgumentException('Kategori HPP tidak valid.');}
-        elseif(str_starts_with($key,'sticker:')){$sku=substr($key,8);$check=$this->db->prepare("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id=?");$check->execute([$sku]);$mapping=$check->fetch();if(!$mapping||(self::categoryFor($mapping)['type']??'')!=='sticker')throw new InvalidArgumentException('SKU sticker tidak ditemukan.');}
+        elseif(str_starts_with($key,'sticker:')){$sku=substr($key,8);$check=$this->db->prepare("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id=?");$check->execute([$sku]);$mapping=$check->fetch();if(!$mapping){$lines=$this->db->query("SELECT item_key,model_sku,item_sku,item_name,model_name FROM order_process WHERE item_name LIKE '%STIKER%' OR item_name LIKE '%STICKER%' OR model_name LIKE '%STIKER%' OR model_name LIKE '%STICKER%'")->fetchAll();foreach($lines as $line){$candidate=$this->lineAsMapping($line);if((string)$candidate['sku_id']===$sku){$mapping=$candidate;break;}}}if(!$mapping||(self::categoryFor($mapping)['type']??'')!=='sticker')throw new InvalidArgumentException('SKU sticker tidak ditemukan.');}
         else throw new InvalidArgumentException('Kategori HPP tidak valid.');
         $stmt=$this->db->prepare('INSERT INTO product_costs(sku_id,unit_cost,updated_at) VALUES(?,?,?) ON DUPLICATE KEY UPDATE unit_cost=VALUES(unit_cost),updated_at=VALUES(updated_at)');$stmt->execute([$key,$cost,time()]);
     }
@@ -95,9 +98,9 @@ final class ProfitLossService
     {
         $costs=[];foreach($this->db->query('SELECT sku_id,unit_cost FROM product_costs')->fetchAll() as $row)$costs[(string)$row['sku_id']]=(float)$row['unit_cost'];$lookup=[];$byId=[];
         foreach($this->db->query("SELECT id,sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id<>''")->fetchAll() as $mapping){$category=self::categoryFor($mapping);if($category===null||!array_key_exists($category['key'],$costs))continue;$cost=['sku'=>$category['key'],'cost'=>$costs[$category['key']]];$byId[(int)$mapping['id']]=$cost;$keys=$this->keys(['item_key'=>$mapping['sku_id']]);if($keys)$lookup[$keys[0]]=$cost;}
-        if(!$byId)return $lookup;foreach($this->db->query('SELECT mapping_id,alias_key FROM mapping_aliases')->fetchAll() as $row)if(isset($byId[(int)$row['mapping_id']]))$lookup[(string)$row['alias_key']]=$byId[(int)$row['mapping_id']];return $lookup;
+        if($byId)foreach($this->db->query('SELECT mapping_id,alias_key FROM mapping_aliases')->fetchAll() as $row)if(isset($byId[(int)$row['mapping_id']]))$lookup[(string)$row['alias_key']]=$byId[(int)$row['mapping_id']];return ['mapped'=>$lookup,'costs'=>$costs];
     }
-    private function resolveCostFromLookup(array $line,array $lookup): ?array { foreach($this->keys($line) as $key)if(isset($lookup[$key]))return $lookup[$key];return null; }
+    private function resolveCostFromLookup(array $line,array $lookup): ?array { foreach($this->keys($line) as $key)if(isset($lookup['mapped'][$key]))return $lookup['mapped'][$key];$category=self::categoryFor($this->lineAsMapping($line));if(($category['type']??'')==='sticker'&&isset($lookup['costs'][$category['key']]))return ['sku'=>$category['key'],'cost'=>$lookup['costs'][$category['key']]];return null; }
     public static function categoryFor(array $mapping): ?array
     {
         $sku=trim((string)($mapping['sku_id']??''));$group=mb_strtolower(trim((string)($mapping['group_name']??'')));$text=mb_strtolower(implode(' ',[$group,(string)($mapping['product_name']??''),(string)($mapping['variation_name']??'')]));$paper=strtoupper(trim((string)($mapping['paper']??'')));if($paper!=='A5'&&$paper!=='B5')$paper=str_contains($text,'b5')?'B5':(str_contains($text,'a5')?'A5':'');
@@ -108,6 +111,7 @@ final class ProfitLossService
         if(str_contains($text,'ring binder')||str_contains($text,'binder'))return ['type'=>'category','key'=>'category:ring_binder'];
         return null;
     }
+    private function lineAsMapping(array $line): array { $sku=trim((string)($line['item_key']??''))?:trim((string)($line['model_sku']??''))?:trim((string)($line['item_sku']??''));return ['sku_id'=>$sku,'product_name'=>(string)($line['item_name']??''),'variation_name'=>(string)($line['model_name']??''),'group_name'=>'','paper'=>'','duplex'=>'']; }
     private function keys(array $line): array { $norm=fn($value)=>strtoupper(preg_replace('/\s+/','',trim((string)$value)));return array_values(array_unique(array_filter([$norm($line['item_key']??''),$norm(($line['model_sku']??'').($line['item_sku']??'')),$norm(($line['item_sku']??'').($line['model_sku']??'')),$norm($line['model_sku']??''),$norm($line['item_sku']??'')]))); }
     private function monthLabel(DateTimeImmutable $month): string { return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][(int)$month->format('n')-1].' '.$month->format('Y'); }
 }
