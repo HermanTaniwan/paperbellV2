@@ -10,4 +10,10 @@ profitExpectSame(38.33,$result['margin'],'Margin must use total cross-marketplac
 $zero=ProfitLossService::calculate(['shopee'=>0.0,'tiktok'=>0.0],0.0,0.0,[]);
 profitExpectSame(0.0,$zero['netProfit'],'Empty month should have zero profit.');
 profitExpectSame(0.0,$zero['margin'],'Empty month must not divide by zero.');
+profitExpectSame('category:journal_a5',ProfitLossService::categoryFor(['sku_id'=>'J-A5','group_name'=>'Jurnal Jurnalan','paper'=>'A5'])['key'],'Single-sided journal A5 must use its category HPP.');
+profitExpectSame('category:loose_leaf_b5',ProfitLossService::categoryFor(['sku_id'=>'L-B5','product_name'=>'Loose Leaf Polos','paper'=>'B5'])['key'],'Loose leaf B5 must use its category HPP.');
+profitExpectSame('category:journal_a5',ProfitLossService::categoryFor(['sku_id'=>'P-A5','group_name'=>'P','paper'=>'A5'])['key'],'Planner group must resolve to the journal category.');
+profitExpectSame('category:loose_leaf_a5',ProfitLossService::categoryFor(['sku_id'=>'L-A5','group_name'=>'L','paper'=>'A5'])['key'],'Loose group must resolve to the loose leaf category.');
+profitExpectSame('category:cover_b5',ProfitLossService::categoryFor(['sku_id'=>'C-B5','product_name'=>'Sampul Binder','paper'=>'B5'])['key'],'Covers must separate A5 and B5 category HPP.');
+profitExpectSame('sticker:STICKER-CAT',ProfitLossService::categoryFor(['sku_id'=>'STICKER-CAT','product_name'=>'Sticker Kucing Duduk'])['key'],'Stickers must retain per-SKU HPP.');
 echo "ProfitLossService tests passed\n";

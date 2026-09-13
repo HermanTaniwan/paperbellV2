@@ -11,6 +11,11 @@ final class ProfitLossService
         'operations' => 'Tools & operasional',
         'other' => 'Lainnya',
     ];
+    public const CATEGORY_COSTS = [
+        'journal_a5' => 'Jurnal Jurnalan A5', 'journal_b5' => 'Jurnal Jurnalan B5',
+        'loose_leaf_a5' => 'Loose Leaf A5', 'loose_leaf_b5' => 'Loose Leaf B5',
+        'ring_binder' => 'Ring Binder', 'cover_a5' => 'Sampul A5', 'cover_b5' => 'Sampul B5',
+    ];
 
     public function __construct(private PDO $db) { $this->ensureSchema(); }
 
@@ -23,22 +28,26 @@ final class ProfitLossService
 
     public function costs(): array
     {
-        $sql="SELECT m.sku_id,m.product_name,m.variation_name,COALESCE(pc.unit_cost,0) unit_cost,pc.sku_id IS NOT NULL configured FROM data_mappings m LEFT JOIN product_costs pc ON pc.sku_id=m.sku_id WHERE m.sku_id<>'' ORDER BY m.product_name,m.variation_name";
-        return ['items'=>$this->db->query($sql)->fetchAll()];
+        $configured=[];foreach($this->db->query('SELECT sku_id,unit_cost FROM product_costs')->fetchAll() as $row)$configured[(string)$row['sku_id']]=(float)$row['unit_cost'];
+        $categories=[];foreach(self::CATEGORY_COSTS as $id=>$label){$key='category:'.$id;$categories[]=['key'=>$key,'label'=>$label,'unit_cost'=>$configured[$key]??0,'configured'=>isset($configured[$key])];}
+        $stickers=[];foreach($this->db->query("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id<>'' ORDER BY product_name,variation_name")->fetchAll() as $mapping){$category=self::categoryFor($mapping);if(($category['type']??'')!=='sticker')continue;$key=(string)$category['key'];$stickers[]=['key'=>$key,'sku_id'=>(string)$mapping['sku_id'],'product_name'=>(string)$mapping['product_name'],'variation_name'=>(string)$mapping['variation_name'],'unit_cost'=>$configured[$key]??0,'configured'=>isset($configured[$key])];}
+        return ['categories'=>$categories,'stickers'=>$stickers];
     }
 
-    public function saveCost(string $sku, float $cost): void
+    public function saveCost(string $key, float $cost): void
     {
-        $sku=trim($sku); if($sku==='') throw new InvalidArgumentException('SKU wajib dipilih.'); if($cost<0) throw new InvalidArgumentException('HPP tidak boleh negatif.');
-        $check=$this->db->prepare('SELECT 1 FROM data_mappings WHERE sku_id=?');$check->execute([$sku]);if(!$check->fetchColumn())throw new InvalidArgumentException('SKU tidak ditemukan di Data Mapping.');
-        $stmt=$this->db->prepare('INSERT INTO product_costs(sku_id,unit_cost,updated_at) VALUES(?,?,?) ON DUPLICATE KEY UPDATE unit_cost=VALUES(unit_cost),updated_at=VALUES(updated_at)');$stmt->execute([$sku,$cost,time()]);
+        $key=trim($key);if($key===''||$cost<0)throw new InvalidArgumentException($key===''?'Kategori HPP wajib dipilih.':'HPP tidak boleh negatif.');
+        if(str_starts_with($key,'category:')){if(!isset(self::CATEGORY_COSTS[substr($key,9)]))throw new InvalidArgumentException('Kategori HPP tidak valid.');}
+        elseif(str_starts_with($key,'sticker:')){$sku=substr($key,8);$check=$this->db->prepare("SELECT sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id=?");$check->execute([$sku]);$mapping=$check->fetch();if(!$mapping||(self::categoryFor($mapping)['type']??'')!=='sticker')throw new InvalidArgumentException('SKU sticker tidak ditemukan.');}
+        else throw new InvalidArgumentException('Kategori HPP tidak valid.');
+        $stmt=$this->db->prepare('INSERT INTO product_costs(sku_id,unit_cost,updated_at) VALUES(?,?,?) ON DUPLICATE KEY UPDATE unit_cost=VALUES(unit_cost),updated_at=VALUES(updated_at)');$stmt->execute([$key,$cost,time()]);
     }
 
     public function snapshotLine(int $lineId): void
     {
         $exists=$this->db->prepare('SELECT 1 FROM order_line_costs WHERE order_process_id=?');$exists->execute([$lineId]);if($exists->fetchColumn())return;
         $line=$this->db->prepare('SELECT item_key,model_sku,item_sku FROM order_process WHERE id=?');$line->execute([$lineId]);$row=$line->fetch();if(!$row)return;
-        $cost=$this->resolveCost($row);if($cost===null)return;
+        $cost=$this->resolveCostFromLookup($row,$this->costLookup());if($cost===null)return;
         $save=$this->db->prepare('INSERT IGNORE INTO order_line_costs(order_process_id,sku_id,unit_cost,captured_at) VALUES(?,?,?,?)');$save->execute([$lineId,$cost['sku'], $cost['cost'],time()]);
     }
 
@@ -82,18 +91,23 @@ final class ProfitLossService
         $raw=json_decode($json,true);if(!is_array($raw))return 0.0;$primary=$marketplace==='tiktok'?(float)($raw['payment']['total_amount']??0):(float)($raw['total_amount']??0);if($primary>0)return $primary;if($marketplace==='tiktok'){ $fallback=(float)($raw['payment']['sub_total']??0);if($fallback>0)return $fallback;foreach(($raw['line_items']??[]) as $line)$fallback+=(float)($line['sale_price']??0)*max(1,(int)($line['quantity']??1));return $fallback; }$fallback=0.0;foreach(($raw['item_list']??[]) as $line)$fallback+=(float)($line['model_discounted_price']??$line['model_original_price']??0)*max(1,(int)($line['model_quantity_purchased']??1));return $fallback;
     }
 
-    private function resolveCost(array $line): ?array
-    {
-        $keys=$this->keys($line);if(!$keys)return null;$marks=implode(',',array_fill(0,count($keys),'?'));
-        $sql="SELECT pc.sku_id,pc.unit_cost FROM product_costs pc JOIN data_mappings m ON m.sku_id=pc.sku_id LEFT JOIN mapping_aliases a ON a.mapping_id=m.id WHERE UPPER(REPLACE(m.sku_id,' ','')) IN ($marks) OR a.alias_key IN ($marks) ORDER BY FIELD(UPPER(REPLACE(m.sku_id,' ','')),".implode(',',array_fill(0,count($keys),'?')).") LIMIT 1";
-        $stmt=$this->db->prepare($sql);$stmt->execute(array_merge($keys,$keys,$keys));$row=$stmt->fetch();return $row?['sku'=>(string)$row['sku_id'],'cost'=>(float)$row['unit_cost']]:null;
-    }
     private function costLookup(): array
     {
-        $lookup=[];$rows=$this->db->query('SELECT m.id,m.sku_id,pc.unit_cost FROM data_mappings m JOIN product_costs pc ON pc.sku_id=m.sku_id')->fetchAll();$byId=[];foreach($rows as $row){$cost=['sku'=>(string)$row['sku_id'],'cost'=>(float)$row['unit_cost']];$byId[(int)$row['id']]=$cost;$lookup[$this->keys(['item_key'=>$row['sku_id']])[0]]=$cost;}
+        $costs=[];foreach($this->db->query('SELECT sku_id,unit_cost FROM product_costs')->fetchAll() as $row)$costs[(string)$row['sku_id']]=(float)$row['unit_cost'];$lookup=[];$byId=[];
+        foreach($this->db->query("SELECT id,sku_id,product_name,variation_name,group_name,paper,duplex FROM data_mappings WHERE sku_id<>''")->fetchAll() as $mapping){$category=self::categoryFor($mapping);if($category===null||!array_key_exists($category['key'],$costs))continue;$cost=['sku'=>$category['key'],'cost'=>$costs[$category['key']]];$byId[(int)$mapping['id']]=$cost;$keys=$this->keys(['item_key'=>$mapping['sku_id']]);if($keys)$lookup[$keys[0]]=$cost;}
         if(!$byId)return $lookup;foreach($this->db->query('SELECT mapping_id,alias_key FROM mapping_aliases')->fetchAll() as $row)if(isset($byId[(int)$row['mapping_id']]))$lookup[(string)$row['alias_key']]=$byId[(int)$row['mapping_id']];return $lookup;
     }
     private function resolveCostFromLookup(array $line,array $lookup): ?array { foreach($this->keys($line) as $key)if(isset($lookup[$key]))return $lookup[$key];return null; }
+    public static function categoryFor(array $mapping): ?array
+    {
+        $sku=trim((string)($mapping['sku_id']??''));$group=mb_strtolower(trim((string)($mapping['group_name']??'')));$text=mb_strtolower(implode(' ',[$group,(string)($mapping['product_name']??''),(string)($mapping['variation_name']??'')]));$paper=strtoupper(trim((string)($mapping['paper']??'')));if($paper!=='A5'&&$paper!=='B5')$paper=str_contains($text,'b5')?'B5':(str_contains($text,'a5')?'A5':'');
+        if(str_contains($text,'sticker'))return $sku===''?null:['type'=>'sticker','key'=>'sticker:'.$sku];
+        if(preg_match('/sampul|cover/u',$text))return $paper===''?null:['type'=>'category','key'=>'category:cover_'.strtolower($paper)];
+        if(str_contains($text,'loose leaf')||str_contains($text,'looseleaf')||preg_match('/^l\b/u',$group))return $paper===''?null:['type'=>'category','key'=>'category:loose_leaf_'.strtolower($paper)];
+        if(str_contains($text,'jurnal')||str_contains($text,'journal')||preg_match('/^[pj]\b/u',$group))return $paper===''?null:['type'=>'category','key'=>'category:journal_'.strtolower($paper)];
+        if(str_contains($text,'ring binder')||str_contains($text,'binder'))return ['type'=>'category','key'=>'category:ring_binder'];
+        return null;
+    }
     private function keys(array $line): array { $norm=fn($value)=>strtoupper(preg_replace('/\s+/','',trim((string)$value)));return array_values(array_unique(array_filter([$norm($line['item_key']??''),$norm(($line['model_sku']??'').($line['item_sku']??'')),$norm(($line['item_sku']??'').($line['model_sku']??'')),$norm($line['model_sku']??''),$norm($line['item_sku']??'')]))); }
     private function monthLabel(DateTimeImmutable $month): string { return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][(int)$month->format('n')-1].' '.$month->format('Y'); }
 }
