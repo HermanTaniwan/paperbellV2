@@ -22,6 +22,14 @@ final class TikTokShopeeListingService
         return ['ok'=>true,'source_item_id'=>$itemId,'product_id'=>(string)($data['product_id']??''),'status'=>'draft','title'=>$body['title'],'message'=>'Draf TikTok berhasil dibuat dan menunggu pemeriksaan.'];
     }
 
+    public function activate(string $productId): array
+    {
+        $productId=trim($productId);if($productId==='')throw new InvalidArgumentException('ID produk TikTok wajib diisi.');$auth=$this->oauth->credentials('tiktok');
+        $this->tiktok('POST','/product/202309/products/activate',[],['product_ids'=>[$productId],'listing_platforms'=>['TIKTOK_SHOP']],$auth);
+        $detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth)['data']??[];$product=$detail['product']??$detail;
+        return ['ok'=>true,'product_id'=>$productId,'status'=>(string)($product['status']??$product['product_status']??'PENDING'),'message'=>'Produk dikirim untuk ditayangkan dan sedang mengikuti pemeriksaan TikTok.'];
+    }
+
     private function stickerTemplate(array $auth): array
     {
         $list=$this->tiktok('POST','/product/202309/products/search',['page_size'=>100],[],$auth);foreach(($list['data']['products']??[]) as $row){$title=mb_strtolower((string)($row['title']??$row['name']??''));if(!str_contains($title,'stiker')&&!str_contains($title,'sticker'))continue;$id=(string)($row['id']??'');if($id==='')continue;$response=$this->tiktok('GET','/product/202309/products/'.rawurlencode($id),[],null,$auth);$product=$response['data']['product']??$response['data']??[];$chains=$product['category_chains']??[];$leaf=is_array($chains)&&$chains?end($chains):[];$category=(string)($product['category_id']??$product['category']['id']??$leaf['id']??$leaf['category_id']??'');if($category!==''){$product['category_id']=$category;return$product;}}
