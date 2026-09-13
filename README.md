@@ -123,7 +123,7 @@ Runbook lengkap untuk membuat draf, memetakan kategori V2, mengunggah gambar, me
 
 ## Pembaruan stok Shopee
 
-Gunakan endpoint internal `shopee_product_stock&item_id=<item_id>` untuk memeriksa variasi dan stok saat ini. Untuk menyetel stok satu variasi, kirim `POST` JSON ke `shopee_update_stock` dengan `item_id`, `model_id`, dan `quantity`. Operasi ini memakai `POST /api/v2/product/update_stock`, kemudian membaca ulang produk untuk konfirmasi dan mencatat hasilnya di `marketplace_stock_updates`.
+Runbook untuk pembaruan stok Shopee dan TikTok Shop—termasuk endpoint internal, format payload, verifikasi, audit, serta batasan multi-gudang—tersedia di [docs/marketplace-stock-runbook.md](docs/marketplace-stock-runbook.md).
 
 Saat diminta menaikkan harga produk looseleaf/jurnal, gunakan kenaikan **Rp500 per SKU** di Shopee dan TikTok Shop. Ringbinder, stiker/sticker, dan sampul/cover adalah pengecualian dan harus tetap pada harga semula. Produk seperti buku sketsa fashion, pembatas binder, HSK, workbook kaligrafi, rekap tagihan, dan sudoku termasuk target kenaikan bila belum pernah dinaikkan.
 
