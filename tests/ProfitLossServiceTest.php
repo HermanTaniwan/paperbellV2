@@ -18,5 +18,6 @@ profitExpectSame('category:cover_b5',ProfitLossService::categoryFor(['sku_id'=>'
 $stickerOne=ProfitLossService::categoryFor(['sku_id'=>'STICKER-CAT','product_name'=>'Sticker Kucing Duduk'])['key'];
 $stickerTwo=ProfitLossService::categoryFor(['sku_id'=>'OTHER-MARKETPLACE-ID','product_name'=>'Sticker Kucing Duduk'])['key'];
 profitExpectSame($stickerOne,$stickerTwo,'The same sticker design from different marketplaces must share one HPP entry.');
+profitExpectSame($stickerOne,ProfitLossService::categoryFor(['sku_id'=>'OTHER-VARIATION','product_name'=>'Sticker Kucing Duduk','variation_name'=>'Pack 50'])['key'],'Sticker marketplace variations must not duplicate a design-level HPP entry.');
 profitExpectSame(true,str_starts_with(ProfitLossService::categoryFor(['sku_id'=>'STIKER-CAT','product_name'=>'STIKER KUCING HITAM'])['key'],'sticker:name:'),'Indonesian STIKER names must retain a distinct HPP entry.');
 echo "ProfitLossService tests passed\n";
