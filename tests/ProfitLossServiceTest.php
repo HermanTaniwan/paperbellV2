@@ -16,4 +16,5 @@ profitExpectSame('category:journal_a5',ProfitLossService::categoryFor(['sku_id'=
 profitExpectSame('category:loose_leaf_a5',ProfitLossService::categoryFor(['sku_id'=>'L-A5','group_name'=>'L','paper'=>'A5'])['key'],'Loose group must resolve to the loose leaf category.');
 profitExpectSame('category:cover_b5',ProfitLossService::categoryFor(['sku_id'=>'C-B5','product_name'=>'Sampul Binder','paper'=>'B5'])['key'],'Covers must separate A5 and B5 category HPP.');
 profitExpectSame('sticker:STICKER-CAT',ProfitLossService::categoryFor(['sku_id'=>'STICKER-CAT','product_name'=>'Sticker Kucing Duduk'])['key'],'Stickers must retain per-SKU HPP.');
+profitExpectSame('sticker:STIKER-CAT',ProfitLossService::categoryFor(['sku_id'=>'STIKER-CAT','product_name'=>'STIKER KUCING HITAM'])['key'],'Indonesian STIKER names must retain per-SKU HPP.');
 echo "ProfitLossService tests passed\n";

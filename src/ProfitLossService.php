@@ -101,7 +101,7 @@ final class ProfitLossService
     public static function categoryFor(array $mapping): ?array
     {
         $sku=trim((string)($mapping['sku_id']??''));$group=mb_strtolower(trim((string)($mapping['group_name']??'')));$text=mb_strtolower(implode(' ',[$group,(string)($mapping['product_name']??''),(string)($mapping['variation_name']??'')]));$paper=strtoupper(trim((string)($mapping['paper']??'')));if($paper!=='A5'&&$paper!=='B5')$paper=str_contains($text,'b5')?'B5':(str_contains($text,'a5')?'A5':'');
-        if(str_contains($text,'sticker'))return $sku===''?null:['type'=>'sticker','key'=>'sticker:'.$sku];
+        if(str_contains($text,'sticker')||str_contains($text,'stiker'))return $sku===''?null:['type'=>'sticker','key'=>'sticker:'.$sku];
         if(preg_match('/sampul|cover/u',$text))return $paper===''?null:['type'=>'category','key'=>'category:cover_'.strtolower($paper)];
         if(str_contains($text,'loose leaf')||str_contains($text,'looseleaf')||preg_match('/^l\b/u',$group))return $paper===''?null:['type'=>'category','key'=>'category:loose_leaf_'.strtolower($paper)];
         if(str_contains($text,'jurnal')||str_contains($text,'journal')||preg_match('/^[pj]\b/u',$group))return $paper===''?null:['type'=>'category','key'=>'category:journal_'.strtolower($paper)];
