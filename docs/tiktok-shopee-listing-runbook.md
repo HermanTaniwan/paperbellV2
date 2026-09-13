@@ -7,7 +7,7 @@ Gunakan alur ini untuk menyalin satu produk Shopee ke TikTok Shop. Implementasi 
 - Selalu buat **draf** terlebih dahulu (`save_mode: AS_DRAFT`). Aktivasi adalah operasi terpisah dan hanya dilakukan setelah penjual menyetujui.
 - Jangan menyalin token atau secret ke skrip. Ambil kredensial lewat `MarketplaceOAuthService::credentials()`; Paperbell menyimpan token terenkripsi dan me-refreshnya otomatis.
 - Gunakan `idempotency_key` yang stabil, saat ini `shopee-{item_id}`, agar retry tidak membuat produk ganda.
-- TikTok Shop Indonesia harus memakai taksonomi `v2`; jangan gunakan kembali kategori `v1` dari produk lama.
+- Produk Indonesia secara default ditujukan ke **TikTok Shop dan Tokopedia** (`listing_platforms:["TIKTOK_SHOP","TOKOPEDIA"]`). TikTok Shop Indonesia harus memakai taksonomi `v2`; jangan gunakan kembali kategori `v1` dari produk lama.
 - Produk multivariasi dihentikan dengan sengaja sampai sales attributes TikTok dipetakan. Produk satu SKU dapat diproses otomatis.
 
 ## Urutan API
@@ -15,7 +15,7 @@ Gunakan alur ini untuk menyalin satu produk Shopee ke TikTok Shop. Implementasi 
 1. Shopee `GET /api/v2/product/get_item_base_info?item_id_list={item_id}` untuk judul, deskripsi, gambar, berat/dimensi dasar, dan SKU induk.
 2. Shopee `GET /api/v2/product/get_model_list?item_id={item_id}` untuk harga, stok, SKU variasi, berat, dan dimensi final.
 3. Unduh maksimal sembilan gambar Shopee, lalu TikTok `POST /product/202309/images/upload` dengan multipart `data` dan `use_case=MAIN_IMAGE`. Simpan URI yang dikembalikan TikTok; URL Shopee tidak boleh dipasang langsung di listing TikTok.
-4. TikTok `POST /product/202309/categories/recommend` dengan `category_version=v2`, `listing_platform=TIKTOK_SHOP`, judul, deskripsi, dan URI gambar. Pakai `data.leaf_category_id` (atau category ID leaf yang dikembalikan), bukan hasil pencarian kata kunci.
+4. TikTok `POST /product/202309/categories/recommend` dua kali dengan `category_version=v2`, masing-masing untuk `listing_platform=TIKTOK_SHOP` dan `TOKOPEDIA`, judul, deskripsi, dan URI gambar. Pakai hanya `leaf_category_id` yang sama pada kedua respons; bila berbeda, hentikan dan minta pemetaan kategori bersama.
 5. Sebelum membuat listing baru, panggil `GET /product/202309/categories/{category_id}/attributes` dan `.../rules` dengan `category_version=v2`, `locale=id-ID`, serta `shop_cipher`. Simpan/isi semua atribut `is_required`, aturan sertifikasi, size chart, COD, dan ketentuan gudang yang dikembalikan.
 6. TikTok `POST /product/202309/products` dengan `save_mode=AS_DRAFT`.
 7. Setelah pengguna menyetujui, TikTok `POST /product/202309/products/activate` dengan `product_ids` dan `listing_platforms:["TIKTOK_SHOP"]`.
