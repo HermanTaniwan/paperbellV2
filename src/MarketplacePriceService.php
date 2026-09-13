@@ -30,6 +30,16 @@ final class MarketplacePriceService
         return ['listed_items'=>count($ids),'base_items'=>count($base),'sample'=>$sample,'model_sample'=>$modelSample];
     }
 
+    /** Read a small, sanitized sample of existing TikTok listings to reuse their permitted taxonomy. */
+    public function tiktokCatalogSample(string $query, int $limit = 10): array
+    {
+        $query=trim($query);if($query==='')throw new InvalidArgumentException('Kata kunci katalog TikTok wajib diisi.');
+        $auth=$this->oauth->credentials('tiktok');
+        $json=$this->tiktok('POST','/product/202309/products/search',['page_size'=>max(1,min(20,$limit))],[],$auth);
+        $items=[];foreach(($json['data']['products']??[]) as $row){$title=(string)($row['title']??$row['name']??'');if(!str_contains(mb_strtolower($title),mb_strtolower($query)))continue;$id=(string)($row['id']??'');if($id==='')continue;$detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($id),[],null,$auth)['data']['product']??[];$items[]=['id'=>$id,'title'=>$title,'category_id'=>(string)($detail['category_id']??''),'category_version'=>(string)($detail['category_version']??''),'product_attributes'=>$detail['product_attributes']??[],'package_weight'=>$detail['package_weight']??[],'package_dimensions'=>$detail['package_dimensions']??[],'is_cod_allowed'=>(bool)($detail['is_cod_allowed']??false),'sku_count'=>count($detail['skus']??[])];}
+        return ['items'=>$items];
+    }
+
     /** Increase every SKU belonging to a looseleaf or journal product. */
     public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {
