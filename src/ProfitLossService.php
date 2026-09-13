@@ -111,7 +111,7 @@ final class ProfitLossService
         if(str_contains($text,'ring binder')||str_contains($text,'binder'))return ['type'=>'category','key'=>'category:ring_binder'];
         return null;
     }
-    private function lineAsMapping(array $line): array { $sku=trim((string)($line['item_key']??''))?:trim((string)($line['model_sku']??''))?:trim((string)($line['item_sku']??''));return ['sku_id'=>$sku,'product_name'=>(string)($line['item_name']??''),'variation_name'=>(string)($line['model_name']??''),'group_name'=>'','paper'=>'','duplex'=>'']; }
+    private function lineAsMapping(array $line): array { $name=(string)($line['item_name']??'');$variation=(string)($line['model_name']??'');$sku=trim((string)($line['item_key']??''))?:trim((string)($line['model_sku']??''))?:trim((string)($line['item_sku']??''));if($sku==='')$sku='name:'.hash('sha256',mb_strtolower(trim($name.'|'.$variation)));return ['sku_id'=>$sku,'product_name'=>$name,'variation_name'=>$variation,'group_name'=>'','paper'=>'','duplex'=>'']; }
     private function keys(array $line): array { $norm=fn($value)=>strtoupper(preg_replace('/\s+/','',trim((string)$value)));return array_values(array_unique(array_filter([$norm($line['item_key']??''),$norm(($line['model_sku']??'').($line['item_sku']??'')),$norm(($line['item_sku']??'').($line['model_sku']??'')),$norm($line['model_sku']??''),$norm($line['item_sku']??'')]))); }
     private function monthLabel(DateTimeImmutable $month): string { return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][(int)$month->format('n')-1].' '.$month->format('Y'); }
 }
