@@ -7,6 +7,7 @@ function profitExpectSame(mixed $expected,mixed $actual,string $message): void {
 $result=ProfitLossService::calculate(['shopee'=>200000.0,'tiktok'=>100000.0],120000.0,18000.0,['tiktok_fee'=>5000.0,'external_ads'=>10000.0,'shipping_packing'=>7000.0,'payroll'=>20000.0,'operations'=>5000.0,'other'=>0.0]);
 profitExpectSame(115000.0,$result['netProfit'],'P&L must subtract HPP, marketplace fees, and every manual expense exactly once.');
 profitExpectSame(38.33,$result['margin'],'Margin must use total cross-marketplace revenue as the denominator.');
+profitExpectSame(185000.0,$result['totalCost'],'Total cost must include HPP, marketplace fees, and every manual expense exactly once.');
 $zero=ProfitLossService::calculate(['shopee'=>0.0,'tiktok'=>0.0],0.0,0.0,[]);
 profitExpectSame(0.0,$zero['netProfit'],'Empty month should have zero profit.');
 profitExpectSame(0.0,$zero['margin'],'Empty month must not divide by zero.');

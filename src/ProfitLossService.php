@@ -64,12 +64,12 @@ final class ProfitLossService
         $lines->execute([$start,$end]);$costLookup=$this->costLookup();$cogs=0.0;$estimatedUnits=0;$missingUnits=0;$missing=[];foreach($lines->fetchAll() as $line){$qty=(int)$line['qty'];if($line['snapshot_sku']!==null){$cogs+=$qty*(float)$line['snapshot_cost'];continue;}$cost=$this->resolveCostFromLookup($line,$costLookup);if($cost===null){$missingUnits+=$qty;$missing[(string)($line['item_key']?:$line['item_name'])]=true;continue;}$cogs+=$qty*$cost['cost'];$estimatedUnits+=$qty;}
         $fee=$this->db->prepare("SELECT COUNT(*) orders,COALESCE(SUM(e.total_marketplace_fee),0) fees,COALESCE(SUM(e.payout_amount),0) payout FROM shopee_escrow_details e JOIN orders o ON o.order_sn=e.order_sn WHERE e.order_create_time>=? AND e.order_create_time<? AND o.order_sn NOT LIKE 'TIKTOK:%' AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED')");$fee->execute([$start,$end]);$escrow=$fee->fetch()?:[];$shopeeOrders=count(array_filter($orderRows,fn($row)=>$row['marketplace']==='shopee'));
         $summary=self::calculate($revenue,$cogs,(float)($escrow['fees']??0),$expenses);
-        return ['month'=>$from->format('Y-m'),'label'=>$this->monthLabel($from),'revenue'=>$revenue,'expenses'=>$expenses,'cogs'=>$cogs,'marketplaceFees'=>(float)($escrow['fees']??0),'payout'=>(float)($escrow['payout']??0),'netProfit'=>$summary['netProfit'],'margin'=>$summary['margin'],'coverage'=>['shopeeOrders'=>$shopeeOrders,'escrowOrders'=>(int)($escrow['orders']??0),'escrowPercent'=>$shopeeOrders?round((int)($escrow['orders']??0)/$shopeeOrders*100,1):100,'missingUnits'=>$missingUnits,'estimatedUnits'=>$estimatedUnits,'missingSkus'=>array_keys($missing)]];
+        return ['month'=>$from->format('Y-m'),'label'=>$this->monthLabel($from),'revenue'=>$revenue,'expenses'=>$expenses,'cogs'=>$cogs,'marketplaceFees'=>(float)($escrow['fees']??0),'payout'=>(float)($escrow['payout']??0),'totalCost'=>$summary['totalCost'],'netProfit'=>$summary['netProfit'],'margin'=>$summary['margin'],'coverage'=>['shopeeOrders'=>$shopeeOrders,'escrowOrders'=>(int)($escrow['orders']??0),'escrowPercent'=>$shopeeOrders?round((int)($escrow['orders']??0)/$shopeeOrders*100,1):100,'missingUnits'=>$missingUnits,'estimatedUnits'=>$estimatedUnits,'missingSkus'=>array_keys($missing)]];
     }
 
     public function history(DateTimeImmutable $month): array
     {
-        $items=[];for($i=11;$i>=0;$i--){$report=$this->dashboard($month->modify('first day of this month')->modify('-'.$i.' months'));$items[]=['month'=>$report['month'],'label'=>$report['label'],'revenue'=>array_sum($report['revenue']),'netProfit'=>$report['netProfit'],'margin'=>$report['margin']];}return $items;
+        $items=[];for($i=0;$i<12;$i++){$report=$this->dashboard($month->modify('first day of this month')->modify('-'.$i.' months'));$items[]=['month'=>$report['month'],'label'=>$report['label'],'revenue'=>array_sum($report['revenue']),'totalCost'=>$report['totalCost'],'netProfit'=>$report['netProfit'],'margin'=>$report['margin']];}return $items;
     }
 
     public function expenses(DateTimeImmutable $month): array
@@ -86,7 +86,7 @@ final class ProfitLossService
 
     public static function calculate(array $revenue,float $cogs,float $marketplaceFees,array $expenses): array
     {
-        $total=array_sum($revenue);$net=$total-$cogs-$marketplaceFees-array_sum($expenses);return ['netProfit'=>$net,'margin'=>$total>0?round($net/$total*100,2):0.0];
+        $total=array_sum($revenue);$totalCost=$cogs+$marketplaceFees+array_sum($expenses);$net=$total-$totalCost;return ['totalCost'=>$totalCost,'netProfit'=>$net,'margin'=>$total>0?round($net/$total*100,2):0.0];
     }
 
     private static function orderAmount(string $json,string $marketplace): float
