@@ -24,6 +24,7 @@ require __DIR__ . '/src/ScannerService.php';
 require __DIR__ . '/src/ServerHealthService.php';
 require __DIR__ . '/src/CustomerLoyaltyService.php';
 require __DIR__ . '/src/DashboardAnalyticsService.php';
+require __DIR__ . '/src/ProfitLossService.php';
 
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
@@ -260,6 +261,12 @@ try {
         $to=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($_GET['to']??'')))?:$today;
         respond((new ShopeeEscrowService($mysql,$oauthService()))->dashboard($from,$to));
     }
+    if ($action === 'profit_loss') {
+        $value=trim((string)($_GET['month']??''));$month=DateTimeImmutable::createFromFormat('!Y-m',$value)?:new DateTimeImmutable('first day of this month');$service=new ProfitLossService($mysql);$report=$service->dashboard($month);respond($report+['history'=>$service->history($month)]);
+    }
+    if ($action === 'profit_costs') respond((new ProfitLossService($mysql))->costs());
+    if ($action === 'save_profit_cost') { $input=body();(new ProfitLossService($mysql))->saveCost((string)($input['sku_id']??''),(float)($input['unit_cost']??0));respond(['ok'=>true]); }
+    if ($action === 'save_profit_expenses') { $input=body();$month=DateTimeImmutable::createFromFormat('!Y-m',trim((string)($input['month']??'')));if(!$month)respond(['error'=>'Bulan tidak valid.'],422);(new ProfitLossService($mysql))->saveExpenses($month,$input);respond(['ok'=>true]); }
     if ($action === 'sync_shopee_finance') {
         $input=body();$today=new DateTimeImmutable('today');
         $from=DateTimeImmutable::createFromFormat('!Y-m-d',trim((string)($input['from']??'')))?:$today->setDate((int)$today->format('Y'),4,1);

@@ -63,6 +63,19 @@ CREATE TABLE IF NOT EXISTS mapping_aliases (
   CONSTRAINT fk_mapping_alias_mapping FOREIGN KEY(mapping_id) REFERENCES data_mappings(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS product_costs (
+  sku_id VARCHAR(255) PRIMARY KEY, unit_cost DECIMAL(18,2) NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS order_line_costs (
+  order_process_id BIGINT PRIMARY KEY, sku_id VARCHAR(255) NOT NULL, unit_cost DECIMAL(18,2) NOT NULL, captured_at BIGINT NOT NULL,
+  INDEX ix_order_line_costs_sku(sku_id)
+) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS monthly_profit_expenses (
+  month_start DATE PRIMARY KEY, tiktok_fee DECIMAL(18,2) NOT NULL DEFAULT 0, external_ads DECIMAL(18,2) NOT NULL DEFAULT 0,
+  shipping_packing DECIMAL(18,2) NOT NULL DEFAULT 0, payroll DECIMAL(18,2) NOT NULL DEFAULT 0, operations DECIMAL(18,2) NOT NULL DEFAULT 0,
+  other DECIMAL(18,2) NOT NULL DEFAULT 0, updated_at BIGINT NOT NULL
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS print_jobs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(30) NOT NULL, order_sn VARCHAR(100) NOT NULL DEFAULT '',
   order_process_id BIGINT NULL, file_path TEXT NOT NULL, printer VARCHAR(255) NOT NULL,

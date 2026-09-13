@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 final class MarketplaceOrderSyncService
 {
-    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth){$this->ensureSchema();}
+    private ProfitLossService $profitLoss;
+    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth){$this->ensureSchema();$this->profitLoss=new ProfitLossService($db);}
 
     private function ensureSchema(): void
     {
@@ -66,7 +67,7 @@ final class MarketplaceOrderSyncService
         foreach(array_values(array_unique($orderSns)) as $sn){$stmt->execute([$sn,$provider,mb_substr($user,0,100),$now,$now]);$queued+=$stmt->rowCount();}
         return$queued;
     }
-    private function upsertLine(string $sn,string $lineId,string $itemKey,string $modelSku,string $itemSku,string $itemName,string $modelName,int $qty,string $status,int $create): void{$stmt=$this->db->prepare('INSERT INTO order_process(order_sn,order_item_id,item_key,model_sku,item_sku,item_name,model_name,qty,status,create_time,saved_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE item_key=VALUES(item_key),model_sku=VALUES(model_sku),item_sku=VALUES(item_sku),item_name=VALUES(item_name),model_name=VALUES(model_name),qty=VALUES(qty),status=VALUES(status),create_time=VALUES(create_time),saved_at=VALUES(saved_at)');$stmt->execute([$sn,$lineId,$itemKey,$modelSku,$itemSku,$itemName,$modelName,$qty,$status,$create,time()]);}
+    private function upsertLine(string $sn,string $lineId,string $itemKey,string $modelSku,string $itemSku,string $itemName,string $modelName,int $qty,string $status,int $create): void{$stmt=$this->db->prepare('INSERT INTO order_process(order_sn,order_item_id,item_key,model_sku,item_sku,item_name,model_name,qty,status,create_time,saved_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE item_key=VALUES(item_key),model_sku=VALUES(model_sku),item_sku=VALUES(item_sku),item_name=VALUES(item_name),model_name=VALUES(model_name),qty=VALUES(qty),status=VALUES(status),create_time=VALUES(create_time),saved_at=VALUES(saved_at)');$stmt->execute([$sn,$lineId,$itemKey,$modelSku,$itemSku,$itemName,$modelName,$qty,$status,$create,time()]);$find=$this->db->prepare('SELECT id FROM order_process WHERE order_sn=? AND order_item_id=?');$find->execute([$sn,$lineId]);$id=(int)$find->fetchColumn();if($id>0)$this->profitLoss->snapshotLine($id);}
     private function deleteStaleLines(string $sn,array $ids): void{if(!$ids)return;$marks=implode(',',array_fill(0,count($ids),'?'));$stmt=$this->db->prepare("DELETE FROM order_process WHERE order_sn=? AND order_item_id NOT IN ($marks)");$stmt->execute(array_merge([$sn],$ids));}
     private function refreshPrintSummary(string $sn): void{$stmt=$this->db->prepare('UPDATE orders o LEFT JOIN (SELECT order_sn,COUNT(*) line_count,COALESCE(SUM(qty),0) item_qty,SUM(printed=0) pending,MAX(printed_at) printed_at FROM order_process WHERE order_sn=? GROUP BY order_sn) s ON s.order_sn=o.order_sn SET o.print_line_count=COALESCE(s.line_count,0),o.print_item_qty=COALESCE(s.item_qty,0),o.unprinted_lines=COALESCE(s.pending,0),o.last_printed_at=s.printed_at WHERE o.order_sn=?');$stmt->execute([$sn,$sn]);}
     private function upsertTrackingNumber(string $sn,string $tracking): void{if($tracking==='')return;$stmt=$this->db->prepare("INSERT INTO order_resi(order_sn,pdf_path,tracking_number) VALUES(?,'',?) ON DUPLICATE KEY UPDATE tracking_number=VALUES(tracking_number)");$stmt->execute([$sn,$tracking]);}
