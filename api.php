@@ -18,6 +18,7 @@ require __DIR__ . '/src/ShopeeEscrowService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
+require __DIR__ . '/src/TikTokStockService.php';
 require __DIR__ . '/src/TikTokShopeeListingService.php';
 require __DIR__ . '/src/DataMappingService.php';
 require __DIR__ . '/src/PrintQueueService.php';
@@ -238,6 +239,8 @@ try {
     if ($action === 'marketplace_shopee_catalog_diagnostics') respond((new MarketplacePriceService($mysql,$oauthService()))->shopeeCatalogDiagnostics());
     if ($action === 'shopee_product_stock') respond((new ShopeeStockService($mysql,$oauthService()))->product((int)($_GET['item_id']??0)));
     if ($action === 'shopee_update_stock') {$input=body();respond((new ShopeeStockService($mysql,$oauthService()))->update((int)($input['item_id']??0),(int)($input['model_id']??-1),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
+    if ($action === 'tiktok_product_stock') respond((new TikTokStockService($mysql,$oauthService()))->product(trim((string)($_GET['product_id']??''))));
+    if ($action === 'tiktok_update_stock') {$input=body();respond((new TikTokStockService($mysql,$oauthService()))->update(trim((string)($input['product_id']??'')),trim((string)($input['sku_id']??'')),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
     if ($action === 'marketplace_tiktok_catalog_sample') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCatalogSample((string)($_GET['q']??''),(int)($_GET['limit']??10)));
     if ($action === 'marketplace_tiktok_categories') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCategories((string)($_GET['q']??'')));
     if ($action === 'tiktok_draft_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->createDraft((int)($input['item_id']??0))); }
