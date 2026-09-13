@@ -40,6 +40,12 @@ final class MarketplacePriceService
         return ['items'=>$items];
     }
 
+    public function tiktokCategories(string $query): array
+    {
+        $auth=$this->oauth->credentials('tiktok');
+        return $this->tiktok('GET','/product/202309/categories',['category_version'=>'v2','locale'=>'id-ID','keyword'=>trim($query),'listing_platform'=>'TIKTOK_SHOP','include_prohibited_categories'=>'false'],null,$auth);
+    }
+
     /** Increase every SKU belonging to a looseleaf or journal product. */
     public function raiseLooseleafAndJournalPrices(int $increment, string $user, ?string $onlyProvider = null): array
     {

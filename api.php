@@ -236,6 +236,7 @@ try {
     if ($action === 'marketplace_price_update_summary') respond((new MarketplacePriceService($mysql,$oauthService()))->updateSummary());
     if ($action === 'marketplace_shopee_catalog_diagnostics') respond((new MarketplacePriceService($mysql,$oauthService()))->shopeeCatalogDiagnostics());
     if ($action === 'marketplace_tiktok_catalog_sample') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCatalogSample((string)($_GET['q']??''),(int)($_GET['limit']??10)));
+    if ($action === 'marketplace_tiktok_categories') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCategories((string)($_GET['q']??'')));
     if ($action === 'tiktok_draft_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->createDraft((int)($input['item_id']??0))); }
 
     if ($action === 'label_pdf') {
