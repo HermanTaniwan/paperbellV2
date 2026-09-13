@@ -15,6 +15,8 @@ profitExpectSame('category:loose_leaf_b5',ProfitLossService::categoryFor(['sku_i
 profitExpectSame('category:journal_a5',ProfitLossService::categoryFor(['sku_id'=>'P-A5','group_name'=>'P','paper'=>'A5'])['key'],'Planner group must resolve to the journal category.');
 profitExpectSame('category:loose_leaf_a5',ProfitLossService::categoryFor(['sku_id'=>'L-A5','group_name'=>'L','paper'=>'A5'])['key'],'Loose group must resolve to the loose leaf category.');
 profitExpectSame('category:cover_b5',ProfitLossService::categoryFor(['sku_id'=>'C-B5','product_name'=>'Sampul Binder','paper'=>'B5'])['key'],'Covers must separate A5 and B5 category HPP.');
-profitExpectSame('sticker:STICKER-CAT',ProfitLossService::categoryFor(['sku_id'=>'STICKER-CAT','product_name'=>'Sticker Kucing Duduk'])['key'],'Stickers must retain per-SKU HPP.');
-profitExpectSame('sticker:STIKER-CAT',ProfitLossService::categoryFor(['sku_id'=>'STIKER-CAT','product_name'=>'STIKER KUCING HITAM'])['key'],'Indonesian STIKER names must retain per-SKU HPP.');
+$stickerOne=ProfitLossService::categoryFor(['sku_id'=>'STICKER-CAT','product_name'=>'Sticker Kucing Duduk'])['key'];
+$stickerTwo=ProfitLossService::categoryFor(['sku_id'=>'OTHER-MARKETPLACE-ID','product_name'=>'Sticker Kucing Duduk'])['key'];
+profitExpectSame($stickerOne,$stickerTwo,'The same sticker design from different marketplaces must share one HPP entry.');
+profitExpectSame(true,str_starts_with(ProfitLossService::categoryFor(['sku_id'=>'STIKER-CAT','product_name'=>'STIKER KUCING HITAM'])['key'],'sticker:name:'),'Indonesian STIKER names must retain a distinct HPP entry.');
 echo "ProfitLossService tests passed\n";
