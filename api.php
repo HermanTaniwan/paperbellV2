@@ -17,6 +17,7 @@ require __DIR__ . '/src/MarketplaceOrderSyncService.php';
 require __DIR__ . '/src/ShopeeEscrowService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
+require __DIR__ . '/src/TikTokShopeeListingService.php';
 require __DIR__ . '/src/DataMappingService.php';
 require __DIR__ . '/src/PrintQueueService.php';
 require __DIR__ . '/src/PdfToolsService.php';
@@ -235,6 +236,7 @@ try {
     if ($action === 'marketplace_price_update_summary') respond((new MarketplacePriceService($mysql,$oauthService()))->updateSummary());
     if ($action === 'marketplace_shopee_catalog_diagnostics') respond((new MarketplacePriceService($mysql,$oauthService()))->shopeeCatalogDiagnostics());
     if ($action === 'marketplace_tiktok_catalog_sample') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCatalogSample((string)($_GET['q']??''),(int)($_GET['limit']??10)));
+    if ($action === 'tiktok_draft_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->createDraft((int)($input['item_id']??0))); }
 
     if ($action === 'label_pdf') {
         $stmt=$mysql->prepare('SELECT pdf_path FROM order_resi WHERE order_sn=?');$stmt->execute([(string)($_GET['order_sn']??'')]);$path=(string)($stmt->fetchColumn()?:'');
