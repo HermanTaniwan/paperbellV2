@@ -115,6 +115,10 @@ Buka **Koneksi Marketplace** dari sidebar. Credential aplikasi dan token disimpa
 
 Jangan bagikan `storage/secrets/oauth.key`. File tersebut diblokir oleh Apache dan diabaikan Git.
 
+## Produk Shopee ke TikTok Shop
+
+Runbook lengkap untuk membuat draf, memetakan kategori V2, mengunggah gambar, mengaktifkan listing, dan menyimpan audit tersedia di [docs/tiktok-shopee-listing-runbook.md](docs/tiktok-shopee-listing-runbook.md).
+
 ## Prosedur harga marketplace
 
 Saat diminta menaikkan harga produk looseleaf/jurnal, gunakan kenaikan **Rp500 per SKU** di Shopee dan TikTok Shop. Ringbinder, stiker/sticker, dan sampul/cover adalah pengecualian dan harus tetap pada harga semula. Produk seperti buku sketsa fashion, pembatas binder, HSK, workbook kaligrafi, rekap tagihan, dan sudoku termasuk target kenaikan bila belum pernah dinaikkan.
