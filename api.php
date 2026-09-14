@@ -254,6 +254,8 @@ try {
     if ($action === 'tiktok_product_stock') respond((new TikTokStockService($mysql,$oauthService()))->product(trim((string)($_GET['product_id']??''))));
     if ($action === 'tiktok_update_stock') {$input=body();respond((new TikTokStockService($mysql,$oauthService()))->update(trim((string)($input['product_id']??'')),trim((string)($input['sku_id']??'')),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
     if ($action === 'stock_management') respond((new StockManagementService($mysql,$oauthService()))->overview());
+    if ($action === 'stock_management_list') respond((new StockManagementService($mysql,$oauthService()))->listManaged());
+    if ($action === 'stock_management_stock') respond((new StockManagementService($mysql,$oauthService()))->stockFor((int)($_GET['id']??0)));
     if ($action === 'stock_management_search') respond((new StockManagementService($mysql,$oauthService()))->search(strtolower(trim((string)($_GET['provider']??''))),trim((string)($_GET['q']??''))));
     if ($action === 'stock_management_parent_search') respond((new StockManagementService($mysql,$oauthService()))->searchParents(strtolower(trim((string)($_GET['provider']??''))),trim((string)($_GET['q']??''))));
     if ($action === 'stock_management_add') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->create($input,(string)$_SESSION['paperbell_user']));}

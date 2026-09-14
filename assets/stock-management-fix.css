@@ -7,3 +7,7 @@
 .sm-stock-control strong{margin:0!important}
 .sm-stock-control label{display:flex!important;align-items:center!important;gap:6px!important;margin:0!important;white-space:nowrap}
 .sm-table td strong.sm-zero{color:var(--red)}
+.sm-list-loading{padding:20px!important;text-align:center;color:var(--muted)}
+.sm-stock-skeleton{display:grid;gap:9px;padding:3px 0}.sm-stock-skeleton span{display:block;height:16px;width:32px;border-radius:5px;background:linear-gradient(100deg,#e9efeb 25%,#f7faf8 48%,#e9efeb 72%);background-size:200% 100%;animation:sm-shine 1.4s ease-in-out infinite}.sm-stock-skeleton span+span{width:82px;height:30px}
+@keyframes sm-shine{to{background-position-x:-200%}}
+@media(prefers-reduced-motion:reduce){.sm-stock-skeleton span{animation:none}}
