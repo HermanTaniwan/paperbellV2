@@ -12,7 +12,7 @@ final class TikTokStockService
     public function product(string $productId): array
     {
         $product = $this->detail($productId, $this->oauth->credentials('tiktok'));
-        return ['product_id'=>$productId, 'title'=>(string)($product['title'] ?? ''), 'status'=>(string)($product['status'] ?? $product['product_status'] ?? ''), 'skus'=>array_map(fn(array $sku): array => ['sku_id'=>(string)($sku['id'] ?? ''), 'seller_sku'=>(string)($sku['seller_sku'] ?? ''), 'stock'=>$this->stock($sku['inventory'] ?? []), 'inventory'=>$sku['inventory'] ?? []], $product['skus'] ?? [])];
+        return ['product_id'=>$productId, 'title'=>(string)($product['title'] ?? ''), 'status'=>(string)($product['status'] ?? $product['product_status'] ?? ''), 'skus'=>array_map(fn(array $sku): array => ['sku_id'=>(string)($sku['id'] ?? ''), 'seller_sku'=>(string)($sku['seller_sku'] ?? ''), 'variant_name'=>$this->variantName($sku), 'stock'=>$this->stock($sku['inventory'] ?? []), 'inventory'=>$sku['inventory'] ?? []], $product['skus'] ?? [])];
     }
 
     public function update(string $productId, string $skuId, int $quantity, string $user): array
@@ -38,7 +38,7 @@ final class TikTokStockService
     {
         $query=mb_strtolower(trim($query)); if($query==='') return ['items'=>[]];
         $auth=$this->oauth->credentials('tiktok');$page=$this->tiktok('POST','/product/202309/products/search',['page_size'=>100],[],$auth)['data']['products']??[];$items=[];
-        foreach($page as $summary){$title=(string)($summary['title']??$summary['name']??'');if(!str_contains(mb_strtolower($title),$query))continue;$id=(string)($summary['id']??'');if($id==='')continue;$product=$this->product($id);foreach($product['skus'] as $sku){$hay=mb_strtolower($title.' '.(string)($sku['seller_sku']??''));if(!str_contains($hay,$query))continue;$items[]=['product_id'=>$id,'sku_id'=>$sku['sku_id'],'title'=>$product['title'],'seller_sku'=>$sku['seller_sku'],'stock'=>$sku['stock']];if(count($items)>=$limit)return['items'=>$items];}}
+        foreach($page as $summary){$title=(string)($summary['title']??$summary['name']??'');if(!str_contains(mb_strtolower($title),$query))continue;$id=(string)($summary['id']??'');if($id==='')continue;$product=$this->product($id);foreach($product['skus'] as $sku){$hay=mb_strtolower($title.' '.(string)($sku['seller_sku']??'').' '.(string)($sku['variant_name']??''));if(!str_contains($hay,$query))continue;$items[]=['product_id'=>$id,'sku_id'=>$sku['sku_id'],'title'=>$product['title'],'seller_sku'=>$sku['seller_sku'],'variant_name'=>$sku['variant_name'],'stock'=>$sku['stock']];if(count($items)>=$limit)return['items'=>$items];}}
         return ['items'=>$items];
     }
 
@@ -50,6 +50,12 @@ final class TikTokStockService
     }
 
     private function stock(array $inventory): ?int { $quantities=array_filter(array_map(fn($row)=>is_numeric($row['quantity'] ?? null)?(int)$row['quantity']:null, $inventory), fn($v)=>$v!==null); return $quantities ? array_sum($quantities) : null; }
+    private function variantName(array $sku): string
+    {
+        $values=[];
+        foreach(($sku['sales_attributes']??[]) as $attribute){if(!is_array($attribute))continue;$value=trim((string)($attribute['value_name']??$attribute['value']??$attribute['name']??''));if($value!=='')$values[]=$value;}
+        return implode(' · ',array_values(array_unique($values)));
+    }
     private function audit(string $productId,string $skuId,string $title,string $sku,?int $before,int $after,string $status,string $error,string $user): void { $stmt=$this->db->prepare('INSERT INTO marketplace_stock_updates(provider,item_id,model_id,item_name,model_name,stock_before,stock_after,status,error,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');$stmt->execute(['tiktok',$productId,$skuId,mb_substr($title,0,500),mb_substr($sku,0,500),$before,$after,$status,mb_substr($error,0,2000),mb_substr($user,0,100),time()]); }
 
     private function tiktok(string $method,string $path,array $query,?array $body,array $auth): array

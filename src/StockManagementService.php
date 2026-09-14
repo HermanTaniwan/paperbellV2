@@ -40,7 +40,17 @@ final class StockManagementService
         if($shopeeItemId<1||!ctype_digit($tiktokProductId))throw new InvalidArgumentException('Pilih produk induk Shopee dan TikTok terlebih dahulu.');
         $shopee=$this->shopee->product($shopeeItemId);$tiktok=$this->tiktok->product($tiktokProductId);$models=$shopee['models']??[];$skus=$tiktok['skus']??[];$pairs=[];$unmatched=[];
         if(count($models)===1&&count($skus)===1)$pairs[]=['model'=>$models[0],'sku'=>$skus[0]];
-        else {$bySku=[];foreach($skus as $sku){$key=$this->key((string)($sku['seller_sku']??''));if($key!=='')$bySku[$key]=$sku;}foreach($models as $model){$key=$this->key((string)($model['model_sku']??''));if($key!==''&&isset($bySku[$key]))$pairs[]=['model'=>$model,'sku'=>$bySku[$key]];else $unmatched[]=(string)($model['model_name']?:$model['model_sku']?:'Variasi tanpa SKU');}}
+        else {
+            $bySku=$this->uniqueIndex($skus,'seller_sku');
+            $byName=$this->uniqueIndex($skus,'variant_name');
+            foreach($models as $model){
+                $skuKey=$this->key((string)($model['model_sku']??''));
+                $nameKey=$this->key((string)($model['model_name']??''));
+                $sku=$skuKey!==''?($bySku[$skuKey]??null):null;
+                if($sku===null&&$nameKey!=='')$sku=$byName[$nameKey]??null;
+                if($sku!==null)$pairs[]=['model'=>$model,'sku'=>$sku];else $unmatched[]=(string)($model['model_name']?:$model['model_sku']?:'Variasi tanpa SKU');
+            }
+        }
         $created=[];$skipped=[];foreach($pairs as $pair){try{$created[]=$this->create(['shopee_item_id'=>$shopeeItemId,'shopee_model_id'=>$pair['model']['model_id'],'tiktok_product_id'=>$tiktokProductId,'tiktok_sku_id'=>$pair['sku']['sku_id']],$user);}catch(Throwable $e){$skipped[]=$e->getMessage();}}
         return ['ok'=>true,'created'=>count($created),'items'=>$created,'unmatched'=>$unmatched,'skipped'=>$skipped];
     }
@@ -64,4 +74,11 @@ final class StockManagementService
     private function findShopee(array $product,int $modelId): array {foreach($product['models'] as $model)if((int)$model['model_id']===$modelId)return $model+['item_name'=>$product['item_name']];throw new RuntimeException('Variasi Shopee tidak ditemukan.');}
     private function findTikTok(array $product,string $skuId): array {foreach($product['skus'] as $sku)if((string)$sku['sku_id']===$skuId)return $sku+['title'=>$product['title']];throw new RuntimeException('SKU TikTok tidak ditemukan.');}
     private function key(string $value): string {return preg_replace('/[^a-z0-9]+/','',strtolower(trim($value)))??'';}
+    private function uniqueIndex(array $rows,string $field): array
+    {
+        $index=[];$duplicates=[];
+        foreach($rows as $row){$key=$this->key((string)($row[$field]??''));if($key==='')continue;if(isset($index[$key]))$duplicates[$key]=true;else $index[$key]=$row;}
+        foreach($duplicates as $key=>$_)unset($index[$key]);
+        return $index;
+    }
 }
