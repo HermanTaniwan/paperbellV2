@@ -31,7 +31,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=3">
   <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
   <link rel="stylesheet" href="assets/stock-management.css?v=3">
-  <link rel="stylesheet" href="assets/stock-management-fix.css?v=1">
+  <link rel="stylesheet" href="assets/stock-management-fix.css?v=2">
 </head>
 <body>
 <script>
@@ -687,8 +687,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           <div class="table-wrap"><table class="sm-table"><thead><tr><th>Produk & variasi</th><th>Shopee</th><th>TikTok / Tokopedia</th><th>Status</th><th></th></tr></thead><tbody>
             <tr v-if="!(stockManagement.items||[]).length"><td colspan="5" class="empty">Belum ada SKU. Tambahkan produk yang ingin Anda kelola.</td></tr>
             <tr v-for="row in stockManagement.items" :key="row.id"><td><b>{{row.label}}</b><small>Shopee: {{row.shopee.model_name||'Tanpa variasi'}} · {{row.shopee.model_id}}</small><small>TikTok SKU: {{row.tiktok.seller_sku||row.tiktok.sku_id}}</small></td>
-              <td><div class="sm-stock-control"><strong :class="{empty:row.shopee.stock===0}">{{row.shopee.stock===null?'—':row.shopee.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.shopeeTarget" :disabled="!!row.shopee.error"></label><small v-if="row.shopee.error" class="sm-error">{{row.shopee.error}}</small></div></td>
-              <td><div class="sm-stock-control"><strong :class="{empty:row.tiktok.stock===0}">{{row.tiktok.stock===null?'—':row.tiktok.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.tiktokTarget" :disabled="!!row.tiktok.error"></label><small v-if="row.tiktok.error" class="sm-error">{{row.tiktok.error}}</small></div></td>
+              <td><div class="sm-stock-control"><strong :class="{'sm-zero':row.shopee.stock===0}">{{row.shopee.stock===null?'—':row.shopee.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.shopeeTarget" :disabled="!!row.shopee.error"></label><small v-if="row.shopee.error" class="sm-error">{{row.shopee.error}}</small></div></td>
+              <td><div class="sm-stock-control"><strong :class="{'sm-zero':row.tiktok.stock===0}">{{row.tiktok.stock===null?'—':row.tiktok.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.tiktokTarget" :disabled="!!row.tiktok.error"></label><small v-if="row.tiktok.error" class="sm-error">{{row.tiktok.error}}</small></div></td>
               <td><span class="sm-status" :class="row.lastStatus||'idle'">{{row.lastStatusText||'Belum ada perubahan'}}</span><small v-if="row.lastError" class="sm-error">{{row.lastError}}</small></td><td><button class="ghost sm-remove" @click="deleteStockManagement(row)" :disabled="row.deleting||stockManagementSaving">{{row.deleting?'…':'Hapus'}}</button></td></tr>
           </tbody></table></div>
         </article>
