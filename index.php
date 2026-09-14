@@ -397,7 +397,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <details v-if="courierFilters.length" class="courier-filter">
 <summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
 <div class="courier-filter-options">
-<div v-for="group in courierFilterGroups()" :key="group.brand" class="courier-filter-group"><b>{{group.brand}}</b><label v-for="courier in group.couriers" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label></div>
+<label v-for="group in courierFilterGroups()" :key="group.brand"><input type="checkbox" :checked="courierBrandSelected(group)" @change="toggleCourierBrand(group,$event.target.checked)">{{group.brand}}</label>
 </div>
 </details>
 </div>
@@ -786,7 +786,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <details v-if="courierFilters.length" class="courier-filter">
 <summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
 <div class="courier-filter-options">
-<div v-for="group in courierFilterGroups()" :key="group.brand" class="courier-filter-group"><b>{{group.brand}}</b><label v-for="courier in group.couriers" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label></div>
+<label v-for="group in courierFilterGroups()" :key="group.brand"><input type="checkbox" :checked="courierBrandSelected(group)" @change="toggleCourierBrand(group,$event.target.checked)">{{group.brand}}</label>
 </div>
 </details>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
@@ -1548,7 +1548,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=140">
+<script src="assets/app.js?v=141">
 </script>
 </body>
 </html>
