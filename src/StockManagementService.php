@@ -42,10 +42,10 @@ final class StockManagementService
         if(count($models)===1&&count($skus)===1)$pairs[]=['model'=>$models[0],'sku'=>$skus[0]];
         else {
             $bySku=$this->uniqueIndex($skus,'seller_sku');
-            $byName=$this->uniqueIndex($skus,'variant_name');
+            $byName=$this->uniqueIndex($skus,'variant_name',true);
             foreach($models as $model){
                 $skuKey=$this->key((string)($model['model_sku']??''));
-                $nameKey=$this->key((string)($model['model_name']??''));
+                $nameKey=$this->variantKey((string)($model['model_name']??''));
                 $sku=$skuKey!==''?($bySku[$skuKey]??null):null;
                 if($sku===null&&$nameKey!=='')$sku=$byName[$nameKey]??null;
                 if($sku!==null)$pairs[]=['model'=>$model,'sku'=>$sku];else $unmatched[]=(string)($model['model_name']?:$model['model_sku']?:'Variasi tanpa SKU');
@@ -74,10 +74,15 @@ final class StockManagementService
     private function findShopee(array $product,int $modelId): array {foreach($product['models'] as $model)if((int)$model['model_id']===$modelId)return $model+['item_name'=>$product['item_name']];throw new RuntimeException('Variasi Shopee tidak ditemukan.');}
     private function findTikTok(array $product,string $skuId): array {foreach($product['skus'] as $sku)if((string)$sku['sku_id']===$skuId)return $sku+['title'=>$product['title']];throw new RuntimeException('SKU TikTok tidak ditemukan.');}
     private function key(string $value): string {return preg_replace('/[^a-z0-9]+/','',strtolower(trim($value)))??'';}
-    private function uniqueIndex(array $rows,string $field): array
+    private function variantKey(string $value): string
+    {
+        $key=$this->key($value);
+        return ['transparent'=>'transparan'][$key]??$key;
+    }
+    private function uniqueIndex(array $rows,string $field,bool $variant=false): array
     {
         $index=[];$duplicates=[];
-        foreach($rows as $row){$key=$this->key((string)($row[$field]??''));if($key==='')continue;if(isset($index[$key]))$duplicates[$key]=true;else $index[$key]=$row;}
+        foreach($rows as $row){$key=$variant?$this->variantKey((string)($row[$field]??'')):$this->key((string)($row[$field]??''));if($key==='')continue;if(isset($index[$key]))$duplicates[$key]=true;else $index[$key]=$row;}
         foreach($duplicates as $key=>$_)unset($index[$key]);
         return $index;
     }
