@@ -31,7 +31,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=3">
   <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
   <link rel="stylesheet" href="assets/stock-management.css?v=3">
-  <link rel="stylesheet" href="assets/stock-management-fix.css?v=3">
+  <link rel="stylesheet" href="assets/stock-management-fix.css?v=4">
 </head>
 <body>
 <script>
