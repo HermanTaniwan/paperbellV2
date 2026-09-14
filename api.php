@@ -19,6 +19,7 @@ require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
 require __DIR__ . '/src/TikTokStockService.php';
+require __DIR__ . '/src/StockManagementService.php';
 require __DIR__ . '/src/TikTokShopeeListingService.php';
 require __DIR__ . '/src/DataMappingService.php';
 require __DIR__ . '/src/PrintQueueService.php';
@@ -252,6 +253,11 @@ try {
     if ($action === 'shopee_update_stock') {$input=body();respond((new ShopeeStockService($mysql,$oauthService()))->update((int)($input['item_id']??0),(int)($input['model_id']??-1),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
     if ($action === 'tiktok_product_stock') respond((new TikTokStockService($mysql,$oauthService()))->product(trim((string)($_GET['product_id']??''))));
     if ($action === 'tiktok_update_stock') {$input=body();respond((new TikTokStockService($mysql,$oauthService()))->update(trim((string)($input['product_id']??'')),trim((string)($input['sku_id']??'')),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
+    if ($action === 'stock_management') respond((new StockManagementService($mysql,$oauthService()))->overview());
+    if ($action === 'stock_management_search') respond((new StockManagementService($mysql,$oauthService()))->search(strtolower(trim((string)($_GET['provider']??''))),trim((string)($_GET['q']??''))));
+    if ($action === 'stock_management_add') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->create($input,(string)$_SESSION['paperbell_user']));}
+    if ($action === 'stock_management_delete') {$input=body();(new StockManagementService($mysql,$oauthService()))->delete((int)($input['id']??0));respond(['ok'=>true]);}
+    if ($action === 'stock_management_apply') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->apply(is_array($input['items']??null)?$input['items']:[],(string)$_SESSION['paperbell_user']));}
     if ($action === 'marketplace_tiktok_catalog_sample') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCatalogSample((string)($_GET['q']??''),(int)($_GET['limit']??10)));
     if ($action === 'marketplace_tiktok_categories') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCategories((string)($_GET['q']??'')));
     if ($action === 'tiktok_draft_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->createDraft((int)($input['item_id']??0))); }

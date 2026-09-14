@@ -30,6 +30,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=3">
   <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
+  <link rel="stylesheet" href="assets/stock-management.css?v=1">
 </head>
 <body>
 <script>
@@ -85,7 +86,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button class="menu-button" @click="toggleMenu">☰</button>
         <div>
 <h1>{{ title }}</h1>
-<p>{{ view==='stock'?'Shortlist SKU terbaik untuk memulai stok produk jadi.':subtitle }}</p>
+<p>{{ view==='stock'?'Shortlist SKU terbaik untuk memulai stok produk jadi.':view==='stock-management'?'Atur stok SKU pilihan di Shopee dan TikTok/Tokopedia.':subtitle }}</p>
 </div>
         <div class="header-actions">
 <span class="sync-state">
@@ -672,6 +673,29 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </table></div>
           <pagination :data="stockRecommendations" @change="p=>{page=p;refresh()}"></pagination>
         </article>
+      </section>
+
+      <section v-if="view==='stock-management'" class="content stock-management-page">
+        <article class="panel sm-hero">
+          <div><span class="eyebrow">MARKETPLACE INVENTORY</span><h2>Stock Management</h2><p>Kelola hanya SKU yang Anda tautkan manual. Stok TikTok berlaku bersama untuk TikTok Shop dan Tokopedia.</p></div>
+          <div class="sm-hero-actions"><button class="ghost" @click="loadStockManagement" :disabled="loading||stockManagementSaving">↻ Ambil stok terbaru</button><button @click="stockManagementAdd.open=true">+ Tambah produk</button></div>
+        </article>
+        <article class="panel sm-table-panel">
+          <div class="sm-table-head"><div><h3>SKU terkelola</h3><p>{{(stockManagement.items||[]).length}} SKU dipilih manual.</p></div><button @click="applyStockManagement" :disabled="stockManagementSaving||!stockManagementChanges().length">{{stockManagementSaving?'Menyimpan…':'Simpan semua perubahan ('+stockManagementChanges().length+')'}}</button></div>
+          <p class="sm-note">Input adalah stok absolut. Pembaruan yang gagal tidak menghentikan SKU lain dan dapat dicoba ulang.</p>
+          <div class="table-wrap"><table class="sm-table"><thead><tr><th>Produk & variasi</th><th>Shopee</th><th>TikTok / Tokopedia</th><th>Status</th><th></th></tr></thead><tbody>
+            <tr v-if="!(stockManagement.items||[]).length"><td colspan="5" class="empty">Belum ada SKU. Tambahkan produk yang ingin Anda kelola.</td></tr>
+            <tr v-for="row in stockManagement.items" :key="row.id"><td><b>{{row.label}}</b><small>Shopee: {{row.shopee.model_name||'Tanpa variasi'}} · {{row.shopee.model_id}}</small><small>TikTok SKU: {{row.tiktok.seller_sku||row.tiktok.sku_id}}</small></td>
+              <td><strong :class="{empty:row.shopee.stock===0}">{{row.shopee.stock===null?'—':row.shopee.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.shopeeTarget" :disabled="!!row.shopee.error"></label><small v-if="row.shopee.error" class="sm-error">{{row.shopee.error}}</small></td>
+              <td><strong :class="{empty:row.tiktok.stock===0}">{{row.tiktok.stock===null?'—':row.tiktok.stock}}</strong><label>Target<input type="number" min="0" v-model.number="row.tiktokTarget" :disabled="!!row.tiktok.error"></label><small v-if="row.tiktok.error" class="sm-error">{{row.tiktok.error}}</small></td>
+              <td><span class="sm-status" :class="row.lastStatus||'idle'">{{row.lastStatusText||'Belum ada perubahan'}}</span><small v-if="row.lastError" class="sm-error">{{row.lastError}}</small></td><td><button class="ghost sm-remove" @click="deleteStockManagement(row)" :disabled="row.deleting||stockManagementSaving">{{row.deleting?'…':'Hapus'}}</button></td></tr>
+          </tbody></table></div>
+        </article>
+        <div v-if="stockManagementAdd.open" class="modal-backdrop" @click.self="stockManagementAdd.open=false"><article class="panel sm-modal"><div class="panel-head"><div><h3>Tambah SKU terkelola</h3><p>Pilih satu variasi Shopee dan satu SKU TikTok yang mewakili produk yang sama.</p></div><button class="icon-button" @click="stockManagementAdd.open=false">×</button></div>
+          <div class="sm-picker-grid"><section><b>1. Shopee</b><input v-model="stockManagementAdd.shopeeQuery" @input="searchStockManagement('shopee')" placeholder="Cari judul atau SKU"><p v-if="stockManagementAdd.shopeeLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.shopeeItems" :key="item.item_id+'-'+item.model_id" class="ghost" :class="{selected:stockManagementAdd.shopeeSelected&&stockManagementAdd.shopeeSelected.item_id===item.item_id&&stockManagementAdd.shopeeSelected.model_id===item.model_id}" @click="stockManagementAdd.shopeeSelected=item"><b>{{item.item_name}}</b><small>{{item.model_name||'Tanpa variasi'}} · {{item.model_sku||'tanpa SKU'}} · stok {{item.stock}}</small></button></div></section>
+            <section><b>2. TikTok / Tokopedia</b><input v-model="stockManagementAdd.tiktokQuery" @input="searchStockManagement('tiktok')" placeholder="Cari judul atau SKU"><p v-if="stockManagementAdd.tiktokLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.tiktokItems" :key="item.product_id+'-'+item.sku_id" class="ghost" :class="{selected:stockManagementAdd.tiktokSelected&&stockManagementAdd.tiktokSelected.product_id===item.product_id&&stockManagementAdd.tiktokSelected.sku_id===item.sku_id}" @click="stockManagementAdd.tiktokSelected=item"><b>{{item.title}}</b><small>{{item.seller_sku||'tanpa SKU'}} · stok {{item.stock}}</small></button></div></section></div>
+          <label class="sm-label">Label produk (opsional)<input v-model="stockManagementAdd.label" placeholder="Otomatis memakai judul Shopee bila kosong"></label><div class="sm-modal-actions"><button class="ghost" @click="stockManagementAdd.open=false">Batal</button><button @click="addStockManagement" :disabled="stockManagementAdd.saving||!stockManagementAdd.shopeeSelected||!stockManagementAdd.tiktokSelected">{{stockManagementAdd.saving?'Menyimpan…':'Tambahkan SKU'}}</button></div>
+        </article></div>
       </section>
 
       <section v-if="view==='inventory'" class="content">

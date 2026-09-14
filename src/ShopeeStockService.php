@@ -59,12 +59,26 @@ final class ShopeeStockService
             $updated = $this->product($itemId);
             $confirmed = null;
             foreach ($updated['models'] as $row) if ((int)$row['model_id'] === $modelId) {$confirmed = $row['stock']; break;}
+            // Shopee can accept the request before its catalog read reflects the new stock.
+            for ($attempt=0; $confirmed !== $quantity && $attempt<3; $attempt++) {
+                sleep(5);$updated=$this->product($itemId);foreach($updated['models'] as $row)if((int)$row['model_id']===$modelId){$confirmed=$row['stock'];break;}
+            }
             $this->audit($itemId, $modelId, (string)($item['item_name'] ?? ''), (string)($model['model_name'] ?? ''), $before, $quantity, 'updated', '', $user);
             return ['ok'=>true, 'item_id'=>(string)$itemId, 'model_id'=>(string)$modelId, 'stock_before'=>$before, 'stock_after'=>$quantity, 'stock_confirmed'=>$confirmed, 'item_name'=>(string)($item['item_name'] ?? ''), 'model_name'=>(string)($model['model_name'] ?? '')];
         } catch (Throwable $e) {
             $this->audit($itemId, $modelId, (string)($item['item_name'] ?? ''), (string)($model['model_name'] ?? ''), $before, $quantity, 'failed', $e->getMessage(), $user);
             throw $e;
         }
+    }
+
+    /** Search selectable Shopee variants without exposing OAuth credentials. */
+    public function search(string $query, int $limit=30): array
+    {
+        $query=mb_strtolower(trim($query)); if($query==='') return ['items'=>[]];
+        $auth=$this->oauth->credentials('shopee'); $ids=[];
+        foreach(['NORMAL','UNLIST'] as $status){$json=$this->shopee('GET','/api/v2/product/get_item_list',['offset'=>0,'page_size'=>100,'item_status'=>$status],null,$auth);foreach(($json['response']['item']??$json['response']['item_list']??[]) as $row)if(!empty($row['item_id']))$ids[(string)$row['item_id']]=true;}
+        $items=[];foreach(array_chunk(array_keys($ids),50) as $batch){$json=$this->shopee('GET','/api/v2/product/get_item_base_info',['item_id_list'=>implode(',',$batch)],null,$auth);foreach(($json['response']['item_list']??[]) as $item){$hay=mb_strtolower((string)($item['item_name']??'').' '.(string)($item['item_sku']??''));if(!str_contains($hay,$query))continue;$product=$this->product((int)$item['item_id']);foreach($product['models'] as $model){$modelHay=mb_strtolower((string)($model['model_name']??'').' '.(string)($model['model_sku']??''));if($modelHay!==''&&!str_contains($hay.' '.$modelHay,$query))continue;$items[]=['item_id'=>$product['item_id'],'model_id'=>$model['model_id'],'item_name'=>$product['item_name'],'model_name'=>$model['model_name'],'model_sku'=>$model['model_sku'],'stock'=>$model['stock']];if(count($items)>=$limit)return['items'=>$items];}}}
+        return ['items'=>$items];
     }
 
     private function item(int $itemId, array $auth): array

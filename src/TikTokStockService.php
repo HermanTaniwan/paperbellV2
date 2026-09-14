@@ -33,6 +33,15 @@ final class TikTokStockService
         }
     }
 
+    /** Search selectable TikTok SKUs. TikTok/Tokopedia inventory is shared by the connected shop. */
+    public function search(string $query, int $limit=30): array
+    {
+        $query=mb_strtolower(trim($query)); if($query==='') return ['items'=>[]];
+        $auth=$this->oauth->credentials('tiktok');$page=$this->tiktok('POST','/product/202309/products/search',['page_size'=>100],[],$auth)['data']['products']??[];$items=[];
+        foreach($page as $summary){$title=(string)($summary['title']??$summary['name']??'');if(!str_contains(mb_strtolower($title),$query))continue;$id=(string)($summary['id']??'');if($id==='')continue;$product=$this->product($id);foreach($product['skus'] as $sku){$hay=mb_strtolower($title.' '.(string)($sku['seller_sku']??''));if(!str_contains($hay,$query))continue;$items[]=['product_id'=>$id,'sku_id'=>$sku['sku_id'],'title'=>$product['title'],'seller_sku'=>$sku['seller_sku'],'stock'=>$sku['stock']];if(count($items)>=$limit)return['items'=>$items];}}
+        return ['items'=>$items];
+    }
+
     private function detail(string $productId, array $auth): array
     {
         if (!preg_match('/^\d+$/', $productId)) throw new InvalidArgumentException('ID produk TikTok tidak valid.');
