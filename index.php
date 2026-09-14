@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=32">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=27">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=28">
   <link rel="stylesheet" href="assets/features.css?v=27">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -394,6 +394,12 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="filters paper-order-filters" aria-label="Filter jenis kertas">
 <button v-for="f in paperFilters" :class="{active:paperFilter===f.id}" :disabled="loading" @click="changePaperFilter(f.id)">{{f.label}}</button>
 </div>
+<details v-if="courierFilters.length" class="courier-filter">
+<summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
+<div class="courier-filter-options">
+<label v-for="courier in courierFilters" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label>
+</div>
+</details>
 </div>
 <div class="order-toolbar-actions" aria-label="Aksi order">
 <button class="ghost marketplace-sync-button manual-order-add-button" @click="openManualOrder">+ Tambah order cetak</button>
@@ -777,6 +783,12 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button :class="{active:shippingFilter==='all'}" @click="changeShippingFilter('all')">Semua</button>
 <button :class="{active:shippingFilter==='due_today'}" @click="changeShippingFilter('due_today')">{{shippingTargetButtonLabel()}}</button>
 </div>
+<details v-if="courierFilters.length" class="courier-filter">
+<summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
+<div class="courier-filter-options">
+<label v-for="courier in courierFilters" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label>
+</div>
+</details>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
 <button class="label-toolbar-button" :disabled="!selected.size||labelBulkFetching" @click="bulkCommand('fetch_label')">{{labelBulkFetching?'Mengambil PDF…':'Ambil PDF ('+selected.size+')'}}</button>
 <button class="label-toolbar-button" :disabled="!selected.size||!labelPrinter" @click="bulkCommand('print_label')">Cetak ({{selected.size}})</button>
@@ -1536,7 +1548,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=138">
+<script src="assets/app.js?v=139">
 </script>
 </body>
 </html>
