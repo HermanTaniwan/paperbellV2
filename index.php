@@ -14,7 +14,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 </title>
   <link rel="stylesheet" href="assets/app.css?v=32">
   <link rel="stylesheet" href="assets/print.css?v=6">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=28">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=29">
   <link rel="stylesheet" href="assets/features.css?v=27">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -397,7 +397,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <details v-if="courierFilters.length" class="courier-filter">
 <summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
 <div class="courier-filter-options">
-<label v-for="courier in courierFilters" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label>
+<div v-for="group in courierFilterGroups()" :key="group.brand" class="courier-filter-group"><b>{{group.brand}}</b><label v-for="courier in group.couriers" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label></div>
 </div>
 </details>
 </div>
@@ -786,7 +786,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <details v-if="courierFilters.length" class="courier-filter">
 <summary>Kurir <span>{{courierFilterLabel()}}</span></summary>
 <div class="courier-filter-options">
-<label v-for="courier in courierFilters" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label>
+<div v-for="group in courierFilterGroups()" :key="group.brand" class="courier-filter-group"><b>{{group.brand}}</b><label v-for="courier in group.couriers" :key="courier"><input v-model="courierFilter" type="checkbox" :value="courier" @change="changeCourierFilter">{{courier}}</label></div>
 </div>
 </details>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
@@ -1548,7 +1548,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=139">
+<script src="assets/app.js?v=140">
 </script>
 </body>
 </html>
