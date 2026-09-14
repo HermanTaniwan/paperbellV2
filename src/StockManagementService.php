@@ -16,6 +16,13 @@ final class StockManagementService
     }
 
     public function search(string $provider,string $query): array { return $provider==='shopee'?$this->shopee->search($query):($provider==='tiktok'?$this->tiktok->search($query):throw new InvalidArgumentException('Marketplace pencarian tidak didukung.')); }
+    public function searchParents(string $provider,string $query): array
+    {
+        $rows=$this->search($provider,$query)['items'];$parents=[];
+        foreach($rows as $row){if($provider==='shopee'){$key=(string)$row['item_id'];$parents[$key]??=['id'=>$key,'title'=>(string)$row['item_name'],'sku'=>(string)($row['model_sku']??''),'variants'=>0];$parents[$key]['variants']++;}
+            else {$key=(string)$row['product_id'];$parents[$key]??=['id'=>$key,'title'=>(string)$row['title'],'sku'=>(string)($row['seller_sku']??''),'variants'=>0];$parents[$key]['variants']++;}}
+        return ['items'=>array_values($parents)];
+    }
     public function overview(): array { $items=[];foreach($this->rows() as $row)$items[]=$this->hydrate($row);return ['items'=>$items]; }
 
     public function create(array $input,string $user): array
@@ -25,6 +32,17 @@ final class StockManagementService
         $stmt=$this->db->prepare('INSERT INTO stock_management_items(shopee_item_id,shopee_model_id,tiktok_product_id,tiktok_sku_id,label,shopee_name,shopee_model_name,tiktok_name,tiktok_seller_sku,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
         try{$stmt->execute([(string)$si,(string)$sm,$tp,$ts,mb_substr($label,0,500),mb_substr((string)$s['item_name'],0,500),mb_substr((string)$s['model_name'],0,500),mb_substr((string)$t['title'],0,500),mb_substr((string)$t['seller_sku'],0,255),mb_substr($user,0,100),$now,$now]);}catch(PDOException $e){if((string)$e->getCode()==='23000')throw new RuntimeException('Pasangan SKU ini sudah ada di Stock Management.');throw $e;}
         return $this->hydrate($this->row((int)$this->db->lastInsertId()));
+    }
+
+    /** Link every exactly matching child SKU after the user chooses two product parents. */
+    public function createAuto(int $shopeeItemId,string $tiktokProductId,string $user): array
+    {
+        if($shopeeItemId<1||!ctype_digit($tiktokProductId))throw new InvalidArgumentException('Pilih produk induk Shopee dan TikTok terlebih dahulu.');
+        $shopee=$this->shopee->product($shopeeItemId);$tiktok=$this->tiktok->product($tiktokProductId);$models=$shopee['models']??[];$skus=$tiktok['skus']??[];$pairs=[];$unmatched=[];
+        if(count($models)===1&&count($skus)===1)$pairs[]=['model'=>$models[0],'sku'=>$skus[0]];
+        else {$bySku=[];foreach($skus as $sku){$key=$this->key((string)($sku['seller_sku']??''));if($key!=='')$bySku[$key]=$sku;}foreach($models as $model){$key=$this->key((string)($model['model_sku']??''));if($key!==''&&isset($bySku[$key]))$pairs[]=['model'=>$model,'sku'=>$bySku[$key]];else $unmatched[]=(string)($model['model_name']?:$model['model_sku']?:'Variasi tanpa SKU');}}
+        $created=[];$skipped=[];foreach($pairs as $pair){try{$created[]=$this->create(['shopee_item_id'=>$shopeeItemId,'shopee_model_id'=>$pair['model']['model_id'],'tiktok_product_id'=>$tiktokProductId,'tiktok_sku_id'=>$pair['sku']['sku_id']],$user);}catch(Throwable $e){$skipped[]=$e->getMessage();}}
+        return ['ok'=>true,'created'=>count($created),'items'=>$created,'unmatched'=>$unmatched,'skipped'=>$skipped];
     }
 
     public function delete(int $id): array { $stmt=$this->db->prepare('DELETE FROM stock_management_items WHERE id=?');$stmt->execute([$id]);if(!$stmt->rowCount())throw new RuntimeException('Produk terkelola tidak ditemukan.');return['ok'=>true]; }
@@ -45,4 +63,5 @@ final class StockManagementService
     private function hydrate(array $row): array { $out=['id'=>(int)$row['id'],'label'=>$row['label'],'shopee'=>['item_id'=>$row['shopee_item_id'],'model_id'=>$row['shopee_model_id'],'name'=>$row['shopee_name'],'model_name'=>$row['shopee_model_name'],'stock'=>null,'error'=>''],'tiktok'=>['product_id'=>$row['tiktok_product_id'],'sku_id'=>$row['tiktok_sku_id'],'name'=>$row['tiktok_name'],'seller_sku'=>$row['tiktok_seller_sku'],'stock'=>null,'error'=>'']];try{$out['shopee']['stock']=$this->findShopee($this->shopee->product((int)$row['shopee_item_id']),(int)$row['shopee_model_id'])['stock'];}catch(Throwable $e){$out['shopee']['error']=$e->getMessage();}try{$out['tiktok']['stock']=$this->findTikTok($this->tiktok->product((string)$row['tiktok_product_id']),(string)$row['tiktok_sku_id'])['stock'];}catch(Throwable $e){$out['tiktok']['error']=$e->getMessage();}return $out; }
     private function findShopee(array $product,int $modelId): array {foreach($product['models'] as $model)if((int)$model['model_id']===$modelId)return $model+['item_name'=>$product['item_name']];throw new RuntimeException('Variasi Shopee tidak ditemukan.');}
     private function findTikTok(array $product,string $skuId): array {foreach($product['skus'] as $sku)if((string)$sku['sku_id']===$skuId)return $sku+['title'=>$product['title']];throw new RuntimeException('SKU TikTok tidak ditemukan.');}
+    private function key(string $value): string {return preg_replace('/[^a-z0-9]+/','',strtolower(trim($value)))??'';}
 }

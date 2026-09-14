@@ -255,7 +255,9 @@ try {
     if ($action === 'tiktok_update_stock') {$input=body();respond((new TikTokStockService($mysql,$oauthService()))->update(trim((string)($input['product_id']??'')),trim((string)($input['sku_id']??'')),(int)($input['quantity']??-1),(string)$_SESSION['paperbell_user']));}
     if ($action === 'stock_management') respond((new StockManagementService($mysql,$oauthService()))->overview());
     if ($action === 'stock_management_search') respond((new StockManagementService($mysql,$oauthService()))->search(strtolower(trim((string)($_GET['provider']??''))),trim((string)($_GET['q']??''))));
+    if ($action === 'stock_management_parent_search') respond((new StockManagementService($mysql,$oauthService()))->searchParents(strtolower(trim((string)($_GET['provider']??''))),trim((string)($_GET['q']??''))));
     if ($action === 'stock_management_add') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->create($input,(string)$_SESSION['paperbell_user']));}
+    if ($action === 'stock_management_add_auto') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->createAuto((int)($input['shopee_item_id']??0),trim((string)($input['tiktok_product_id']??'')),(string)$_SESSION['paperbell_user']));}
     if ($action === 'stock_management_delete') {$input=body();(new StockManagementService($mysql,$oauthService()))->delete((int)($input['id']??0));respond(['ok'=>true]);}
     if ($action === 'stock_management_apply') {$input=body();respond((new StockManagementService($mysql,$oauthService()))->apply(is_array($input['items']??null)?$input['items']:[],(string)$_SESSION['paperbell_user']));}
     if ($action === 'marketplace_tiktok_catalog_sample') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCatalogSample((string)($_GET['q']??''),(int)($_GET['limit']??10)));

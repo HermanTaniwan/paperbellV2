@@ -30,7 +30,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=3">
   <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
-  <link rel="stylesheet" href="assets/stock-management.css?v=1">
+  <link rel="stylesheet" href="assets/stock-management.css?v=2">
 </head>
 <body>
 <script>
@@ -691,10 +691,10 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <td><span class="sm-status" :class="row.lastStatus||'idle'">{{row.lastStatusText||'Belum ada perubahan'}}</span><small v-if="row.lastError" class="sm-error">{{row.lastError}}</small></td><td><button class="ghost sm-remove" @click="deleteStockManagement(row)" :disabled="row.deleting||stockManagementSaving">{{row.deleting?'…':'Hapus'}}</button></td></tr>
           </tbody></table></div>
         </article>
-        <div v-if="stockManagementAdd.open" class="modal-backdrop" @click.self="stockManagementAdd.open=false"><article class="panel sm-modal"><div class="panel-head"><div><h3>Tambah SKU terkelola</h3><p>Pilih satu variasi Shopee dan satu SKU TikTok yang mewakili produk yang sama.</p></div><button class="icon-button" @click="stockManagementAdd.open=false">×</button></div>
-          <div class="sm-picker-grid"><section><b>1. Shopee</b><input v-model="stockManagementAdd.shopeeQuery" @input="searchStockManagement('shopee')" placeholder="Cari judul atau SKU"><p v-if="stockManagementAdd.shopeeLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.shopeeItems" :key="item.item_id+'-'+item.model_id" class="ghost" :class="{selected:stockManagementAdd.shopeeSelected&&stockManagementAdd.shopeeSelected.item_id===item.item_id&&stockManagementAdd.shopeeSelected.model_id===item.model_id}" @click="stockManagementAdd.shopeeSelected=item"><b>{{item.item_name}}</b><small>{{item.model_name||'Tanpa variasi'}} · {{item.model_sku||'tanpa SKU'}} · stok {{item.stock}}</small></button></div></section>
-            <section><b>2. TikTok / Tokopedia</b><input v-model="stockManagementAdd.tiktokQuery" @input="searchStockManagement('tiktok')" placeholder="Cari judul atau SKU"><p v-if="stockManagementAdd.tiktokLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.tiktokItems" :key="item.product_id+'-'+item.sku_id" class="ghost" :class="{selected:stockManagementAdd.tiktokSelected&&stockManagementAdd.tiktokSelected.product_id===item.product_id&&stockManagementAdd.tiktokSelected.sku_id===item.sku_id}" @click="stockManagementAdd.tiktokSelected=item"><b>{{item.title}}</b><small>{{item.seller_sku||'tanpa SKU'}} · stok {{item.stock}}</small></button></div></section></div>
-          <label class="sm-label">Label produk (opsional)<input v-model="stockManagementAdd.label" placeholder="Otomatis memakai judul Shopee bila kosong"></label><div class="sm-modal-actions"><button class="ghost" @click="stockManagementAdd.open=false">Batal</button><button @click="addStockManagement" :disabled="stockManagementAdd.saving||!stockManagementAdd.shopeeSelected||!stockManagementAdd.tiktokSelected">{{stockManagementAdd.saving?'Menyimpan…':'Tambahkan SKU'}}</button></div>
+        <div v-if="stockManagementAdd.open" class="modal-backdrop" @click.self="stockManagementAdd.open=false"><article class="panel sm-modal"><div class="panel-head"><div><h3>Tambah produk terkelola</h3><p>Pilih produk induk di masing-masing marketplace. Variasi akan dipasangkan otomatis berdasarkan SKU yang sama.</p></div><button class="icon-button" @click="stockManagementAdd.open=false">×</button></div>
+          <div class="sm-picker-grid"><section><b>1. Produk induk Shopee</b><input v-model="stockManagementAdd.shopeeQuery" @input="searchStockManagement('shopee')" placeholder="Cari judul produk"><p v-if="stockManagementAdd.shopeeLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.shopeeItems" :key="item.id" class="ghost" :class="{selected:stockManagementAdd.shopeeSelected&&stockManagementAdd.shopeeSelected.id===item.id}" @click="stockManagementAdd.shopeeSelected=item"><b>{{item.title}}</b><small>{{item.variants}} variasi</small></button></div></section>
+            <section><b>2. Produk induk TikTok / Tokopedia</b><input v-model="stockManagementAdd.tiktokQuery" @input="searchStockManagement('tiktok')" placeholder="Cari judul produk"><p v-if="stockManagementAdd.tiktokLoading">Mencari…</p><div class="sm-results"><button v-for="item in stockManagementAdd.tiktokItems" :key="item.id" class="ghost" :class="{selected:stockManagementAdd.tiktokSelected&&stockManagementAdd.tiktokSelected.id===item.id}" @click="stockManagementAdd.tiktokSelected=item"><b>{{item.title}}</b><small>{{item.variants}} variasi</small></button></div></section></div>
+          <p class="sm-note">Jika jumlah variasi berbeda atau SKU variasi tidak sama, variasi tanpa pasangan akan dilewati dan ditampilkan setelah tersimpan.</p><div class="sm-modal-actions"><button class="ghost" @click="stockManagementAdd.open=false">Batal</button><button @click="addStockManagement" :disabled="stockManagementAdd.saving||!stockManagementAdd.shopeeSelected||!stockManagementAdd.tiktokSelected">{{stockManagementAdd.saving?'Memasangkan…':'Tambahkan variasi cocok'}}</button></div>
         </article></div>
       </section>
 
@@ -1572,7 +1572,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=142">
+<script src="assets/app.js?v=143">
 </script>
 </body>
 </html>
