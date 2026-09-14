@@ -1,0 +1,8 @@
+/* Keep each marketplace control compact even when the row contains long product text. */
+.sm-table{table-layout:fixed}
+.sm-table th:first-child{width:55%}
+.sm-table th:nth-child(2),.sm-table th:nth-child(3){width:12%}
+.sm-table th:nth-child(4){width:13%}
+.sm-stock-control{display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:7px!important;min-height:0!important}
+.sm-stock-control strong{margin:0!important}
+.sm-stock-control label{display:flex!important;align-items:center!important;gap:6px!important;margin:0!important;white-space:nowrap}
