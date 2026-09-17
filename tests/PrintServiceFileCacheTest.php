@@ -31,6 +31,11 @@ try {
     assert($cache['/current/missing.pdf'] === ['available' => false, 'checked_at' => $savedAt + 30]);
     assert($availability[$path] === true);
     assert($availability[$path . '.missing'] === false);
+
+    $settingsMethod = new ReflectionMethod(PrintService::class, 'productSettings');
+    $wfMapping = ['printer' => 'EPSON_WF-C5390', 'page_from' => 1, 'page_to' => 0, 'copies' => 1, 'duplex' => 'simplex', 'paper' => 'DEFAULT'];
+    assert(str_contains($settingsMethod->invoke($service, $wfMapping, 1, ['paper' => 'B5']), 'bin=261'));
+    assert(str_contains($settingsMethod->invoke($service, $wfMapping, 1, ['paper' => 'A5']), 'bin=1'));
     echo "PrintService file cache tests passed\n";
 } finally {
     @unlink($path);

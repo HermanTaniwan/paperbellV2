@@ -387,6 +387,7 @@ function cupsOptions(string $printSettings,string $printer): array
         elseif(str_starts_with($lower,'ink='))$options[]='Ink='.substr($token,4);
         elseif($lower==='paperkind=13')$options[]='media=Custom.182x257mm';
         elseif($lower==='paperkind=88')$options[]=stripos($printer,'L3210')!==false?'PageSize=B6':'media=B6';
+        elseif($lower==='bin=1')$options[]='InputSlot=Tray1';
         elseif($lower==='bin=7')$options[]='InputSlot=Auto';
         elseif($lower==='bin=258')$options[]='InputSlot=ByPassTray';
         elseif($lower==='bin=261')$options[]='InputSlot=Rear';

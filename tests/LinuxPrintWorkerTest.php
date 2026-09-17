@@ -26,6 +26,11 @@ foreach(['page-ranges=2-7','page-set=odd','sides=two-sided-long-edge','scaling=1
     expectContains($options,$expected);
 }
 
+$a5Options=cupsOptions('1-,simplex,noscale,paper=A5,bin=1','EPSON_WF_C5390_Series');
+foreach(['media=iso_a5_148x210mm','InputSlot=Tray1'] as $expected){
+    expectContains($a5Options,$expected);
+}
+
 $brotherOptions=cupsOptions('3-4,duplexlong,noscale,paper=A5','Brother_DCP_T830DW');
 if(in_array('cupsPrintQuality=High',$brotherOptions,true))throw new RuntimeException('High quality must only be forced for WF printers.');
 foreach(['page-ranges=3-4','Duplex=DuplexNoTumble','PageSize=A5','InputSlot=Tray1','MediaType=Stationery'] as $expected){
