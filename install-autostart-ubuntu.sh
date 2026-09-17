@@ -12,6 +12,7 @@ environment_file="/etc/paperbell-print-worker.env"
 service_file="/etc/systemd/system/paperbell-print-worker.service"
 label_service_file="/etc/systemd/system/paperbell-label-worker.service"
 drive_service_file="/etc/systemd/system/paperbell-google-drive-mount.service"
+printer_sudoers_file="/etc/sudoers.d/paperbell-cupsenable"
 drive_user="${PAPERBELL_DRIVE_USER:-herman}"
 drive_mount="${PAPERBELL_UBUNTU_DRIVE_MOUNT:-/home/herman/GoogleDrive}"
 drive_remote="${PAPERBELL_RCLONE_REMOTE:-gdrive:}"
@@ -19,7 +20,7 @@ ubuntu_print_root="${PAPERBELL_UBUNTU_PRINT_ROOT:-${drive_mount}/Paperbell/Print
 wf_queue="${PAPERBELL_WF_QUEUE:-EPSON_WF_C5390_Series}"
 wf_uri="${PAPERBELL_WF_URI:-ipp://192.168.1.6/ipp/print}"
 
-for command_name in php python3 lp lpadmin lpstat cancel cupsenable cupsaccept systemctl; do
+for command_name in php python3 lp lpadmin lpstat cancel cupsenable cupsaccept sudo systemctl visudo; do
     command -v "${command_name}" >/dev/null || {
         echo "Perintah wajib tidak ditemukan: ${command_name}" >&2
         exit 1
@@ -31,6 +32,13 @@ done
 lpadmin -p "${wf_queue}" -E -v "${wf_uri}" -m everywhere
 cupsenable "${wf_queue}"
 cupsaccept "${wf_queue}"
+
+printer_sudoers_temp="$(mktemp)"
+printf 'www-data ALL=(root) NOPASSWD: /usr/sbin/cupsenable *\n' >"${printer_sudoers_temp}"
+chmod 0440 "${printer_sudoers_temp}"
+visudo -cf "${printer_sudoers_temp}" >/dev/null
+install -o root -g root -m 0440 "${printer_sudoers_temp}" "${printer_sudoers_file}"
+rm -f "${printer_sudoers_temp}"
 
 if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
     command -v apt-get >/dev/null || {

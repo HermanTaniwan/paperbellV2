@@ -15,7 +15,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <link rel="stylesheet" href="assets/app.css?v=32">
   <link rel="stylesheet" href="assets/print.css?v=6">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=30">
-  <link rel="stylesheet" href="assets/features.css?v=27">
+  <link rel="stylesheet" href="assets/features.css?v=28">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
   <link rel="stylesheet" href="assets/theme-pastel.css?v=13">
@@ -1353,13 +1353,16 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           <div class="printer-queue-section">
             <h3>Printer aktif / tujuan</h3>
             <div class="printer-queue-printers">
-              <article v-for="printer in queueWidgetPrinters" :key="printer.name">
+              <article v-for="printer in visibleQueuePrinters()" :key="printer.name">
                 <span class="dot" :class="printer.active?'online':'danger'"></span>
                 <div>
                   <b>{{printer.name}}</b>
                   <small>{{printer.status}} · {{printer.queue_count||0}} di spooler</small>
                 </div>
-                <span class="badge" :class="printer.active?'green':'red'">{{printer.active?'Aktif':'Masalah'}}</span>
+                <div class="printer-queue-printer-actions">
+                  <span class="badge" :class="printer.active?'green':'red'">{{printer.active?'Aktif':'Masalah'}}</span>
+                  <button v-if="printer.error_type==='paused'" type="button" :disabled="!!queueActionKey" @click="enablePrinter(printer)">{{queueActionKey===`printer-${printer.name}`?'Mengaktifkan…':'Aktifkan printer'}}</button>
+                </div>
               </article>
             </div>
           </div>
@@ -1574,7 +1577,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=145">
+<script src="assets/app.js?v=146">
 </script>
 </body>
 </html>

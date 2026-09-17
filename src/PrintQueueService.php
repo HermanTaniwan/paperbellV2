@@ -118,6 +118,30 @@ final class PrintQueueService
         $this->powershell($script);if($action==='cancel')$this->markSpoolerJobCancelled($printer,$jobId);@unlink($this->spoolerCacheFile);return['ok'=>true];
     }
 
+    public function enablePrinter(string $printer):array
+    {
+        $printer=trim($printer);if($printer==='')throw new InvalidArgumentException('Nama printer wajib diisi.');
+        $state=$this->spoolerState();if(!(bool)($state['available']??false))throw new RuntimeException('Status spooler tidak tersedia. Coba lagi beberapa saat.');
+        $current=$this->resumablePrinter($state['printers']??[],$printer);
+        if($current===null)throw new RuntimeException('Printer tidak ditemukan pada konfigurasi Paperbell.');
+        if((bool)($current['active']??false))return['ok'=>true,'printer'=>$printer,'already_active'=>true];
+        if((string)($current['error_type']??'')!=='paused')throw new RuntimeException('Printer tidak sedang dijeda. Periksa masalah fisik atau koneksi printer terlebih dahulu.');
+        if(PHP_OS_FAMILY!=='Windows')$this->cupsCommand(['/usr/bin/sudo','-n','/usr/sbin/cupsenable',$printer]);
+        else{
+            $p64=base64_encode(mb_convert_encoding($printer,'UTF-16LE','UTF-8'));
+            $this->powershell("\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$p64}')); Resume-Printer -Name \$p -ErrorAction Stop");
+        }
+        @unlink($this->spoolerCacheFile);$updated=$this->spoolerState();$result=$this->resumablePrinter($updated['printers']??[],$printer);
+        if($result===null||!(bool)($result['active']??false))throw new RuntimeException('Antrean sudah dicoba diaktifkan, tetapi printer belum kembali siap. Periksa kondisi printer lalu coba lagi.');
+        return['ok'=>true,'printer'=>$printer,'already_active'=>false];
+    }
+
+    private function resumablePrinter(array $printers,string $name):?array
+    {
+        foreach($printers as $printer)if(is_array($printer)&&(string)($printer['name']??'')===$name)return$printer;
+        return null;
+    }
+
     private function reconcileSubmittedJobs(array $spooler):void
     {
         if(!(bool)($spooler['available']??false))return;

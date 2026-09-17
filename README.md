@@ -75,7 +75,7 @@ Server Health di Ubuntu membaca CPU, RAM, uptime, filesystem, block device, dan 
 sudo ./tools/install-server-health-timer.sh
 ```
 
-Installer memasang `python3-venv` melalui APT bila belum tersedia, mengelola mount `gdrive:` sebagai `paperbell-google-drive-mount.service` dengan akses FUSE untuk Apache, membaca environment database Paperbell dari konfigurasi Apache, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR`, `PAPERBELL_APACHE_CONFIG`, `PAPERBELL_DRIVE_USER`, `PAPERBELL_UBUNTU_DRIVE_MOUNT`, atau `PAPERBELL_RCLONE_REMOTE` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
+Installer memasang `python3-venv` melalui APT bila belum tersedia, mengelola mount `gdrive:` sebagai `paperbell-google-drive-mount.service` dengan akses FUSE untuk Apache, membaca environment database Paperbell dari konfigurasi Apache, lalu menjalankan `paperbell-print-worker.service` sebagai `www-data`. Installer juga memberi `www-data` izin sudo terbatas hanya untuk `cupsenable`, sehingga antrean CUPS yang dijeda dapat diaktifkan kembali dari panel Paperbell tanpa akses administrasi printer lainnya. Lokasi instalasi default adalah `/var/www/html/paperbell`; gunakan `PAPERBELL_APP_DIR`, `PAPERBELL_APACHE_CONFIG`, `PAPERBELL_DRIVE_USER`, `PAPERBELL_UBUNTU_DRIVE_MOUNT`, atau `PAPERBELL_RCLONE_REMOTE` bila lokasinya berbeda. Workflow Windows melalui `install-autostart.ps1` tetap tersedia dan tidak berubah.
 
 Untuk mengaktifkan HTTPS lokal gratis pada `app.paperbell.id`, jalankan installer berikut satu kali di server Ubuntu:
 

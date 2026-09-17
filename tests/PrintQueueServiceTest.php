@@ -55,6 +55,11 @@ assert($printerState === [
 $printerUriMethod=new ReflectionMethod(PrintQueueService::class,'cupsLocalPrinterUri');
 assert($printerUriMethod->invoke($service,'EPSON WF-C5390') === 'ipp://localhost:631/printers/EPSON%20WF-C5390');
 
+$resumablePrinterMethod=new ReflectionMethod(PrintQueueService::class,'resumablePrinter');
+$pausedPrinter=['name'=>'EPSON_WF-C5390','active'=>false,'error_type'=>'paused'];
+assert($resumablePrinterMethod->invoke($service,[$pausedPrinter],'EPSON_WF-C5390') === $pausedPrinter);
+assert($resumablePrinterMethod->invoke($service,[$pausedPrinter],'Printer_Lain') === null);
+
 $completedMethod=new ReflectionMethod(PrintQueueService::class,'completedSubmittedJobIds');
 $completed=$completedMethod->invoke($service,[
     ['id'=>101,'printer'=>'EPSON_WF_C5390_Series','spooler_job_id'=>68],

@@ -117,6 +117,7 @@
 .printer-queue-printers article,.printer-queue-jobs article{display:flex;align-items:center;gap:10px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:12px}
 .printer-queue-printers article>div,.printer-queue-jobs article>div{min-width:0;flex:1}.printer-queue-printers b,.printer-queue-printers small,.printer-queue-jobs b,.printer-queue-jobs small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .printer-queue-printers b,.printer-queue-jobs b{font-size:10px}.printer-queue-printers small,.printer-queue-jobs small{margin-top:4px;color:var(--muted);font-size:9px}
+.printer-queue-printer-actions{display:grid;flex:0 0 auto!important;justify-items:end;gap:6px}.printer-queue-printer-actions button{padding:7px 10px;font-size:9px;white-space:nowrap}
 .printer-queue-jobs .printer-queue-job{align-items:flex-start;flex-wrap:wrap}
 .printer-queue-jobs .printer-queue-job-name{overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.45;color:var(--ink)}
 .printer-queue-job-copy{align-self:center}

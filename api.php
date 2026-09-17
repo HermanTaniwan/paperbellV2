@@ -232,6 +232,7 @@ try {
     if ($action === 'acknowledge_printer_incident') {$input=body();respond($queueService()->acknowledgeIncident((int)($input['id']??0),(string)$_SESSION['paperbell_user']));}
     if ($action === 'clear_completed_jobs') respond(['ok'=>true,'deleted'=>$queueService()->clearCompleted()]);
     if ($action === 'spooler_action') {$input=body();respond($queueService()->spoolerAction(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['operation']??''))));}
+    if ($action === 'enable_printer') {$input=body();respond($queueService()->enablePrinter(trim((string)($input['printer']??''))));}
     if ($action === 'move_spooler_job') {$input=body();respond($queueService()->moveSpoolerJob(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['target_printer']??''))));}
     if ($action === 'printer_live_progress') respond($queueService()->liveProgress());
 
