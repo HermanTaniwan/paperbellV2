@@ -31,6 +31,7 @@ require __DIR__ . '/src/DashboardAnalyticsService.php';
 require __DIR__ . '/src/ProfitLossService.php';
 
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
+function paperbellTimingLog(string $stage, float $startedAt, array $context = []): void { $context['duration_ms'] = (int) round((microtime(true) - $startedAt) * 1000); error_log('[paperbell-timing] '.$stage.' '.json_encode($context, JSON_UNESCAPED_SLASHES)); }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
 function unixText(int|string|null $unix): string { $value=(int)$unix; return $value > 0 ? date('d M Y H:i', $value) : '-'; }
 function refreshOrderPrintSummary(PDO $db,string $orderSn): void { $stmt=$db->prepare('UPDATE orders o LEFT JOIN (SELECT order_sn,COUNT(*) line_count,COALESCE(SUM(qty),0) item_qty,SUM(printed=0) pending,MAX(printed_at) printed_at FROM order_process WHERE order_sn=? GROUP BY order_sn) s ON s.order_sn=o.order_sn SET o.print_line_count=COALESCE(s.line_count,0),o.print_item_qty=COALESCE(s.item_qty,0),o.unprinted_lines=COALESCE(s.pending,0),o.last_printed_at=s.printed_at WHERE o.order_sn=?');$stmt->execute([$orderSn,$orderSn]); }
@@ -476,7 +477,7 @@ try {
     }
 
     if ($action === 'orders') {
-        $q = trim((string)($_GET['q'] ?? '')); $filter = $_GET['filter'] ?? 'all'; $dueToday=(string)($_GET['due_today']??'')==='1'; $paperFilter=strtolower(trim((string)($_GET['paper']??'all')));if(!in_array($paperFilter,['all','a5_6','a5_20','b5'],true))$paperFilter='all';$page=max(1,(int)($_GET['page']??1)); $size=30; $offset=($page-1)*$size;
+        $ordersRequestStartedAt=microtime(true);$q = trim((string)($_GET['q'] ?? '')); $filter = $_GET['filter'] ?? 'all'; $dueToday=(string)($_GET['due_today']??'')==='1'; $paperFilter=strtolower(trim((string)($_GET['paper']??'all')));if(!in_array($paperFilter,['all','a5_6','a5_20','b5'],true))$paperFilter='all';$page=max(1,(int)($_GET['page']??1)); $size=30; $offset=($page-1)*$size;
         $holidayLookup=array_fill_keys(storeHolidays($mysql),true);$shippingTarget=activeShippingTarget($mysql,$holidayLookup);$dueRange=$shippingTarget['range'];$shippingSummary=$shippingTarget['summary']+['period'=>$shippingTarget['period'],'date'=>$shippingTarget['date'],'rollover'=>$shippingTarget['rollover']];
         $where=[]; $params=[];
         $courierData=orderCourierData($mysql);$requestedCouriers=array_values(array_filter(array_map('trim',explode(',',(string)($_GET['couriers']??'')))));if($requestedCouriers){$wanted=array_fill_keys(array_map('mb_strtolower',$requestedCouriers),true);$courierOrderSns=array_keys(array_filter($courierData['byOrder'],fn($courier)=>isset($wanted[mb_strtolower($courier)])));if(!$courierOrderSns)$where[]='1=0';else{$marks=implode(',',array_fill(0,count($courierOrderSns),'?'));$where[]="o.order_sn IN ({$marks})";$params=array_merge($params,$courierOrderSns);}}
@@ -508,13 +509,13 @@ try {
         }
         $loyaltyByBuyer=$customerLoyalty->forBuyers(array_column($items,'buyer_username'));
         foreach($items as &$row){$deadline=shippingDeadline($row['create_time'],$holidayLookup);$row['createdText']=unixText($row['create_time']);$row['shipping_deadline']=$deadline['date'];$row['shipping_due_today']=$deadline['date']===$shippingTarget['date']&&!str_starts_with((string)$row['order_sn'],'MANUAL-')&&!str_starts_with((string)$row['order_sn'],'RANDOM-')&&!in_array(strtoupper((string)$row['status']),['CANCELLED','CANCELED'],true);$row['packaged']=(bool)$row['packaged'];$row['has_label_pdf']=$row['label_pdf_path']!==''&&is_file($row['label_pdf_path']);$row['resi_printed']=(bool)$row['resi_printed'];$row['loyalty']=$loyaltyByBuyer[(string)$row['buyer_username']]??null;unset($row['label_pdf_path']);}
-        respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'shippingSummary'=>$shippingSummary,'couriers'=>$courierData['names'],'printers'=>$printing->configuredPrinters(),'labelPrinters'=>$printing->labelPrinters(),'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
+        $printers=$printing->configuredPrinters();$labelPrinters=$printing->labelPrinters();paperbellTimingLog('api.orders', $ordersRequestStartedAt, ['items'=>count($items),'total'=>$total,'filter'=>$filter,'query_present'=>$q!=='','printers'=>count($printers)]);respond(['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'shippingSummary'=>$shippingSummary,'couriers'=>$courierData['names'],'printers'=>$printers,'labelPrinters'=>$labelPrinters,'defaultLabelPrinter'=>$printing->defaultLabelPrinter()]);
     }
 
     if ($action === 'order_items') {
-        $input=body();$requested=is_array($input['orders']??null)?$input['orders']:[];if(count($requested)>50)respond(['error'=>'Maksimal 50 order per permintaan.'],422);
+        $requestStartedAt=microtime(true);$input=body();$requested=is_array($input['orders']??null)?$input['orders']:[];if(count($requested)>50)respond(['error'=>'Maksimal 50 order per permintaan.'],422);
         $orders=[];foreach($requested as $entry){if(!is_array($entry))continue;$sn=trim((string)($entry['order_sn']??''));if($sn==='')continue;$ids=array_key_exists('item_ids',$entry)&&is_array($entry['item_ids'])?array_values(array_unique(array_filter(array_map('intval',$entry['item_ids']),fn($id)=>$id>0))):null;$orders[$sn]=$ids;}
-        $items=$printing->listOrderItems(array_keys($orders));foreach($orders as $sn=>$ids)if($ids!==null){$allowed=array_fill_keys($ids,true);$items[$sn]=array_values(array_filter($items[$sn]??[],fn($line)=>isset($allowed[(int)$line['id']])));}respond(['items'=>$items]);
+        $listStartedAt=microtime(true);$items=$printing->listOrderItems(array_keys($orders));$listDurationMs=(int)round((microtime(true)-$listStartedAt)*1000);$filterStartedAt=microtime(true);foreach($orders as $sn=>$ids)if($ids!==null){$allowed=array_fill_keys($ids,true);$items[$sn]=array_values(array_filter($items[$sn]??[],fn($line)=>isset($allowed[(int)$line['id']]))) ;}paperbellTimingLog('api.order_items', $requestStartedAt, ['orders'=>count($orders),'lines'=>array_sum(array_map('count',$items)),'list_ms'=>$listDurationMs,'filter_ms'=>(int)round((microtime(true)-$filterStartedAt)*1000)]);respond(['items'=>$items]);
     }
 
     if ($action === 'order_detail') {
