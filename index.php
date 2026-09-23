@@ -537,7 +537,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="inline-item-actions">
 <button class="inline-print-button" :class="{ghost:line.printed}" :disabled="!line.print_ready||!line.selected_printer||itemPrintActive(line)" @click="printItem(line)">{{line.queueing?'Mengantre…':(itemPrintActive(line)?'Dalam antrean…':(line.printed?'Cetak ulang':'Cetak item'))}}</button>
 <button class="ghost mark-printed-button" :class="{revert:line.printed}" :disabled="line.marking_printed" @click="setOrderItemPrinted(line,!line.printed)">{{line.marking_printed?'Menyimpan…':(line.printed?'Belum tercetak':'Sudah dicetak')}}</button>
-<button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" @click="useInventory(line)">Gunakan inventory ({{line.inventory_qty}})</button>
+<button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" :disabled="line.inventoryUsing" @click="useInventory(line)">{{line.inventoryUsing?'Memproses…':('Gunakan inventory ('+line.inventory_qty+')')}}</button>
 </div>
 <details class="advanced-print inline-advanced">
 <summary>Pengaturan cetak item</summary>
@@ -1577,7 +1577,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=146">
+<script src="assets/app.js?v=147">
 </script>
 </body>
 </html>
