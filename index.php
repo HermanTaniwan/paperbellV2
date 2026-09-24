@@ -524,7 +524,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <div class="inline-item-summary">
 <b>{{line.qty}} pcs</b>
-<span class="badge" :class="itemPrintActive(line)?'blue':(line.printed?'green':(line.print_ready?'amber':'red'))">{{itemPrintActive(line)?'Dalam antrean':(line.printed?'Tercetak':(line.print_ready?'Siap cetak':'Tidak siap'))}}</span>
+<span class="badge" :class="itemPrintActive(line)?'blue':(line.printed?'green':(line.print_ready?'amber':'red'))">{{itemPrintActive(line)?'Dalam antrean':(line.printed?'Tercetak':(line.print_ready?'Belum dicetak':'Tidak siap'))}}</span>
 <small v-if="line.printed&&line.printed_at">Dicetak {{timeText(line.printed_at)}}</small>
 <small v-if="line.printed_odd||line.printed_even">Ganjil {{line.printed_odd?'✓':'—'}} · Genap {{line.printed_even?'✓':'—'}}</small>
 </div>

@@ -176,9 +176,9 @@ final class PrintService
         $active=$this->db->query("SELECT order_process_id FROM print_jobs WHERE job_type='product' AND order_process_id IS NOT NULL AND status IN ('queued','processing','submitted','moving','cancel_requested')");
         foreach($active->fetchAll(PDO::FETCH_COLUMN) as $lineId)$activeLineIds[(int)$lineId]=true;
         $queueMs=(int)round((microtime(true)-$stageStartedAt)*1000);
-        $stageStartedAt=microtime(true);$printers=$this->configuredPrinters();$result=[];$fileAvailability=$this->fileAvailabilityCache();$now=time();$pathsToCheck=[];
-        foreach($resolved as $entry){$path=(string)($entry['mapping']['file_path']??'');if($path==='')continue;$cachedAvailability=$fileAvailability[$path]??null;$cacheTtl=($cachedAvailability['available']??false)?self::AVAILABLE_FILE_CACHE_TTL:self::MISSING_FILE_CACHE_TTL;if(!is_array($cachedAvailability)||(int)($cachedAvailability['checked_at']??0)<$now-$cacheTtl)$pathsToCheck[$path]=true;}
-        foreach($this->checkFileAvailability(array_keys($pathsToCheck)) as $path=>$available)$fileAvailability[$path]=['available'=>$available,'checked_at'=>$now];
+        // Listing must never stat product PDFs: a Google Drive mount can block
+        // even for printed items. Print and PDF-open actions validate the file.
+        $stageStartedAt=microtime(true);$printers=$this->configuredPrinters();$result=[];
         $fileCheckMs=(int)round((microtime(true)-$stageStartedAt)*1000);
         foreach($resolved as $entry){$line=$entry['line'];$mapping=$entry['mapping'];
             $inventoryQty=null;
@@ -186,11 +186,10 @@ final class PrintService
             foreach($inventoryKeys as $inventoryKey)if(array_key_exists($inventoryKey,$inventory)){$inventoryQty=$inventory[$inventoryKey];break;}
             $requiredQty=max(1,(int)$line['qty']);
             $path=(string)($mapping['file_path']??'');
-            $ready=$path!==''&&(bool)($fileAvailability[$path]['available']??false);
+            $ready=$path!=='';
             $defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready,'print_reason'=>$mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap'),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
         }
-        if($pathsToCheck)$this->writeFileAvailabilityCache($fileAvailability);
-        error_log('[paperbell-timing] print.list_order_items '.json_encode(['orders'=>count($orderSns),'lines'=>count($lines),'paths_checked'=>count($pathsToCheck),'line_query_ms'=>$lineQueryMs,'mapping_ms'=>$mappingMs,'inventory_ms'=>$inventoryMs,'queue_ms'=>$queueMs,'file_printer_ms'=>$fileCheckMs,'total_ms'=>(int)round((microtime(true)-$startedAt)*1000)],JSON_UNESCAPED_SLASHES));
+        error_log('[paperbell-timing] print.list_order_items '.json_encode(['orders'=>count($orderSns),'lines'=>count($lines),'paths_checked'=>0,'line_query_ms'=>$lineQueryMs,'mapping_ms'=>$mappingMs,'inventory_ms'=>$inventoryMs,'queue_ms'=>$queueMs,'file_printer_ms'=>$fileCheckMs,'total_ms'=>(int)round((microtime(true)-$startedAt)*1000)],JSON_UNESCAPED_SLASHES));
         return$result;
     }
 
