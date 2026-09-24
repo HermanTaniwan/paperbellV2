@@ -85,8 +85,10 @@ export class PaperbellPdfViewer {
       this.pageCount = document.numPages;
       await this.buildPageStack(generation);
       if (generation !== this.generation) return;
+      await this.renderPage(1);
+      if (generation !== this.generation) return;
       this.state();
-      this.renderPage(1);
+      for (const entry of this.pages.values()) this.pageObserver.observe(entry.canvas);
     } catch (error) {
       if (generation !== this.generation || error?.name === 'RenderingCancelledException') return;
       this.state({ loading: false, error: 'Preview PDF tidak dapat dimuat. Coba buka di tab baru.' });
@@ -96,11 +98,13 @@ export class PaperbellPdfViewer {
 
   async buildPageStack(generation) {
     this.clearPageStack();
+    const firstPage = await this.document.getPage(1);
+    if (generation !== this.generation) return;
+    const naturalViewport = firstPage.getViewport({ scale: 1 });
     let previousCanvas = null;
-    const addPage = async pageNumber => {
-      const page = await this.document.getPage(pageNumber);
-      if (generation !== this.generation) return false;
-      const naturalViewport = page.getViewport({ scale: 1 });
+    // Reserve space without fetching off-screen page metadata. Actual page
+    // dimensions are resolved on demand, including mixed-size documents.
+    for (let pageNumber = 1; pageNumber <= this.pageCount; pageNumber++) {
       const canvas = pageNumber === 1 ? this.canvas : document.createElement('canvas');
       canvas.className = 'pdf-page-canvas';
       canvas.dataset.pdfPage = String(pageNumber);
@@ -110,19 +114,6 @@ export class PaperbellPdfViewer {
       previousCanvas = canvas;
       this.pages.set(pageNumber, { canvas, naturalViewport, renderedZoom: null });
       this.sizePlaceholder(pageNumber);
-      this.pageObserver.observe(canvas);
-      return true;
-    };
-
-    // Make page one usable immediately; build the remaining stack lazily.
-    if (this.pageCount > 0 && !(await addPage(1))) return;
-    this.state();
-    void this.populateRemainingPages(generation, addPage);
-  }
-
-  async populateRemainingPages(generation, addPage) {
-    for (let pageNumber = 2; pageNumber <= this.pageCount; pageNumber++) {
-      if (!(await addPage(pageNumber))) return;
     }
   }
 
@@ -151,6 +142,7 @@ export class PaperbellPdfViewer {
     try {
       const page = await this.document.getPage(pageNumber);
       if (generation !== this.generation || renderGeneration !== this.renderGeneration) return;
+      entry.naturalViewport = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: this.pageScale(entry.naturalViewport) });
       const outputScale = Math.min(window.devicePixelRatio || 1, 2);
       entry.canvas.width = Math.floor(viewport.width * outputScale);
