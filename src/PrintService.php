@@ -210,14 +210,14 @@ final class PrintService
 
     public function queueOrderItem(string $orderSn,int $lineId,string $printer,string $user,array $requestedOptions=[]): array
     {
-        $items=$this->previewOrder($orderSn);if(!$items)throw new RuntimeException('Order tidak ditemukan.');$item=null;
-        foreach($items as $candidate)if((int)$candidate['line']['id']===$lineId){$item=$candidate;break;}
-        if($item===null)throw new RuntimeException('Item tidak ditemukan pada order ini.');
-        $line=$item['line'];if(strtoupper(trim((string)$line['status']))==='CANCELLED')throw new RuntimeException('Item pada order yang dibatalkan tidak dapat dicetak.');
-        if(!$item['ready'])throw new RuntimeException((string)$item['reason']);
-        $printer=trim($printer!==''?$printer:(string)$item['default_printer']);
+        $stmt=$this->db->prepare('SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,status FROM order_process WHERE id=? AND order_sn=? LIMIT 1');$stmt->execute([$lineId,$orderSn]);$line=$stmt->fetch();
+        if(!$line)throw new RuntimeException('Item tidak ditemukan pada order ini.');
+        if(strtoupper(trim((string)$line['status']))==='CANCELLED')throw new RuntimeException('Item pada order yang dibatalkan tidak dapat dicetak.');
+        $mapping=$this->resolveMapping($line);if(!$mapping)throw new RuntimeException('Mapping tidak ditemukan');
+        $mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);if(!is_file($mapping['file_path']))throw new RuntimeException('File PDF tidak ditemukan');
+        $defaultPrinter=$this->resolveMappedPrinter((string)$mapping['printer']);$printer=trim($printer!==''?$printer:$defaultPrinter);
         if($printer===''||!in_array($printer,$this->configuredPrinters(),true))throw new RuntimeException('Printer tidak tersedia atau dinonaktifkan: '.($printer?:'(kosong)'));
-        $mapping=$item['mapping'];$mapping['printer']=$printer;$options=$this->normalizePrintOptions($mapping,array_replace($item['print_options']??[],$requestedOptions));$copies=(int)$options['copies'];
+        $mapping['printer']=$printer;$defaults=$this->normalizePrintOptions($mapping,[]);$defaults['copies']=max(1,(int)$line['qty'])*(int)$defaults['copies'];$options=$this->normalizePrintOptions($mapping,array_replace($defaults,$requestedOptions));$copies=(int)$options['copies'];
         $id=$this->insertJob('product',$orderSn,$lineId,(string)$mapping['file_path'],$printer,$this->productSettings($mapping,$copies,$options),$copies,$user);
         return ['ok'=>true,'id'=>$id,'copies'=>$copies,'printer'=>$printer,'options'=>$options];
     }
