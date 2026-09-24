@@ -141,11 +141,10 @@ function streamPdf(string $path, string $downloadName): never {
     fseek($handle, $start);
     $remaining = $length;
     while ($remaining > 0 && !feof($handle) && !connection_aborted()) {
-        $chunk = fread($handle, min(8192, $remaining));
+        $chunk = fread($handle, min(262144, $remaining));
         if ($chunk === false || $chunk === '') break;
         echo $chunk;
         $remaining -= strlen($chunk);
-        flush();
     }
     fclose($handle);
     exit;

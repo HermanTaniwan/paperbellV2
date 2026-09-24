@@ -97,10 +97,9 @@ export class PaperbellPdfViewer {
   async buildPageStack(generation) {
     this.clearPageStack();
     let previousCanvas = null;
-
-    for (let pageNumber = 1; pageNumber <= this.pageCount; pageNumber++) {
+    const addPage = async pageNumber => {
       const page = await this.document.getPage(pageNumber);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation) return false;
       const naturalViewport = page.getViewport({ scale: 1 });
       const canvas = pageNumber === 1 ? this.canvas : document.createElement('canvas');
       canvas.className = 'pdf-page-canvas';
@@ -112,6 +111,18 @@ export class PaperbellPdfViewer {
       this.pages.set(pageNumber, { canvas, naturalViewport, renderedZoom: null });
       this.sizePlaceholder(pageNumber);
       this.pageObserver.observe(canvas);
+      return true;
+    };
+
+    // Make page one usable immediately; build the remaining stack lazily.
+    if (this.pageCount > 0 && !(await addPage(1))) return;
+    this.state();
+    void this.populateRemainingPages(generation, addPage);
+  }
+
+  async populateRemainingPages(generation, addPage) {
+    for (let pageNumber = 2; pageNumber <= this.pageCount; pageNumber++) {
+      if (!(await addPage(pageNumber))) return;
     }
   }
 
