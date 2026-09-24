@@ -195,9 +195,16 @@ final class PrintService
 
     public function productPdf(int $lineId): array
     {
-        if($lineId<=0)throw new InvalidArgumentException('ID item tidak valid.');$stmt=$this->db->prepare('SELECT order_sn FROM order_process WHERE id=?');$stmt->execute([$lineId]);$orderSn=(string)($stmt->fetchColumn()?:'');if($orderSn==='')throw new RuntimeException('Item order tidak ditemukan.');
-        foreach($this->previewOrder($orderSn) as $item)if((int)$item['line']['id']===$lineId){if(!$item['ready'])throw new RuntimeException((string)$item['reason']);return['path'=>(string)$item['mapping']['file_path'],'name'=>$item['file_name']?:'produk.pdf'];}
-        throw new RuntimeException('Item order tidak ditemukan.');
+        if($lineId<=0)throw new InvalidArgumentException('ID item tidak valid.');
+        $stmt=$this->db->prepare('SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,status FROM order_process WHERE id=? LIMIT 1');
+        $stmt->execute([$lineId]);$line=$stmt->fetch();
+        if(!$line)throw new RuntimeException('Item order tidak ditemukan.');
+        $mapping=$this->resolveMapping($line);
+        if($mapping)$mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);
+        if(!$mapping)throw new RuntimeException('Mapping tidak ditemukan');
+        $path=(string)$mapping['file_path'];
+        if(!is_file($path))throw new RuntimeException('File PDF tidak ditemukan');
+        return['path'=>$path,'name'=>basename($path)?:'produk.pdf'];
     }
 
     public function queueOrder(string $orderSn,string $user,array $printerOverrides=[],array $optionOverrides=[]): array
