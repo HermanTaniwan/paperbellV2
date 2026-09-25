@@ -267,6 +267,8 @@ try {
     if ($action === 'marketplace_tiktok_categories') respond((new MarketplacePriceService($mysql,$oauthService()))->tiktokCategories((string)($_GET['q']??'')));
     if ($action === 'tiktok_draft_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->createDraft((int)($input['item_id']??0))); }
     if ($action === 'tiktok_activate_product') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->activate((string)($input['product_id']??''))); }
+    if ($action === 'tiktok_image_sync_candidates') respond((new TikTokShopeeListingService($oauthService()))->imageSyncCandidates((int)($_GET['item_id']??0)));
+    if ($action === 'tiktok_sync_images_from_shopee') { $input=body();respond((new TikTokShopeeListingService($oauthService()))->syncImages((int)($input['item_id']??0),trim((string)($input['product_id']??'')))); }
 
     if ($action === 'label_pdf') {
         $stmt=$mysql->prepare('SELECT pdf_path FROM order_resi WHERE order_sn=?');$stmt->execute([(string)($_GET['order_sn']??'')]);$path=(string)($stmt->fetchColumn()?:'');

@@ -27,6 +27,32 @@ final class TikTokShopeeListingService
         return ['ok'=>true,'product_id'=>$productId,'status'=>(string)($product['status']??$product['product_status']??'PENDING'),'message'=>'Produk dikirim untuk ditayangkan dan sedang mengikuti pemeriksaan TikTok.'];
     }
 
+    public function imageSyncCandidates(int $itemId): array
+    {
+        if ($itemId < 1) throw new InvalidArgumentException('ID produk Shopee tidak valid.');
+        $item=$this->shopeeItem($itemId,$this->oauth->credentials('shopee'));$title=trim((string)($item['item_name']??''));$needle=$this->normalizedTitle($title);
+        $auth=$this->oauth->credentials('tiktok');$token='';$candidates=[];$scanned=0;
+        do {
+            $query=['page_size'=>100];if($token!=='')$query['page_token']=$token;
+            $json=$this->tiktok('POST','/product/202309/products/search',$query,[],$auth);
+            foreach(($json['data']['products']??[]) as $row){$scanned++;$candidateTitle=trim((string)($row['title']??$row['name']??''));$normalized=$this->normalizedTitle($candidateTitle);similar_text($needle,$normalized,$score);if($normalized!==$needle&&$score<80)continue;$id=(string)($row['id']??'');if($id==='')continue;$detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($id),[],null,$auth)['data']??[];$product=$detail['product']??$detail;$candidates[]=['product_id'=>$id,'title'=>$candidateTitle,'status'=>(string)($product['status']??$product['product_status']??''),'score'=>round($score,1),'exact_title'=>$normalized===$needle,'image_count'=>count($product['main_images']??[])];}
+            $token=(string)($json['data']['next_page_token']??'');
+        } while($token!==''&&$scanned<10000);
+        usort($candidates,fn(array $a,array $b): int=>($b['exact_title']<=>$a['exact_title'])?:($b['score']<=>$a['score']));
+        return ['source_item_id'=>$itemId,'source_title'=>$title,'source_image_count'=>count($this->imageUrls($item)),'scanned'=>$scanned,'candidates'=>$candidates];
+    }
+
+    public function syncImages(int $itemId,string $productId): array
+    {
+        if($itemId<1||!preg_match('/^\d+$/',$productId))throw new InvalidArgumentException('ID produk Shopee atau TikTok tidak valid.');
+        $item=$this->shopeeItem($itemId,$this->oauth->credentials('shopee'));$auth=$this->oauth->credentials('tiktok');$detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth)['data']??[];$product=$detail['product']??$detail;
+        $shopeeTitle=trim((string)($item['item_name']??''));$tiktokTitle=trim((string)($product['title']??$product['name']??''));if($this->normalizedTitle($shopeeTitle)!==$this->normalizedTitle($tiktokTitle))throw new RuntimeException('Judul produk Shopee dan TikTok tidak sama; pembaruan gambar dibatalkan.');
+        $images=[];foreach(array_slice($this->imageUrls($item),0,9) as $url)$images[]=['uri'=>$this->uploadImage($url,$auth)];if(!$images)throw new RuntimeException('Produk Shopee tidak memiliki gambar yang dapat diunggah ke TikTok.');
+        $this->tiktok('POST','/product/202509/products/'.rawurlencode($productId).'/partial_edit',[],['save_mode'=>'LISTING','main_images'=>$images],$auth);
+        $afterData=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$auth)['data']??[];$after=$afterData['product']??$afterData;$actual=array_values(array_filter(array_map(fn($row)=>(string)($row['uri']??''),$after['main_images']??[])));$expected=array_column($images,'uri');if($actual!==$expected)throw new RuntimeException('TikTok menerima permintaan, tetapi URI gambar hasil verifikasi belum sama.');
+        return ['ok'=>true,'source_item_id'=>$itemId,'product_id'=>$productId,'title'=>$tiktokTitle,'image_count'=>count($images),'status'=>(string)($after['status']??$after['product_status']??''),'message'=>'Gambar produk TikTok berhasil disinkronkan dari Shopee.'];
+    }
+
     private function stickerTemplate(array $auth): array
     {
         $list=$this->tiktok('POST','/product/202309/products/search',['page_size'=>100],[],$auth);foreach(($list['data']['products']??[]) as $row){$title=mb_strtolower((string)($row['title']??$row['name']??''));if(!str_contains($title,'stiker')&&!str_contains($title,'sticker'))continue;$id=(string)($row['id']??'');if($id==='')continue;$response=$this->tiktok('GET','/product/202309/products/'.rawurlencode($id),[],null,$auth);$product=$response['data']['product']??$response['data']??[];$chains=$product['category_chains']??[];$leaf=is_array($chains)&&$chains?end($chains):[];$category=(string)($product['category_id']??$product['category']['id']??$leaf['id']??$leaf['category_id']??'');if($category!==''){$product['category_id']=$category;return$product;}}
@@ -36,6 +62,7 @@ final class TikTokShopeeListingService
     private function shopeeItem(int $id,array $auth): array{$json=$this->shopee('GET','/api/v2/product/get_item_base_info',['item_id_list'=>(string)$id],null,$auth);$item=$json['response']['item_list'][0]??[];if(!$item)throw new RuntimeException('Produk Shopee tidak ditemukan di toko yang terhubung.');return$item;}
     private function shopeeModels(int $id,array $auth): array{$json=$this->shopee('GET','/api/v2/product/get_model_list',['item_id'=>$id],null,$auth);return $json['response']['model']??[];}
     private function imageUrls(array $item): array{return array_values(array_filter(array_map('strval',$item['image']['image_url_list']??$item['image']['image_url']??[])));}
+    private function normalizedTitle(string $title): string{$title=mb_strtolower($title);$title=preg_replace('/[^\pL\pN]+/u',' ',trim($title))??'';return preg_replace('/\s+/u',' ',$title)??$title;}
     private function title(string $title): string{$title=preg_replace('/\s+/u',' ',trim($title))??'';if(mb_strlen($title)<25)$title.=' - Paperbell';return mb_substr($title,0,255);}
     private function description(string $text): string{$text=trim(strip_tags($text));return '<p>'.nl2br(htmlspecialchars(mb_substr($text,0,9500),ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8')).'</p>';}
     private function price(mixed $value): ?int{return is_numeric($value)&&(float)$value>0?(int)round((float)$value):null;}
