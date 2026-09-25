@@ -39,7 +39,7 @@ final class TikTokShopeeListingService
             $token=(string)($json['data']['next_page_token']??'');
         } while($token!==''&&$scanned<10000);
         usort($candidates,fn(array $a,array $b): int=>($b['exact_title']<=>$a['exact_title'])?:($b['score']<=>$a['score']));
-        return ['source_item_id'=>$itemId,'source_title'=>$title,'source_image_count'=>count($this->imageUrls($item)),'scanned'=>$scanned,'candidates'=>$candidates];
+        return ['source_item_id'=>$itemId,'source_title'=>$title,'source_image_count'=>count($this->imageUrls($item)),'source_image_urls'=>$this->imageUrls($item),'scanned'=>$scanned,'candidates'=>$candidates];
     }
 
     public function syncImages(int $itemId,string $productId): array
