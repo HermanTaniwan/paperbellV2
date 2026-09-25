@@ -53,6 +53,14 @@ final class TikTokShopeeListingService
         return ['ok'=>true,'source_item_id'=>$itemId,'product_id'=>$productId,'title'=>$tiktokTitle,'image_count'=>count($images),'status'=>(string)($after['status']??$after['product_status']??''),'message'=>'Gambar produk TikTok berhasil disinkronkan dari Shopee.'];
     }
 
+    public function variationSyncPlan(int $itemId,string $productId): array
+    {
+        if($itemId<1||!preg_match('/^\d+$/',$productId))throw new InvalidArgumentException('ID produk Shopee atau TikTok tidak valid.');
+        $shopeeAuth=$this->oauth->credentials('shopee');$item=$this->shopeeItem($itemId,$shopeeAuth);$models=$this->shopeeModels($itemId,$shopeeAuth);$tiktokAuth=$this->oauth->credentials('tiktok');$detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$tiktokAuth)['data']??[];$product=$detail['product']??$detail;
+        $source=[];foreach($models as $model)$source[]=['model_id'=>(string)($model['model_id']??''),'name'=>(string)($model['model_name']??''),'seller_sku'=>(string)($model['model_sku']??''),'price'=>$this->price($model['price_info'][0]['current_price']??$model['price_info'][0]['original_price']??$item['price_info'][0]['current_price']??$item['price_info'][0]['original_price']??null),'stock'=>max(0,(int)($model['stock_info_v2']['seller_stock'][0]['stock']??$model['stock_info_v2']['summary_info']['total_available_stock']??0))];
+        return ['source_item_id'=>$itemId,'source_title'=>(string)($item['item_name']??''),'source_models'=>$source,'product_id'=>$productId,'tiktok_title'=>(string)($product['title']??''),'tiktok_status'=>(string)($product['status']??$product['product_status']??''),'tiktok_skus'=>$product['skus']??[]];
+    }
+
     private function stickerTemplate(array $auth): array
     {
         $list=$this->tiktok('POST','/product/202309/products/search',['page_size'=>100],[],$auth);foreach(($list['data']['products']??[]) as $row){$title=mb_strtolower((string)($row['title']??$row['name']??''));if(!str_contains($title,'stiker')&&!str_contains($title,'sticker'))continue;$id=(string)($row['id']??'');if($id==='')continue;$response=$this->tiktok('GET','/product/202309/products/'.rawurlencode($id),[],null,$auth);$product=$response['data']['product']??$response['data']??[];$chains=$product['category_chains']??[];$leaf=is_array($chains)&&$chains?end($chains):[];$category=(string)($product['category_id']??$product['category']['id']??$leaf['id']??$leaf['category_id']??'');if($category!==''){$product['category_id']=$category;return$product;}}
