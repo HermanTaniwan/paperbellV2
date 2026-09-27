@@ -252,6 +252,7 @@ final class PrintQueueService
                     'paper_jam'=>'Buka jalur kertas, keluarkan kertas yang tersangkut, lalu tutup kembali printer.',
                     'out_of_paper'=>'Isi tray kertas yang sesuai dan pastikan paper guide terpasang rapat.',
                     'paused'=>'Buka antrean Windows dan nonaktifkan Pause Printing.',
+                    'printer_connection'=>'Minta operator mematikan lalu menyalakan kembali printer, pastikan printer tersambung ke jaringan, kemudian klik Coba lagi.',
                     default=>'Periksa panel printer, koneksi, driver Windows, dan antrean cetak.',
                 };
                 $signals[]=$this->signal($type,(string)$printer['name'],null,null,'Printer '.$printer['status'],(string)$printer['diagnostic'],$guidance);
@@ -343,6 +344,7 @@ final class PrintQueueService
         try{
             $printerOutput=$this->cupsCommand(['lpstat','-p','-d']);
             $jobOutput=$this->cupsCommand(['lpstat','-W','not-completed','-l','-o']);
+            $deviceOutput=$this->cupsCommand(['lpstat','-v']);
             $visibleRaw=(string)($this->db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn()?:'');
             $visible=json_decode($visibleRaw,true);$visible=is_array($visible)?array_flip(array_map('strval',$visible)):[];
             $default='';if(preg_match('/^system default destination:\s*(\S+)/mi',$printerOutput,$match))$default=$match[1];
@@ -356,7 +358,14 @@ final class PrintQueueService
                     try{$printerStates[$printerName]=$this->cupsPrinterStateRows($this->cupsCommand(['ipptool','-c',$this->cupsLocalPrinterUri($printerName),$this->cupsPrinterStateTest]));}catch(Throwable){}
                 }
             }
-            $printers=[];
+            $printers=[];$connectionErrors=[];
+            foreach($printingRequests as $requestId=>$_unused){
+                if(!preg_match('/^(.*)-\d+$/',(string)$requestId,$requestMatch))continue;
+                $printingPrinter=(string)$requestMatch[1];
+                $deviceUri=$this->cupsDirectPrinterUri($printingPrinter,$deviceOutput);
+                if($deviceUri==='')continue;
+                try{$this->cupsDeviceImpressions($deviceUri);}catch(Throwable $e){$connectionErrors[$printingPrinter]=trim($e->getMessage())?:'Printer tidak dapat dihubungi.';}
+            }
             foreach(preg_split('/\R/',trim($printerOutput))?:[] as $line){
                 if(!preg_match('/^printer\s+(\S+)\s+(.+)$/i',trim($line),$match))continue;
                 $name=$match[1];if($visible&&!isset($visible[$name]))continue;$detail=trim($match[2]);$lower=strtolower($detail);
@@ -373,6 +382,7 @@ final class PrintQueueService
                 elseif(preg_match('/(?:door-open|shutdown|stopped|other-error)/',$reason)){$status='Printer memerlukan tindakan';$errorType='printer_error';}
                 if($message!==''&&strtolower($message)!==strtolower($detail))$detail.=' · IPP: '.$message;
                 if($reason!==''&&$reason!=='none')$detail.=' · Alasan IPP: '.$reason;
+                if(isset($connectionErrors[$name])){$status='Koneksi printer gagal';$errorType='printer_connection';$detail.=' · '.$connectionErrors[$name];}
                 $printers[]=['name'=>$name,'active'=>$errorType==='','status'=>$status,'status_code'=>$disabled?6:3,'error_type'=>$errorType,'diagnostic'=>$detail,'is_default'=>$name===$default,'port'=>'CUPS','queue_count'=>0];
             }
             $printerNames=array_column($printers,'name');usort($printerNames,fn($a,$b)=>strlen($b)<=>strlen($a));$jobs=[];$jobCounts=[];$pageProgress=$this->cupsPageProgress($jobOutput);
