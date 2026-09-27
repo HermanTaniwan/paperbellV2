@@ -65,7 +65,7 @@ final class TikTokShopeeListingService
     {
         if($itemId<1||!preg_match('/^\d+$/',$productId))throw new InvalidArgumentException('ID produk Shopee atau TikTok tidak valid.');
         $item=$this->shopeeItem($itemId,$this->oauth->credentials('shopee'));$detail=$this->tiktok('GET','/product/202309/products/'.rawurlencode($productId),[],null,$this->oauth->credentials('tiktok'))['data']??[];$product=$detail['product']??$detail;
-        return ['source_item_id'=>$itemId,'source_title'=>(string)($item['item_name']??''),'shopee_video_info'=>$item['video_info']??$item['video']??null,'shopee_item_keys'=>array_keys($item),'product_id'=>$productId,'tiktok_title'=>(string)($product['title']??''),'tiktok_status'=>(string)($product['status']??$product['product_status']??''),'tiktok_video'=>$product['video']??$product['video_id']??null,'tiktok_product_keys'=>array_keys($product)];
+        return ['source_item_id'=>$itemId,'source_title'=>(string)($item['item_name']??''),'shopee_video_info'=>$item['video_info']??$item['video']??null,'shopee_item_keys'=>array_keys($item),'product_id'=>$productId,'tiktok_title'=>(string)($product['title']??''),'tiktok_status'=>(string)($product['status']??$product['product_status']??''),'tiktok_create_time'=>$product['create_time']??null,'tiktok_update_time'=>$product['update_time']??null,'integrated_platform_statuses'=>$product['integrated_platform_statuses']??[],'tiktok_video'=>$product['video']??$product['video_id']??null,'tiktok_product_keys'=>array_keys($product)];
     }
 
     public function syncVideo(int $itemId,string $productId): array
