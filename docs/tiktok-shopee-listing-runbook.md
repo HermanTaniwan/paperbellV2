@@ -100,3 +100,4 @@ Produk Shopee `49867791743` dibuat sebagai draf TikTok `1737496494872692083`. Pe
 
 - Shopee `42067744116` → TikTok `1732418161526801779`: delapan gambar utama diperbarui; judul cocok 97,2%; produk tetap aktif.
 - Shopee `44411485281` → TikTok `1732124739647538547`: tujuh gambar utama diperbarui; dua SKU lama dipertahankan dan 28 SKU baru ditambahkan; total 30 SKU unik; harga Rp15.500/Rp17.500; variasi Campur B5 tetap stok 0; produk tetap aktif.
+- Shopee `49466014478` → TikTok `1737268911154955635`: empat SKU lama dipertahankan dan enam kombinasi Hijau/Hitam Transparan/Ungu × A5/B5 ditambahkan; atribut TikTok memakai dua dimensi `Warna` dan `Size`; gambar model Shopee kosong sehingga gambar utama diunggah sebagai fallback `ATTRIBUTE_IMAGE`; total 10 SKU; harga Rp13.000/Rp15.000; produk tetap aktif.
