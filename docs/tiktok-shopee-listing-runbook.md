@@ -50,6 +50,15 @@ Gunakan alur ini untuk menyalin satu produk Shopee ke TikTok Shop serta memperba
 7. TikTok dapat menerima edit dengan `code: 0` tetapi baru menampilkan SKU beberapa puluh detik kemudian. Jika verifikasi langsung gagal, baca ulang katalog sebelum retry. Pengaman komposisi harus menghentikan retry setelah SKU baru muncul agar tidak membuat duplikat.
 8. Verifikasi akhir: status produk tetap `ACTIVATE`, jumlah SKU sumber dan target sama, semua seller SKU unik dan tidak kosong, harga target sesuai sumber, stok nol tetap nol, serta jumlah dan isi gambar sesuai.
 
+### Menambahkan video produk
+
+1. Gunakan `tiktok_media_sync_plan` untuk memastikan produk Shopee memiliki tepat satu `video_info`, judul TikTok cocok minimal 95%, dan listing TikTok belum mempunyai video.
+2. Unduh `video_info[0].video_url` ke file sementara. Direct upload Product File menerima video maksimal 10 MB; gunakan alur large-file upload untuk file yang lebih besar.
+3. Unggah MP4 melalui `POST /product/202309/files/upload` sebagai multipart `data`, sertakan nama file tanpa spasi dan tanpa titik tambahan. Simpan `data.id` dari respons sebagai video ID.
+4. Pasang video melalui `POST /product/202509/products/{product_id}/partial_edit` dengan `save_mode=LISTING` dan `video:{id:video_id}`. Endpoint Paperbell yang dapat dipakai adalah `tiktok_sync_video_from_shopee`.
+5. Transcoding bersifat asynchronous. Respons edit dapat langsung berstatus audit `APPROVED`, sedangkan `GET Product` belum memiliki field `video`. Jangan upload ulang; tunggu lalu baca ulang sampai `video.id` sama dengan hasil upload.
+6. Verifikasi akhir mencakup video ID, format, resolusi, URL/cover hasil TikTok, status produk, serta durasi dan ukuran sumber.
+
 ### Endpoint Paperbell yang dapat dipakai ulang
 
 | Endpoint | Tujuan |
@@ -58,6 +67,8 @@ Gunakan alur ini untuk menyalin satu produk Shopee ke TikTok Shop serta memperba
 | `tiktok_variation_sync_plan` | Membandingkan model Shopee dengan detail SKU TikTok tanpa menulis |
 | `tiktok_sync_images_from_shopee` | Mengganti galeri gambar produk TikTok yang sudah ada |
 | `tiktok_sync_variations_and_images` | Menambah variasi sekaligus menyinkronkan gambar |
+| `tiktok_media_sync_plan` | Memeriksa metadata video Shopee dan status video TikTok tanpa menulis |
+| `tiktok_sync_video_from_shopee` | Mengunggah satu video Shopee dan memasangnya ke listing TikTok |
 
 Sebelum memakai endpoint tulis untuk produk lain, sesuaikan aturan prefix seller SKU dan pengaman jumlah SKU di `TikTokShopeeListingService`. Jangan mengasumsikan pola `WMAZ`, jumlah 2 + 28, atau tujuh gambar berlaku untuk produk lain.
 
@@ -101,3 +112,4 @@ Produk Shopee `49867791743` dibuat sebagai draf TikTok `1737496494872692083`. Pe
 - Shopee `42067744116` → TikTok `1732418161526801779`: delapan gambar utama diperbarui; judul cocok 97,2%; produk tetap aktif.
 - Shopee `44411485281` → TikTok `1732124739647538547`: tujuh gambar utama diperbarui; dua SKU lama dipertahankan dan 28 SKU baru ditambahkan; total 30 SKU unik; harga Rp15.500/Rp17.500; variasi Campur B5 tetap stok 0; produk tetap aktif.
 - Shopee `49466014478` → TikTok `1737268911154955635`: empat SKU lama dipertahankan dan enam kombinasi Hijau/Hitam Transparan/Ungu × A5/B5 ditambahkan; atribut TikTok memakai dua dimensi `Warna` dan `Size`; gambar model Shopee kosong sehingga gambar utama diunggah sebagai fallback `ATTRIBUTE_IMAGE`; total 10 SKU; harga Rp13.000/Rp15.000; produk tetap aktif.
+- Shopee `56868187350` → TikTok `1737639024347415923`: satu video MP4 22 detik berukuran 3.144.067 byte diunggah sebagai Product File dan dipasang sebagai video `v14c21g50000das98fnog65mbu47an7g`; hasil transcoding TikTok 720×1280; audit disetujui dan produk tetap aktif.
