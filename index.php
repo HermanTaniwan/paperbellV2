@@ -13,7 +13,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
   <link rel="stylesheet" href="assets/app.css?v=32">
-  <link rel="stylesheet" href="assets/print.css?v=7">
+  <link rel="stylesheet" href="assets/print.css?v=8">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=31">
   <link rel="stylesheet" href="assets/features.css?v=28">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
@@ -512,7 +512,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <article v-for="line in row.items" :key="line.id" class="inline-print-item" :class="{'six-hole-item':isSixHole(line),'is-status-changing':line.marking_printed}">
 <div class="inline-item-main">
-<img v-if="!row.order_sn.startsWith('TIKTOK:')&&isMarketplaceOrder(row)" class="order-item-thumbnail" :src="'api.php?action=order_thumbnail&line_id='+line.id" :alt="line.model_name||line.item_name" loading="lazy" @error="$event.target.style.display='none'">
+<button v-if="!row.order_sn.startsWith('TIKTOK:')&&isMarketplaceOrder(row)" type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(line.model_name||line.item_name)" title="Klik untuk memperbesar gambar" @click="openOrderImage(line)"><img class="order-item-thumbnail" :src="'api.php?action=order_thumbnail&line_id='+line.id" :alt="line.model_name||line.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
 <b>{{line.item_name||line.model_name||line.sku_id}}</b>
 <small>{{line.model_name||'-'}}</small>
 <span v-if="line.print_options?.paper==='A5'||line.print_options?.paper==='B5'" class="paper-size-indicator" :class="line.print_options.paper==='B5'?'paper-b5':'paper-a5'" :title="'Ukuran kertas '+line.print_options.paper">
@@ -1424,6 +1424,12 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         </section>
       </div>
 
+      <dialog ref="orderImageDialog" class="order-image-dialog" aria-labelledby="order-image-title" @cancel.stop="orderImagePreview=null" @keydown.esc.stop @click.self="closeOrderImage">
+        <article v-if="orderImagePreview" class="order-image-content">
+          <header class="modal-head"><div><h2 id="order-image-title">{{orderImagePreview.title}}</h2><p>{{orderImagePreview.variant}}</p></div><button type="button" class="icon-button" aria-label="Tutup gambar" autofocus @click="closeOrderImage">×</button></header>
+          <img class="order-image-large" :src="orderImagePreview.url" :alt="orderImagePreview.variant">
+        </article>
+      </dialog>
       <div v-if="customerHistory" class="modal-backdrop" @click.self="customerHistory=null">
         <article class="modal-card history-modal">
 <div class="modal-head">
@@ -1578,7 +1584,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=152">
+<script src="assets/app.js?v=153">
 </script>
 </body>
 </html>
