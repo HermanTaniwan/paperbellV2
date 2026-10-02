@@ -13,7 +13,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
   <link rel="stylesheet" href="assets/app.css?v=32">
-  <link rel="stylesheet" href="assets/print.css?v=6">
+  <link rel="stylesheet" href="assets/print.css?v=7">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=30">
   <link rel="stylesheet" href="assets/features.css?v=28">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
@@ -512,6 +512,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <article v-for="line in row.items" :key="line.id" class="inline-print-item" :class="{'six-hole-item':isSixHole(line),'is-status-changing':line.marking_printed}">
 <div class="inline-item-main">
+<img v-if="!row.order_sn.startsWith('TIKTOK:')&&isMarketplaceOrder(row)" class="order-item-thumbnail" :src="'api.php?action=order_thumbnail&line_id='+line.id" :alt="line.model_name||line.item_name" loading="lazy" @error="$event.target.style.display='none'">
 <b>{{line.item_name||line.model_name||line.sku_id}}</b>
 <small>{{line.model_name||'-'}}</small>
 <span v-if="line.print_options?.paper==='A5'||line.print_options?.paper==='B5'" class="paper-size-indicator" :class="line.print_options.paper==='B5'?'paper-b5':'paper-a5'" :title="'Ukuran kertas '+line.print_options.paper">

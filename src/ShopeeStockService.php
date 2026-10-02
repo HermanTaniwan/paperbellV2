@@ -34,6 +34,15 @@ final class ShopeeStockService
         ];
     }
 
+    public function imageCatalog(int $itemId): array
+    {
+        $auth = $this->oauth->credentials('shopee');
+        $item = $this->item($itemId, $auth);
+        $response = !empty($item['has_model'])
+            ? ($this->shopee('GET', '/api/v2/product/get_model_list', ['item_id'=>$itemId], null, $auth)['response'] ?? []) : [];
+        return ['item'=>$item, 'models'=>$response];
+    }
+
     public function update(int $itemId, int $modelId, int $quantity, string $user): array
     {
         if ($itemId < 1 || $modelId < 0 || $quantity < 0) throw new InvalidArgumentException('ID produk, ID variasi, atau stok Shopee tidak valid.');

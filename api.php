@@ -18,6 +18,7 @@ require __DIR__ . '/src/ShopeeEscrowService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
+require __DIR__ . '/src/OrderThumbnailService.php';
 require __DIR__ . '/src/TikTokStockService.php';
 require __DIR__ . '/src/StockManagementService.php';
 require __DIR__ . '/src/TikTokShopeeListingService.php';
@@ -186,6 +187,17 @@ try {
     $customerLoyalty = new CustomerLoyaltyService($mysql);
 
     if ($action === 'server_health') respond($serverHealth->overview());
+
+    if ($action === 'order_thumbnail') {
+        $thumbnails = new OrderThumbnailService($mysql, static fn(int $id): array => (new ShopeeStockService($mysql,$oauthService()))->imageCatalog($id), __DIR__.'/storage/order-thumbnails');
+        $image=$thumbnails->forLine((int)($_GET['line_id']??0));
+        if (!$image) { http_response_code(404); exit; }
+        header('Content-Type: '.$image['mime']);
+        header('Cache-Control: private, max-age=86400');
+        header('X-Thumbnail-Source: '.$image['kind']);
+        header('X-Content-Type-Options: nosniff');
+        readfile($image['path']); exit;
+    }
 
     if ($action === 'scanner_overview') respond($scannerService->overview());
     if ($action === 'scanner_start') respond($scannerService->start(body(),(string)$_SESSION['paperbell_user']),202);
