@@ -42,3 +42,8 @@
  .order-filter-navigation .filters button{min-height:32px;padding:6px 10px;border-radius:7px;font-size:10px;line-height:1;white-space:nowrap}
  .content>.search-toolbar .order-toolbar-actions>.marketplace-sync-button{flex:0 0 auto;min-height:34px;padding:7px 10px;border-radius:8px;font-size:10px}
 }
+@media(max-width:620px){
+ .order-filter-navigation{overflow:visible;flex-wrap:wrap}
+ .order-filter-navigation .courier-filter{flex:0 0 auto}
+ .courier-filter-options{left:0;right:auto;width:min(220px,calc(100vw - 24px));z-index:30}
+}
