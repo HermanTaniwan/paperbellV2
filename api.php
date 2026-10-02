@@ -188,9 +188,11 @@ try {
 
     if ($action === 'server_health') respond($serverHealth->overview());
 
-    if ($action === 'order_thumbnail') {
+    if ($action === 'order_thumbnail' || $action === 'inventory_thumbnail') {
         $thumbnails = new OrderThumbnailService($mysql, static fn(int $id): array => (new ShopeeStockService($mysql,$oauthService()))->imageCatalog($id), __DIR__.'/storage/order-thumbnails');
-        $image=$thumbnails->forLine((int)($_GET['line_id']??0));
+        $image=$action==='inventory_thumbnail'
+            ? $thumbnails->forInventory(trim((string)($_GET['item_key']??'')))
+            : $thumbnails->forLine((int)($_GET['line_id']??0));
         if (!$image) { http_response_code(404); exit; }
         header('Content-Type: '.$image['mime']);
         header('Cache-Control: private, max-age=86400');

@@ -774,6 +774,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </tr>
 <tr v-for="row in pageData.items" :key="row.item_key" :class="{'is-deleting':row.deleting}">
 <td>
+<button type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(row.model_name||row.item_name||row.item_key)" title="Klik untuk memperbesar gambar" @click="openInventoryImage(row)"><img class="order-item-thumbnail" :src="'api.php?action=inventory_thumbnail&item_key='+encodeURIComponent(row.item_key)" :alt="row.model_name||row.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
 <b>{{ row.item_name || row.model_name || row.item_key }}</b>
 <small>{{ row.item_key }}</small>
 </td>
@@ -1584,7 +1585,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=153">
+<script src="assets/app.js?v=154">
 </script>
 </body>
 </html>

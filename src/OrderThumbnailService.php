@@ -27,6 +27,34 @@ final class OrderThumbnailService
             && !parse_url($url, PHP_URL_USER) && !parse_url($url, PHP_URL_PORT);
     }
 
+    public function forInventory(string $itemKey): ?array
+    {
+        $stmt=$this->db->prepare('SELECT item_key,model_sku,item_sku,no_ref FROM product_inventory WHERE item_key=?');
+        $stmt->execute([$itemKey]); $stock=$stmt->fetch();
+        if (!$stock) return null;
+        $keys=array_values(array_unique(array_filter(array_map('trim',[(string)$stock['item_key'],(string)$stock['no_ref'],(string)$stock['model_sku'].(string)$stock['item_sku'],(string)$stock['item_sku'].(string)$stock['model_sku']]))));
+        $marks=implode(',',array_fill(0,count($keys),'?'));
+        $aliases=$this->db->prepare("SELECT a.alias_key FROM mapping_aliases a JOIN data_mappings m ON m.id=a.mapping_id WHERE m.sku_id IN ($marks)");
+        $aliases->execute($keys);
+        $keys=array_values(array_unique(array_merge($keys,array_filter($aliases->fetchAll(PDO::FETCH_COLUMN)))));
+        $marks=implode(',',array_fill(0,count($keys),'?'));
+        // Match full SKU keys or a complete parent/variant pair, never product names.
+        $sql="SELECT p.id FROM order_process p WHERE p.order_sn NOT LIKE 'TIKTOK:%' AND p.order_sn NOT LIKE 'MANUAL-%' AND p.order_sn NOT LIKE 'RANDOM-%' AND (p.item_key IN ($marks)";
+        $params=$keys;
+        if (trim((string)$stock['model_sku'])!=='' && trim((string)$stock['item_sku'])!=='') {
+            $sql.=' OR (p.model_sku=? AND p.item_sku=?)';
+            array_push($params,$stock['model_sku'],$stock['item_sku']);
+        }
+        $sql.=') ORDER BY p.id DESC LIMIT 20';
+        $stmt=$this->db->prepare($sql); $stmt->execute($params);
+        foreach($stmt->fetchAll(PDO::FETCH_COLUMN) as $id)if(($image=$this->forLine((int)$id))!==null)return $image;
+        // Inventory can also originate from TikTok; use its explicitly linked Shopee variant.
+        $linked=$this->db->prepare("SELECT shopee_item_id,shopee_model_id FROM stock_management_items WHERE tiktok_seller_sku IN ($marks) LIMIT 2");
+        $linked->execute($keys); $pairs=$linked->fetchAll();
+        if(count($pairs)===1)return $this->forProduct((int)$pairs[0]['shopee_item_id'],(string)$pairs[0]['shopee_model_id']);
+        return null;
+    }
+
     public function forLine(int $id): ?array
     {
         $stmt = $this->db->prepare('SELECT p.order_item_id,p.model_name,o.raw_json FROM order_process p JOIN orders o ON o.order_sn=p.order_sn WHERE p.id=?');
@@ -41,8 +69,12 @@ final class OrderThumbnailService
             if ($key === (string)$line['order_item_id']) { $selected=$item; break; }
         }
         if (!$selected || (int)($selected['item_id'] ?? 0) < 1) return null;
+        return $this->forProduct((int)$selected['item_id'],(string)($selected['model_id']??'0'));
+    }
+
+    private function forProduct(int $itemId,string $modelId): ?array
+    {
         if (!is_dir($this->directory) && !mkdir($this->directory, 0775, true) && !is_dir($this->directory)) throw new RuntimeException('Cache gambar tidak dapat dibuat.');
-        $itemId=(int)$selected['item_id']; $modelId=(string)($selected['model_id'] ?? '0');
         $key=hash('sha256', $itemId.':'.$modelId);
         $path=$this->directory.'/'.$key.'.image'; $metaPath=$this->directory.'/'.$key.'.json';
         $cached=json_decode((string)@file_get_contents($metaPath),true);
