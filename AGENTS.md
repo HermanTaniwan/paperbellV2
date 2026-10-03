@@ -1,5 +1,15 @@
 # Paperbell repository instructions
 
+## Windows 10 LTSC migration handoff
+
+If this checkout is being restored after the Ubuntu host was removed, read
+`docs/windows-10-ltsc-migration.md` before changing code or starting Paperbell.
+The migration backup is expected under Google Drive at
+`Paperbell/Backups/windows-ltsc-migration-<timestamp>/`. Treat its database
+dump and runtime storage (including extracted secrets) as confidential. Restore and verify the
+database and runtime files before installing scheduled tasks or allowing print
+workers to start, so stale/empty queues cannot print unexpectedly.
+
 ## Required Git and Ubuntu deployment workflow
 
 For every requested Paperbell code change, use this workflow unless the user explicitly asks for a different one:
