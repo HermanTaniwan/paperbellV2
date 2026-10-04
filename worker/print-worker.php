@@ -242,33 +242,50 @@ function epson5790PdfPrintSettings(array $job, string $settings): string
         (string)$job['file_path'], $settings,
     ], 'Ukuran halaman PDF Epson WF-5790 tidak dapat dibaca.'), true, 512, JSON_THROW_ON_ERROR);
     $paper = (string)($result['paper'] ?? '');
-    $kinds = ['A4'=>9, 'A5'=>11, 'A6'=>70, 'B5'=>13, 'Letter'=>1];
-    if (!isset($kinds[$paper])) throw new RuntimeException('Ukuran PDF tidak didukung oleh profil WF-5790.');
+    if (!in_array($paper, ['A4','A5','A6','B5','Letter'], true)) throw new RuntimeException('Ukuran PDF tidak didukung oleh profil WF-5790.');
     $parts = array_values(array_filter(explode(',', $settings),
         static fn(string $part): bool => !preg_match('/^\s*paper(?:kind)?=/i', $part)));
-    // The numeric kind avoids localized Epson paper-name matching in Sumatra.
+    $parts = array_map(static fn(string $part): string => trim($part) === 'bin=1' ? 'bin=258' : $part, $parts);
+    // Native preparation verifies the driver-supported size, tray and duplex;
+    // it replaces this standard kind if the driver requires custom dimensions.
     $parts[] = 'paper='.$paper;
-    $parts[] = 'paperkind='.$kinds[$paper];
+    $parts[] = 'paperkind='.(['A4'=>9,'A5'=>11,'A6'=>70,'B5'=>13,'Letter'=>1][$paper]);
     logLine("Job #{$job['id']} ukuran WF-5790 mengikuti PDF: {$paper}");
     return implode(',', $parts);
 }
 
-function applyEpson5790ProductPaperSize(array $job, string $settings): ?string
+function applyEpson5790ProductPaperSize(array $job, string $settings): ?array
 {
+    global $root;
     if (!isWindowsPrintHost() || !isEpson5790ProductJob($job)) return null;
     $paper = paperSizeFromPrintSettings($settings);
     if ($paper === null && str_contains($settings, 'paper=Letter')) $paper = 'Letter';
     if ($paper === null) throw new RuntimeException('Ukuran PDF WF-5790 belum disiapkan.');
     $printer = (string)$job['printer'];
-    $previous = printerPaperSize($printer);
-    if (strcasecmp($previous, $paper) === 0) return null;
-    try { setPrinterPaperSize($printer, $paper); }
-    catch (Throwable $error) {
-        setPrinterPaperSize($printer, $previous);
-        throw $error;
-    }
-    logLine("Job #{$job['id']} ukuran driver WF-5790 diubah sementara: {$previous} -> {$paper}");
-    return $previous;
+    $backup = $root.'/storage/print-labels/epson-devmode-job-'.(int)$job['id'].'.bin';
+    $tokens = array_map('trim', explode(',', $settings));
+    $duplex = in_array('duplexlong', $tokens, true) ? 'duplexlong' : (in_array('duplexshort', $tokens, true) ? 'duplexshort' : 'simplex');
+    $bin = preg_match('/(?:^|,)bin=(\d+)(?:,|$)/', $settings, $match) ? (int)$match[1] : 7;
+    $result = json_decode(runProcess([
+        'powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', $root.'/tools/set-epson-pdf-paper.ps1', '-PrinterName', $printer,
+        '-Paper', $paper, '-BackupPath', $backup,
+        '-Duplex', $duplex, '-InputBin', (string)$bin,
+    ], 'Ukuran native driver WF-5790 tidak dapat disiapkan.'), true, 512, JSON_THROW_ON_ERROR);
+    if (!isset($result['paperkind'], $result['input_bin'])) throw new RuntimeException('Respons native driver WF-5790 tidak valid.');
+    logLine("Job #{$job['id']} native driver WF-5790 mengikuti PDF: {$result['width_mm']} x {$result['height_mm']} mm");
+    return ['backup'=>$backup, 'paperkind'=>(int)$result['paperkind'], 'input_bin'=>(int)$result['input_bin']];
+}
+
+function restoreEpson5790ProductPaperSize(string $printer, string $backup): void
+{
+    global $root;
+    runProcess([
+        'powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', $root.'/tools/set-epson-pdf-paper.ps1', '-PrinterName', $printer,
+        '-Restore', '-BackupPath', $backup,
+    ], 'Konfigurasi native driver WF-5790 tidak dapat dikembalikan.');
+    @unlink($backup);
 }
 
 function warmBrotherPaperSizeCache(PDO $db): void
@@ -487,6 +504,7 @@ do {
     $preparedLabelPath = null;
     $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
+    $temporaryEpsonDevMode = null;
     $printPrinter = null;
     $processingStartedAt = 0.0;
     $timings = ['prepare' => 0, 'driver' => 0, 'sumatra' => 0, 'correlate' => 0];
@@ -542,7 +560,11 @@ do {
         if ($printPrinter === (string)$job['printer']) {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
             if ($temporaryPaperSize === null) {
-                $temporaryPaperSize = applyEpson5790ProductPaperSize($job, $printSettings);
+                $temporaryEpsonDevMode = applyEpson5790ProductPaperSize($job, $printSettings);
+                if ($temporaryEpsonDevMode !== null) {
+                    $printSettings = preg_replace('/paperkind=\d+/', 'paperkind='.$temporaryEpsonDevMode['paperkind'], $printSettings);
+                    $printSettings = preg_replace('/(?:^|(?<=,))bin=\d+/', 'bin='.$temporaryEpsonDevMode['input_bin'], $printSettings);
+                }
             }
         }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
@@ -616,6 +638,14 @@ do {
         }
         logLine('ERROR: ' . $e->getMessage());
     } finally {
+        if ($temporaryEpsonDevMode !== null && $printPrinter !== null) {
+            try {
+                restoreEpson5790ProductPaperSize($printPrinter, $temporaryEpsonDevMode['backup']);
+                logLine("Job #{$job['id']} native driver WF-5790 dikembalikan");
+            } catch (Throwable $restoreError) {
+                logLine('Native driver WF-5790 gagal dikembalikan: '.$restoreError->getMessage());
+            }
+        }
         if ($temporaryLabelPrintTicket !== null && is_array($job) && isset($job['printer'])) {
             try {
                 restoreLabelPrintTicket((string)$job['printer'], $temporaryLabelPrintTicket);
