@@ -17,9 +17,10 @@ final class LabelPdfPreparer
     public function prepare(string $sourcePath,string $printer):array
     {
         $isL3210=stripos($printer,'L3210')!==false;
-        if($isL3210&&PHP_OS_FAMILY!=='Windows')return$this->preparePreview($sourcePath);
-        $topMarginMm=$isL3210?'4':'2';
-        $driverPageMode=$isL3210?'b6':'custom';
+        // Use the exact preview document on both Windows and CUPS hosts.
+        if($isL3210)return$this->preparePreview($sourcePath);
+        $topMarginMm='2';
+        $driverPageMode='custom';
         $fingerprint=implode('|',[
             realpath($sourcePath)?:$sourcePath,
             hash_file('sha256',$sourcePath)?:((string)filemtime($sourcePath).'|'.(string)filesize($sourcePath)),

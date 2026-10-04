@@ -252,15 +252,12 @@ function prepareLabelPdf(array $job): string
 {
     global $labelPreparer;
     $isL3210 = stripos((string)($job['printer'] ?? ''), 'L3210') !== false;
-    if ($isL3210 && !isWindowsPrintHost()) {
+    if ($isL3210) {
         $result=$labelPreparer->preparePreview((string)$job['file_path']);
-        logLine("Job #{$job['id']} memakai PDF yang sama dengan preview resi untuk profil CUPS A6 L3210");
+        logLine("Job #{$job['id']} memakai PDF yang sama dengan preview resi A6 L3210");
         return (string)$result['path'];
     }
     $result=$labelPreparer->prepare((string)$job['file_path'],(string)$job['printer']);
-    if ($isL3210) {
-        logLine("Job #{$job['id']} memakai cache ".($result['cached']?'siap':'baru')." B6 dengan area label 105 x 182 mm untuk L3210");
-    }
     return (string)$result['path'];
 }
 
@@ -347,7 +344,8 @@ function labelPrintSettings(string $printer): string
             $parts[] = 'media-type=PLAIN_NORMAL';
             $parts[] = 'ink=MONO';
         } else {
-            $parts[] = 'paperkind=88'; // Pertahankan profil Windows yang sudah ada.
+            // Sumatra updates the job DEVMODE, including the Epson media size.
+            $parts[] = 'paper=A6';
         }
     } elseif (stripos($printer, 'Brother DCP') !== false) {
         $parts[] = 'bin=258'; // MP Tray, sama dengan aplikasi desktop.
@@ -355,7 +353,7 @@ function labelPrintSettings(string $printer): string
         $parts[] = 'bin=261'; // Rear Paper Feed, sama dengan aplikasi desktop.
     }
     if(!isWindowsPrintHost()&&stripos($printer,'L3210')===false)$parts[]='paper=Custom.105x182mm';
-    // L3210 memakai halaman driver B6 yang sudah dibuat oleh preparer. Printer
+    // L3210 memakai PDF preview A6 dan ukuran driver A6. Printer
     // lain menerima halaman fisik 105 x 182 mm sebagai ukuran custom.
     return implode(',', $parts);
 }
