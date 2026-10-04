@@ -7,6 +7,7 @@ param(
  [switch]$Restore
 )
 $ErrorActionPreference='Stop'
+if (-not ('EpsonPdfDevMode' -as [type])) {
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -17,6 +18,7 @@ public class EpsonPdfDevMode {
  [DllImport("winspool.drv", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool SetPrinter(IntPtr handle,int level,IntPtr info,int command);
 }
 '@
+}
 $dimensions=@{A4=@(2100,2970);A5=@(1480,2100);A6=@(1050,1480);B5=@(1820,2570);Letter=@(2159,2794)}
 $handle=[IntPtr]::Zero; $inputBuffer=[IntPtr]::Zero; $outputBuffer=[IntPtr]::Zero; $info=[IntPtr]::Zero
 $originalRaw=$null

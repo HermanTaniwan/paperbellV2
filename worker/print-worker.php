@@ -499,6 +499,27 @@ function submitPdfToHost(string $sumatra,string $printer,string $printSettings,i
     return preg_match('/request id is\s+\S+-(\d+)/i',$output,$match)?(int)$match[1]:null;
 }
 
+function submitEpson5790Pdf(array $job,string $printer,string $settings,string $path):array
+{
+    global $root,$sumatra;
+    $tokens=array_map('trim',explode(',',$settings));
+    $duplex=in_array('duplexlong',$tokens,true)?'duplexlong':(in_array('duplexshort',$tokens,true)?'duplexshort':'simplex');
+    $paper=paperSizeFromPrintSettings($settings);
+    if($paper===null&&in_array('paper=Letter',$tokens,true))$paper='Letter';
+    if($paper===null)throw new RuntimeException('Ukuran PDF WF-5790 belum disiapkan.');
+    $backup=$root.'/storage/print-labels/epson-devmode-job-'.(int)$job['id'].'.bin';
+    $result=json_decode(runProcess([
+        'powershell.exe','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+        '-File',$root.'/tools/print-epson-pdf.ps1','-PrinterName',$printer,
+        '-Paper',$paper,'-BackupPath',$backup,'-Settings',$settings,'-PdfPath',$path,
+        '-Sumatra',$sumatra,'-Duplex',$duplex,'-InputBin','7',
+    ],'Gagal mengirim PDF WF-5790.'),true,512,JSON_THROW_ON_ERROR);
+    if(!is_array($result)||($result['submitted']??false)!==true)throw new RuntimeException('Respons pengiriman WF-5790 tidak valid.');
+    if(!empty($result['restore_error']))logLine('Native driver WF-5790 gagal dikembalikan: '.$result['restore_error'].'; backup: '.$backup);
+    logLine("Job #{$job['id']} sesi WF-5790: native={$result['apply_ms']}ms, submit={$result['submit_ms']}ms, restore={$result['restore_ms']}ms; {$result['width_mm']} x {$result['height_mm']} mm, Auto Select");
+    return $result;
+}
+
 if(defined('PAPERBELL_PRINT_WORKER_FUNCTIONS_ONLY'))return;
 
 $db = connectDatabase();
@@ -510,7 +531,6 @@ do {
     $preparedLabelPath = null;
     $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
-    $temporaryEpsonDevMode = null;
     $printPrinter = null;
     $processingStartedAt = 0.0;
     $timings = ['prepare' => 0, 'driver' => 0, 'sumatra' => 0, 'correlate' => 0];
@@ -566,21 +586,20 @@ do {
         if ($printPrinter === (string)$job['printer']) {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
         }
-        if ($temporaryPaperSize === null) {
-            $driverJob = array_replace($job, ['printer' => $printPrinter]);
-            $temporaryEpsonDevMode = applyEpson5790ProductPaperSize($driverJob, $printSettings);
-            if ($temporaryEpsonDevMode !== null) {
-                $printSettings = preg_replace('/paperkind=\d+/', 'paperkind='.$temporaryEpsonDevMode['paperkind'], $printSettings);
-                $printSettings = preg_replace('/(?:^|(?<=,))bin=\d+/', 'bin='.$temporaryEpsonDevMode['input_bin'], $printSettings);
-            }
-        }
+        $epsonSession=isWindowsPrintHost()&&isEpson5790ProductJob(array_replace($job,['printer'=>$printPrinter]));
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $spoolerName=isWindowsPrintHost()?'Windows spooler':'CUPS';
         $submitting = $db->prepare("UPDATE print_jobs SET message=? WHERE id=? AND status='processing'");
         $submitting->execute(['Mengirim ke '.$spoolerName,$job['id']]);
         $stageStartedAt = microtime(true);
-        $spoolerJobId=submitPdfToHost($sumatra,$printPrinter,$printSettings,(int)$job['copies'],$printPath);
-        $timings['sumatra'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
+        if($epsonSession){
+            $nativeResult=submitEpson5790Pdf($job,$printPrinter,$printSettings,$printPath);
+            $spoolerJobId=null;
+            $timings['driver']=(int)$nativeResult['apply_ms'];
+        }else{
+            $spoolerJobId=submitPdfToHost($sumatra,$printPrinter,$printSettings,(int)$job['copies'],$printPath);
+        }
+        $timings['sumatra'] = $epsonSession ? (int)$nativeResult['submit_ms'] : (int)round((microtime(true) - $stageStartedAt) * 1000);
 
         // Jangan menahan worker untuk membaca ulang WMI/Get-PrintJob. Pada host
         // ini korelasi ID dapat memakan lebih dari 60 detik setelah printer
@@ -645,14 +664,6 @@ do {
         }
         logLine('ERROR: ' . $e->getMessage());
     } finally {
-        if ($temporaryEpsonDevMode !== null && $printPrinter !== null) {
-            try {
-                restoreEpson5790ProductPaperSize($printPrinter, $temporaryEpsonDevMode['backup']);
-                logLine("Job #{$job['id']} native driver WF-5790 dikembalikan");
-            } catch (Throwable $restoreError) {
-                logLine('Native driver WF-5790 gagal dikembalikan: '.$restoreError->getMessage());
-            }
-        }
         if ($temporaryLabelPrintTicket !== null && is_array($job) && isset($job['printer'])) {
             try {
                 restoreLabelPrintTicket((string)$job['printer'], $temporaryLabelPrintTicket);
