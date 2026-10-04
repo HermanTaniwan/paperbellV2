@@ -1324,6 +1324,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
             <button class="printer-queue-close" type="button" aria-label="Tutup panel" @click="closeQueuePanel">&times;</button>
           </div>
 
+          <p v-if="queueWidgetError" class="printer-incident-message" role="alert">{{queueWidgetError}} Status antrean belum diperbarui.</p>
           <div class="printer-queue-totals">
             <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Job aplikasi</span></div>
             <div><strong>{{unmatchedSpoolerJobs().length}}</strong><span>CUPS lainnya</span></div>
@@ -1585,7 +1586,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=154">
+<script src="assets/app.js?v=155">
 </script>
 </body>
 </html>

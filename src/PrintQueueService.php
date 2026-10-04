@@ -343,8 +343,14 @@ final class PrintQueueService
     {
         if(PHP_OS_FAMILY!=='Windows')return false;
         $path64=base64_encode(mb_convert_encoding($this->notificationScript,'UTF-16LE','UTF-8'));$title64=base64_encode(mb_convert_encoding($title,'UTF-16LE','UTF-8'));$message64=base64_encode(mb_convert_encoding(mb_substr($message,0,500),'UTF-16LE','UTF-8'));
-        $script="\$e=[Text.Encoding]::Unicode;\$p=\$e.GetString([Convert]::FromBase64String('{$path64}'));\$a=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',\$p,'-TitleBase64','{$title64}','-MessageBase64','{$message64}');Start-Process -FilePath 'powershell.exe' -ArgumentList \$a -WindowStyle Hidden";
-        try{$this->powershell($script);return true;}catch(Throwable){return false;}
+        $script="\$e=[Text.Encoding]::Unicode;\$p=\$e.GetString([Convert]::FromBase64String('{$path64}'));& \$p -TitleBase64 '{$title64}' -MessageBase64 '{$message64}'";
+        // Detached notifications must not inherit the queue request's output pipes.
+        $encoded=base64_encode(mb_convert_encoding($script,'UTF-16LE','UTF-8'));
+        $pipes=[];
+        $command='cmd.exe /d /c start "" /b powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand '.$encoded;
+        $process=@proc_open($command,[0=>['file','NUL','r'],1=>['file','NUL','w'],2=>['file','NUL','w']],$pipes,null,null,['bypass_shell'=>true,'create_no_window'=>true]);
+        if(!is_resource($process))return false;
+        return proc_close($process)===0;
     }
 
     private function spoolerState():array
