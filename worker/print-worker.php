@@ -227,6 +227,50 @@ function applyBrotherProductPaperSize(array $job, string $printSettings): ?strin
     return $previous;
 }
 
+function isEpson5790ProductJob(array $job): bool
+{
+    return ($job['job_type'] ?? '') !== 'label'
+        && stripos((string)($job['printer'] ?? ''), '5790') !== false;
+}
+
+function epson5790PdfPrintSettings(array $job, string $settings): string
+{
+    global $config, $root;
+    if (!isWindowsPrintHost() || !isEpson5790ProductJob($job)) return $settings;
+    $result = json_decode(runProcess([
+        $config['printing']['python'], $root.'/tools/pdf_print_paper.py',
+        (string)$job['file_path'], $settings,
+    ], 'Ukuran halaman PDF Epson WF-5790 tidak dapat dibaca.'), true, 512, JSON_THROW_ON_ERROR);
+    $paper = (string)($result['paper'] ?? '');
+    $kinds = ['A4'=>9, 'A5'=>11, 'A6'=>70, 'B5'=>13, 'Letter'=>1];
+    if (!isset($kinds[$paper])) throw new RuntimeException('Ukuran PDF tidak didukung oleh profil WF-5790.');
+    $parts = array_values(array_filter(explode(',', $settings),
+        static fn(string $part): bool => !preg_match('/^\s*paper(?:kind)?=/i', $part)));
+    // The numeric kind avoids localized Epson paper-name matching in Sumatra.
+    $parts[] = 'paper='.$paper;
+    $parts[] = 'paperkind='.$kinds[$paper];
+    logLine("Job #{$job['id']} ukuran WF-5790 mengikuti PDF: {$paper}");
+    return implode(',', $parts);
+}
+
+function applyEpson5790ProductPaperSize(array $job, string $settings): ?string
+{
+    if (!isWindowsPrintHost() || !isEpson5790ProductJob($job)) return null;
+    $paper = paperSizeFromPrintSettings($settings);
+    if ($paper === null && str_contains($settings, 'paper=Letter')) $paper = 'Letter';
+    if ($paper === null) throw new RuntimeException('Ukuran PDF WF-5790 belum disiapkan.');
+    $printer = (string)$job['printer'];
+    $previous = printerPaperSize($printer);
+    if (strcasecmp($previous, $paper) === 0) return null;
+    try { setPrinterPaperSize($printer, $paper); }
+    catch (Throwable $error) {
+        setPrinterPaperSize($printer, $previous);
+        throw $error;
+    }
+    logLine("Job #{$job['id']} ukuran driver WF-5790 diubah sementara: {$previous} -> {$paper}");
+    return $previous;
+}
+
 function warmBrotherPaperSizeCache(PDO $db): void
 {
     global $brotherPaperSizeCache;
@@ -478,7 +522,7 @@ do {
         if (!is_file($job['file_path'])) throw new RuntimeException('File PDF tidak ditemukan: ' . $job['file_path']);
 
         $printPath = (string)$job['file_path'];
-        $printSettings = (string)$job['print_settings'];
+        $printSettings = epson5790PdfPrintSettings($job, (string)$job['print_settings']);
         $printPrinter = (string)$job['printer'];
         if ($job['job_type'] === 'label') {
             $stageStartedAt = microtime(true);
@@ -497,6 +541,9 @@ do {
         $stageStartedAt = microtime(true);
         if ($printPrinter === (string)$job['printer']) {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
+            if ($temporaryPaperSize === null) {
+                $temporaryPaperSize = applyEpson5790ProductPaperSize($job, $printSettings);
+            }
         }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $spoolerName=isWindowsPrintHost()?'Windows spooler':'CUPS';
@@ -581,10 +628,10 @@ do {
             try {
                 setPrinterPaperSize($printPrinter, $temporaryPaperSize);
                 $brotherPaperSizeCache[$printPrinter] = $temporaryPaperSize;
-                logLine("Job #{$job['id']} ukuran driver Brother dikembalikan ke {$temporaryPaperSize}");
+                logLine("Job #{$job['id']} ukuran driver {$printPrinter} dikembalikan ke {$temporaryPaperSize}");
             } catch (Throwable $restoreError) {
                 unset($brotherPaperSizeCache[$printPrinter]);
-                logLine('Ukuran driver Brother gagal dikembalikan: ' . $restoreError->getMessage());
+                logLine('Ukuran driver printer gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
     }
