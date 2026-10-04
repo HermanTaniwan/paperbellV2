@@ -13,6 +13,32 @@ $labelPreparer = new LabelPdfPreparer($config['printing'],$root);
 $hostPathResolver = new HostPathResolver($config['paths']??[]);
 $once = in_array('--once', $argv, true);
 $brotherPaperSizeCache = [];
+$printerGroup='all';
+foreach($argv as $argument){
+    if(str_starts_with($argument,'--printer-group='))$printerGroup=substr($argument,16);
+}
+printerGroupSql($printerGroup);
+
+function printerGroupSql(string $group): string
+{
+    if($group==='all')return '';
+    if(!in_array($group,['wf5790','wf5390','brother','l3210','other'],true))throw new InvalidArgumentException('Kelompok printer tidak valid.');
+    return " AND (CASE WHEN LOWER(printer) LIKE '%5790%' THEN 'wf5790' WHEN LOWER(printer) LIKE '%5390%' THEN 'wf5390' WHEN LOWER(printer) LIKE '%brother%' THEN 'brother' WHEN LOWER(printer) LIKE '%l3210%' THEN 'l3210' ELSE 'other' END)='{$group}'";
+}
+
+function acquirePrintWorkerLocks(string $directory,string $group): array
+{
+    printerGroupSql($group);
+    if(!is_dir($directory)&&!mkdir($directory,0775,true)&&!is_dir($directory))throw new RuntimeException('Folder kunci worker tidak tersedia.');
+    $global=fopen($directory.'/print-worker-global.lock','c');
+    if(!$global||!flock($global,($group==='all'?LOCK_EX:LOCK_SH)|LOCK_NB))throw new RuntimeException('Mode worker printer lain masih berjalan.');
+    $scoped=fopen($directory.'/print-worker-'.$group.'.lock','c');
+    if(!$scoped||!flock($scoped,LOCK_EX|LOCK_NB)){
+        flock($global,LOCK_UN);fclose($global);
+        throw new RuntimeException('Worker kelompok printer ini sudah berjalan.');
+    }
+    return [$global,$scoped];
+}
 
 function isWindowsPrintHost(): bool
 {
@@ -51,15 +77,17 @@ function connectDatabase(): PDO
 
 function recoverInterruptedJobs(PDO $db): void
 {
+    global $printerGroup;
+    $scope=printerGroupSql($printerGroup);
     $db->beginTransaction();
     try {
-        $safe = $db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer (pemulihan otomatis)',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE status='processing' AND message='Menyiapkan dokumen'");
+        $safe = $db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer (pemulihan otomatis)',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE status='processing' AND message='Menyiapkan dokumen'{$scope}");
         $safe->execute();
         $requeued = $safe->rowCount();
 
         // Once submission to the host spooler has started, automatically retrying could
         // print a duplicate if the previous worker died after handing off data.
-        $uncertain = $db->prepare("UPDATE print_jobs SET status='failed',message='Perlu diperiksa sebelum dicetak ulang',error='Worker terputus saat mengirim ke spooler host. Periksa antrean printer sebelum menggunakan Coba lagi.',completed_at=? WHERE status='processing'");
+        $uncertain = $db->prepare("UPDATE print_jobs SET status='failed',message='Perlu diperiksa sebelum dicetak ulang',error='Worker terputus saat mengirim ke spooler host. Periksa antrean printer sebelum menggunakan Coba lagi.',completed_at=? WHERE status='processing'{$scope}");
         $uncertain->execute([time()]);
         $flagged = $uncertain->rowCount();
         $db->commit();
@@ -522,9 +550,11 @@ function submitEpson5790Pdf(array $job,string $printer,string $settings,string $
 
 if(defined('PAPERBELL_PRINT_WORKER_FUNCTIONS_ONLY'))return;
 
+$workerLocks=acquirePrintWorkerLocks($root.'/storage/worker-locks',$printerGroup);
 $db = connectDatabase();
 recoverInterruptedJobs($db);
-warmBrotherPaperSizeCache($db);
+if(in_array($printerGroup,['all','brother'],true))warmBrotherPaperSizeCache($db);
+logLine("Worker printer aktif: kelompok {$printerGroup}");
 
 do {
     $job = null;
@@ -537,8 +567,13 @@ do {
     try {
         $heartbeat = $db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES('print_worker_heartbeat',?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
         $heartbeat->execute([(string)time()]);
+        if($printerGroup!=='all'){
+            $groupHeartbeat=$db->prepare("INSERT INTO app_meta(meta_key,meta_value) VALUES(?,?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
+            $groupHeartbeat->execute(['print_worker_heartbeat_'.$printerGroup,(string)time()]);
+        }
         $db->beginTransaction();
-        $candidates = $db->query("SELECT * FROM print_jobs WHERE status='queued' ORDER BY id LIMIT 25 FOR UPDATE")->fetchAll();
+        $scope=printerGroupSql($printerGroup);
+        $candidates = $db->query("SELECT * FROM print_jobs WHERE status='queued'{$scope} ORDER BY id LIMIT 25 FOR UPDATE")->fetchAll();
         $gateMessages=[];
         foreach($candidates as $candidate){
             $candidatePrinter=printPrinterForJob($candidate,(string)$candidate['print_settings']);

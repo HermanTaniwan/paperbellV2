@@ -85,6 +85,11 @@ user. The Google Drive mapping root expected by default is
 11. Resume printers one at a time. Verify label printing, Brother B5/tray
     behavior, Epson label alignment, ordinary product PDF printing, and ADF
     scanning. Check `storage\print-worker.log` and the Paperbell health panel.
+    The Windows launcher starts separate print workers for WF-5790, WF-5390,
+    Brother, L3210, and other printers. Each group preserves its job order;
+    slow submissions in one group do not block another. File locks prevent
+    duplicate group workers or overlap with the legacy single worker. Stop
+    the legacy worker while idle before switching to grouped workers.
 12. Reboot Windows and verify Apache, `PaperbellMariaDB`, scheduled tasks,
     Google Drive, both workers, printer detection, database access, and the LAN
     URL. Only after this cold-start test is successful should the old Ubuntu

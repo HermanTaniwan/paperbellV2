@@ -134,10 +134,16 @@ if ($mysqlStartAttempted) {
 }
 
 $worker = Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*print-worker.php*' }
-if (-not $worker) {
-    Start-Process -FilePath 'C:\xampp\php\php.exe' `
-        -ArgumentList "`"$root\worker\print-worker.php`"" `
-        -WorkingDirectory $root -WindowStyle Hidden
+if (-not ($worker | Where-Object { $_.CommandLine -notmatch '--printer-group=' })) {
+    foreach ($group in @('wf5790','wf5390','brother','l3210','other')) {
+        if (-not ($worker | Where-Object { $_.CommandLine -match "--printer-group=$group(?:\s|$)" })) {
+            Start-Process -FilePath 'C:\xampp\php\php.exe' `
+                -ArgumentList "`"$root\worker\print-worker.php`"", "--printer-group=$group" `
+                -WorkingDirectory $root -WindowStyle Hidden
+        }
+    }
+} else {
+    Write-StartupLog 'Worker tunggal masih aktif; pemisahan kelompok menunggu restart worker saat idle.'
 }
 
 $labelWorker = Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*label-worker.php*' }
