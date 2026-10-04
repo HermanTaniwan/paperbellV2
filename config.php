@@ -17,6 +17,7 @@ return [
         'password' => getenv('PAPERBELL_DB_PASSWORD') ?: '',
     ],
     'printing' => [
+        'epson5790_printer' => getenv('PAPERBELL_EPSON5790_PRINTER') ?: '',
         'sumatra' => getenv('PAPERBELL_SUMATRA_PATH') ?: (PHP_OS_FAMILY==='Windows'?((getenv('LOCALAPPDATA') ?: '') . '/SumatraPDF/SumatraPDF.exe'):''),
         'default_label_printer' => getenv('PAPERBELL_LABEL_PRINTER') ?: (PHP_OS_FAMILY==='Windows'?'EPSON L3210 Series':'L3210-Series'),
         // B5 is a paper profile on the existing CUPS queue, not a separate printer.

@@ -70,7 +70,9 @@ try {
  [Runtime.InteropServices.Marshal]::WriteInt16($inputBuffer,94,[int16]$duplexKind)
  if([EpsonPdfDevMode]::DocumentProperties([IntPtr]::Zero,$handle,$PrinterName,$outputBuffer,$inputBuffer,10) -ne 1){throw 'Driver validation failed'}
  if([Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,80) -ne $height -or [Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,82) -ne $width){throw "Driver rejected PDF dimensions for $Paper"}
- if([Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,88) -ne $InputBin -or [Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,94) -ne $duplexKind){throw 'Driver rejected the requested paper source or duplex mode'}
+ $validatedBin=[Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,88)
+ $validatedDuplex=[Runtime.InteropServices.Marshal]::ReadInt16($outputBuffer,94)
+ if($validatedBin -ne $InputBin -or $validatedDuplex -ne $duplexKind){throw "Driver '$PrinterName' rejected tray/duplex: requested tray=$InputBin duplex=$duplexKind; actual tray=$validatedBin duplex=$validatedDuplex"}
  [Runtime.InteropServices.Marshal]::WriteIntPtr($info,$outputBuffer)
  if(-not [EpsonPdfDevMode]::SetPrinter($handle,9,$info,0)){throw ('Cannot set user driver DEVMODE: '+[Runtime.InteropServices.Marshal]::GetLastWin32Error())}
  [EpsonPdfDevMode]::ClosePrinter($handle)|Out-Null

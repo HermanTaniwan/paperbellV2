@@ -169,6 +169,10 @@ function printPrinterForJob(array $job, string $printSettings): string
 {
     global $config;
     $requested = trim((string)($job['printer'] ?? ''));
+    $epson5790 = trim((string)($config['printing']['epson5790_printer'] ?? ''));
+    if (isWindowsPrintHost() && isEpson5790ProductJob($job) && $epson5790 !== '') {
+        return $epson5790;
+    }
     $brotherB5 = trim((string)($config['printing']['brother_b5_printer'] ?? ''));
     if (($job['job_type'] ?? '') === 'label'
         || $brotherB5 === ''
@@ -553,18 +557,19 @@ do {
 
         $printPrinter = printPrinterForJob($job, $printSettings);
         if ($printPrinter !== (string)$job['printer']) {
-            logLine("Job #{$job['id']} dialihkan ke profil Brother B5: {$printPrinter}");
+            logLine("Job #{$job['id']} printer dialihkan: {$job['printer']} -> {$printPrinter}");
         }
 
         $stageStartedAt = microtime(true);
         if ($printPrinter === (string)$job['printer']) {
             $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
-            if ($temporaryPaperSize === null) {
-                $temporaryEpsonDevMode = applyEpson5790ProductPaperSize($job, $printSettings);
-                if ($temporaryEpsonDevMode !== null) {
-                    $printSettings = preg_replace('/paperkind=\d+/', 'paperkind='.$temporaryEpsonDevMode['paperkind'], $printSettings);
-                    $printSettings = preg_replace('/(?:^|(?<=,))bin=\d+/', 'bin='.$temporaryEpsonDevMode['input_bin'], $printSettings);
-                }
+        }
+        if ($temporaryPaperSize === null) {
+            $driverJob = array_replace($job, ['printer' => $printPrinter]);
+            $temporaryEpsonDevMode = applyEpson5790ProductPaperSize($driverJob, $printSettings);
+            if ($temporaryEpsonDevMode !== null) {
+                $printSettings = preg_replace('/paperkind=\d+/', 'paperkind='.$temporaryEpsonDevMode['paperkind'], $printSettings);
+                $printSettings = preg_replace('/(?:^|(?<=,))bin=\d+/', 'bin='.$temporaryEpsonDevMode['input_bin'], $printSettings);
             }
         }
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);

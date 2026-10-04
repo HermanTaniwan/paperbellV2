@@ -5,6 +5,13 @@ require dirname(__DIR__).'/worker/print-worker.php';
 $source = $argv[1] ?? '';
 if (!is_file($source)) throw new RuntimeException('Pass an A5 PDF fixture.');
 $job = ['id'=>0,'job_type'=>'product','printer'=>'WF-C5790 Series(Network)','file_path'=>$source];
+$config['printing']['epson5790_printer'] = 'WF-C5790 Series(Network)';
+$aliasJob = array_replace($job, ['printer'=>'EPSONA90DDD (WF-C5790 Series)']);
+if (printPrinterForJob($aliasJob,'paper=A5,duplexlong') !== 'WF-C5790 Series(Network)') throw new RuntimeException('WSD queue must route to the configured validated Epson queue.');
+if (printPrinterForJob(array_replace($aliasJob,['job_type'=>'label']),'paper=A5') !== $aliasJob['printer']) throw new RuntimeException('Label routing changed.');
+if (printPrinterForJob(array_replace($job,['printer'=>'EPSON WF-C5390 Series']),'paper=A5') !== 'EPSON WF-C5390 Series') throw new RuntimeException('Other Epson routing changed.');
+$config['printing']['epson5790_printer'] = '';
+if (printPrinterForJob($aliasJob,'paper=A5') !== $aliasJob['printer']) throw new RuntimeException('Unconfigured host routing changed.');
 $settings = epson5790PdfPrintSettings($job, '3-4,duplexlong,noscale,bin=1,paper=A4,20x');
 foreach (['3-4','duplexlong','noscale','bin=258','paper=A5','paperkind=11','20x'] as $token) {
     if (!in_array($token,explode(',',$settings),true)) throw new RuntimeException('Missing option: '.$token);

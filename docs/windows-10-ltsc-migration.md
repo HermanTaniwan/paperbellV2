@@ -52,7 +52,13 @@ user. The Google Drive mapping root expected by default is
    `PAPERBELL_DB_HOST`, `PAPERBELL_DB_PORT`, `PAPERBELL_DB_NAME`,
    `PAPERBELL_DB_USER`, and `PAPERBELL_DB_PASSWORD` to match the restored
    database. Never commit credentials.
-6. Review database-backed printer mappings in the web UI after installing the
+6. If WF-5790 has duplicate Windows queues, set
+   `PAPERBELL_EPSON5790_PRINTER` to the queue with the validated driver
+   (for example, `WF-C5790 Series(Network)` using Epson Universal Print Driver).
+   Product jobs saved with another WF-5790 queue name then use this queue for
+   both native paper/tray/duplex preparation and Sumatra submission. This
+   setting does not redirect label jobs.
+   Review database-backed printer mappings in the web UI after installing the
    Windows queues. Linux queue names in the inventory are historical clues;
    select the exact Windows printer names. Confirm label size, tray/bin,
    duplex, and color behavior with one non-production test page per printer.
