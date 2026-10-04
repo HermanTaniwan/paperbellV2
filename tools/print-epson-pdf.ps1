@@ -16,10 +16,7 @@ $timer=[Diagnostics.Stopwatch]::StartNew()
 try {
  $native=(& $helper -PrinterName $PrinterName -Paper $Paper -BackupPath $BackupPath -Duplex $Duplex -InputBin $InputBin)|ConvertFrom-Json
  $applyMs=$timer.ElapsedMilliseconds
- $tokens=@($Settings -split ',' | Where-Object {$_ -notmatch '^\s*(?:bin|paperkind)='})
- $tokens+=('bin='+$native.input_bin)
- $tokens+=('paperkind='+$native.paperkind)
- $settingsToUse=$tokens -join ','
+ $settingsToUse=$Settings
  if(-not $ValidateOnly){
   if(-not (Test-Path -LiteralPath $Sumatra -PathType Leaf)){throw 'SumatraPDF not found'}
   if(-not (Test-Path -LiteralPath $PdfPath -PathType Leaf)){throw 'PDF not found'}

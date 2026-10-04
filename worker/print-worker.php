@@ -275,15 +275,17 @@ function epson5790PdfPrintSettings(array $job, string $settings): string
     ], 'Ukuran halaman PDF Epson WF-5790 tidak dapat dibaca.'), true, 512, JSON_THROW_ON_ERROR);
     $paper = (string)($result['paper'] ?? '');
     if (!in_array($paper, ['A4','A5','A6','B5','Letter'], true)) throw new RuntimeException('Ukuran PDF tidak didukung oleh profil WF-5790.');
-    $parts = array_values(array_filter(explode(',', $settings),
-        static fn(string $part): bool => !preg_match('/^\s*(?:paper(?:kind)?|bin)=/i', $part)));
-    // Auto Select lets the printer match its loaded trays to the PDF size.
-    // Remove saved tray overrides so old Cassette 1 jobs use Auto Select too.
-    $parts[] = 'bin=7';
-    // Native preparation verifies the driver-supported size, tray and duplex;
-    // it replaces this standard kind if the driver requires custom dimensions.
-    $parts[] = 'paper='.$paper;
-    $parts[] = 'paperkind='.(['A4'=>9,'A5'=>11,'A6'=>70,'B5'=>13,'Letter'=>1][$paper]);
+    $tokens = array_map('trim', explode(',', $settings));
+    $range = $tokens[0];
+    $parity = in_array('odd', $tokens, true) ? 'odd' : (in_array('even', $tokens, true) ? 'even' : null);
+    $duplex = in_array('duplexlong', $tokens, true) ? 'duplexlong' : (in_array('duplexshort', $tokens, true) ? 'duplexshort' : 'simplex');
+    $copies = '1x';
+    foreach ($tokens as $token) if (preg_match('/^\d+x$/i', $token)) $copies = $token;
+    // Keep Sumatra's WF-5790 settings in the same order as the validated command.
+    // Native preparation sets and verifies the paper kind, tray and duplex.
+    $parts = [$range];
+    if ($parity !== null) $parts[] = $parity;
+    array_push($parts, 'paper='.$paper, 'bin=7', 'noscale', $duplex, $copies);
     logLine("Job #{$job['id']} ukuran WF-5790 mengikuti PDF: {$paper}, tray Auto Select");
     return implode(',', $parts);
 }
