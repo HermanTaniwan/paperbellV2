@@ -71,4 +71,16 @@ $completed=$completedMethod->invoke($service,[
 ]);
 assert($completed === [102,103]);
 
+$windowsJobs=[
+    ['id'=>201,'printer'=>'Epson','spooler_job_id'=>null,'submitted_at'=>time()-90,'job_type'=>'product','file_path'=>'G:/Print/finished.pdf'],
+    ['id'=>202,'printer'=>'Epson','spooler_job_id'=>null,'submitted_at'=>time()-900,'job_type'=>'product','file_path'=>'G:/Print/live.pdf'],
+    ['id'=>203,'printer'=>'Idle','spooler_job_id'=>null,'submitted_at'=>time()-90],
+    ['id'=>204,'printer'=>'Idle','spooler_job_id'=>null,'submitted_at'=>time()],
+];
+$spooler=[['printer'=>'Epson','job_id'=>11,'document'=>'G:\\Print\\live.pdf','status'=>'Printing']];
+assert($completedMethod->invoke($service,$windowsJobs,$spooler,true)===[201,203]);
+$spooler[0]['document']='Unknown title';
+assert($completedMethod->invoke($service,$windowsJobs,$spooler,true)===[203]);
+assert($completedMethod->invoke($service,$windowsJobs,[],false)===[202]);
+
 echo "Print queue service tests passed\n";

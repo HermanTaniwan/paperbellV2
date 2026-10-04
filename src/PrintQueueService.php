@@ -145,17 +145,47 @@ final class PrintQueueService
     private function reconcileSubmittedJobs(array $spooler):void
     {
         if(!(bool)($spooler['available']??false))return;
-        $submitted=$this->db->query("SELECT id,printer,spooler_job_id,submitted_at FROM print_jobs WHERE status='submitted'")->fetchAll();
-        $complete=$this->db->prepare("UPDATE print_jobs SET status='completed',message='Selesai diproses CUPS',completed_at=? WHERE id=? AND status='submitted'");$now=time();
-        foreach($this->completedSubmittedJobIds($submitted,$spooler['jobs']??[]) as $id)$complete->execute([$now,$id]);
+        $submitted=$this->db->query("SELECT id,printer,spooler_job_id,submitted_at,file_path,job_type FROM print_jobs WHERE status='submitted'")->fetchAll();
+        $complete=$this->db->prepare("UPDATE print_jobs SET status='completed',message=?,completed_at=? WHERE id=? AND status='submitted'");$now=time();
+        $message=PHP_OS_FAMILY==='Windows'?'Selesai diproses antrean Windows':'Selesai diproses CUPS';
+        foreach($this->completedSubmittedJobIds($submitted,$spooler['jobs']??[]) as $id)$complete->execute([$message,$now,$id]);
     }
 
-    private function completedSubmittedJobIds(array $submitted,array $spoolerJobs):array
+    private function completedSubmittedJobIds(array $submitted,array $spoolerJobs,?bool $windows=null):array
     {
-        $active=[];
-        foreach($spoolerJobs as $job)$active[(string)($job['printer']??'').'|'.(int)($job['job_id']??0)]=true;
-        $completed=[];$unknownCutoff=time()-600;
-        foreach($submitted as $job){$spoolerJobId=(int)($job['spooler_job_id']??0);if($spoolerJobId<=0){if((int)($job['submitted_at']??0)>0&&(int)$job['submitted_at']<$unknownCutoff)$completed[]=(int)$job['id'];continue;}$key=(string)$job['printer'].'|'.$spoolerJobId;if(!isset($active[$key]))$completed[]=(int)$job['id'];}
+        $windows??=PHP_OS_FAMILY==='Windows';
+        $active=[];$byPrinter=[];
+        foreach($spoolerJobs as $job){
+            $printer=(string)($job['printer']??'');
+            $active[$printer.'|'.(int)($job['job_id']??0)]=true;
+            $byPrinter[$printer][]=$job;
+        }
+        $completed=[];$now=time();
+        foreach($submitted as $job){
+            $printer=(string)$job['printer'];$spoolerJobId=(int)($job['spooler_job_id']??0);
+            if($spoolerJobId>0){
+                if(!isset($active[$printer.'|'.$spoolerJobId]))$completed[]=(int)$job['id'];
+                continue;
+            }
+            $submittedAt=(int)($job['submitted_at']??0);
+            if($submittedAt<=0)continue;
+            if(!$windows){if($submittedAt<$now-600)$completed[]=(int)$job['id'];continue;}
+            // Give submission a grace period; never finish a live Windows job
+            // merely because ten minutes passed without a spooler ID.
+            if($submittedAt>$now-30)continue;
+            $printerJobs=$byPrinter[$printer]??[];
+            if(!$printerJobs){$completed[]=(int)$job['id'];continue;}
+            if(!in_array($job['job_type']??'',['product','manual','random'],true))continue;
+            $path=strtolower(str_replace('\\','/',(string)($job['file_path']??'')));
+            if(!preg_match('~^(?:[a-z]:/|//)~',$path))continue;
+            $absent=true;
+            foreach($printerJobs as $printerJob){
+                $document=strtolower(str_replace('\\','/',(string)($printerJob['document']??'')));
+                // Unknown document titles cannot prove that this PDF finished.
+                if(!preg_match('~^(?:[a-z]:/|//)~',$document)||$document===$path){$absent=false;break;}
+            }
+            if($absent)$completed[]=(int)$job['id'];
+        }
         return$completed;
     }
 
