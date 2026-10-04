@@ -13,15 +13,17 @@ if (printPrinterForJob(array_replace($job,['printer'=>'EPSON WF-C5390 Series']),
 $config['printing']['epson5790_printer'] = '';
 if (printPrinterForJob($aliasJob,'paper=A5') !== $aliasJob['printer']) throw new RuntimeException('Unconfigured host routing changed.');
 $settings = epson5790PdfPrintSettings($job, '3-4,duplexlong,noscale,bin=1,paper=A4,20x');
-foreach (['3-4','duplexlong','noscale','bin=258','paper=A5','paperkind=11','20x'] as $token) {
+foreach (['3-4','duplexlong','noscale','bin=7','paper=A5','paperkind=11','20x'] as $token) {
     if (!in_array($token,explode(',',$settings),true)) throw new RuntimeException('Missing option: '.$token);
 }
 if (str_contains($settings,'paper=A4')) throw new RuntimeException('A4 override must not supersede PDF size.');
-if (in_array('bin=1',explode(',',$settings),true)) throw new RuntimeException('Use Epson Cassette 1 kind 258, not unsupported bin 1.');
-$rear = epson5790PdfPrintSettings($job,'3-4,noscale,bin=261,paper=A5');
-if (!in_array('bin=261',explode(',',$rear),true)) throw new RuntimeException('Explicit rear-feed choice must be preserved.');
+foreach (['bin=258','bin=261, BIN=1',''] as $savedTray) {
+    $auto = epson5790PdfPrintSettings($job,'3-4,noscale,paper=A5,'.$savedTray);
+    $bins = array_values(preg_grep('/^\s*bin=/i',explode(',',$auto)));
+    if ($bins !== ['bin=7']) throw new RuntimeException('Saved tray overrides must resolve to a single Auto Select option.');
+}
 $job['job_type']='label';
 if (epson5790PdfPrintSettings($job,'paper=A4') !== 'paper=A4') throw new RuntimeException('Label profile changed.');
 $job['job_type']='product'; $job['printer']='Brother DCP-T830DW Printer';
 if (epson5790PdfPrintSettings($job,'paper=A4') !== 'paper=A4') throw new RuntimeException('Other printer profile changed.');
-echo "WF-5790 uses PDF A5 and preserves range, duplex, tray and copies\n";
+echo "WF-5790 uses PDF A5 and Auto Select, preserving range, duplex and copies\n";

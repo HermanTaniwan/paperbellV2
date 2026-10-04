@@ -248,13 +248,15 @@ function epson5790PdfPrintSettings(array $job, string $settings): string
     $paper = (string)($result['paper'] ?? '');
     if (!in_array($paper, ['A4','A5','A6','B5','Letter'], true)) throw new RuntimeException('Ukuran PDF tidak didukung oleh profil WF-5790.');
     $parts = array_values(array_filter(explode(',', $settings),
-        static fn(string $part): bool => !preg_match('/^\s*paper(?:kind)?=/i', $part)));
-    $parts = array_map(static fn(string $part): string => trim($part) === 'bin=1' ? 'bin=258' : $part, $parts);
+        static fn(string $part): bool => !preg_match('/^\s*(?:paper(?:kind)?|bin)=/i', $part)));
+    // Auto Select lets the printer match its loaded trays to the PDF size.
+    // Remove saved tray overrides so old Cassette 1 jobs use Auto Select too.
+    $parts[] = 'bin=7';
     // Native preparation verifies the driver-supported size, tray and duplex;
     // it replaces this standard kind if the driver requires custom dimensions.
     $parts[] = 'paper='.$paper;
     $parts[] = 'paperkind='.(['A4'=>9,'A5'=>11,'A6'=>70,'B5'=>13,'Letter'=>1][$paper]);
-    logLine("Job #{$job['id']} ukuran WF-5790 mengikuti PDF: {$paper}");
+    logLine("Job #{$job['id']} ukuran WF-5790 mengikuti PDF: {$paper}, tray Auto Select");
     return implode(',', $parts);
 }
 

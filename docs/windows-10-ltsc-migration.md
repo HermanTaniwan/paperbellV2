@@ -58,6 +58,9 @@ user. The Google Drive mapping root expected by default is
    Product jobs saved with another WF-5790 queue name then use this queue for
    both native paper/tray/duplex preparation and Sumatra submission. This
    setting does not redirect label jobs.
+   WF-5790 product jobs use Auto Select for the paper source and the PDF's
+   selected page size. Register each tray's loaded paper size on the printer
+   so its automatic selection can match that size.
    Review database-backed printer mappings in the web UI after installing the
    Windows queues. Linux queue names in the inventory are historical clues;
    select the exact Windows printer names. Confirm label size, tray/bin,
