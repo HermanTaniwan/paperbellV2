@@ -4,7 +4,6 @@ declare(strict_types=1);
 final class PrintQueueService
 {
     private string $spoolerCacheFile;
-    private string $notificationScript;
     private string $cupsProgressTest;
     private string $cupsPrinterStateTest;
 
@@ -12,7 +11,6 @@ final class PrintQueueService
     {
         $root=dirname(__DIR__);
         $this->spoolerCacheFile=$root.'/storage/printer-spooler-cache.json';
-        $this->notificationScript=$root.'/tools/show-printer-notification.ps1';
         $this->cupsProgressTest=$root.'/tools/cups-job-progress.test';
         $this->cupsPrinterStateTest=$root.'/tools/cups-printer-state.test';
         $this->ensureIncidentTable();
@@ -303,7 +301,6 @@ final class PrintQueueService
         }
         $seen=[];foreach($signals as $signal){$seen[$signal['key']]=true;$this->observe($signal);}
         $this->healMissing(array_keys($seen),$spooler['available']);
-        $this->sendPendingHostNotifications();
     }
 
     private function signal(string $type,string $printer,?int $printJobId,?int $spoolerJobId,string $title,string $message,string $guidance,string $severity='error',int $activationDelaySeconds=0):array
@@ -328,29 +325,6 @@ final class PrintQueueService
             $type=(string)$row['incident_type'];if(!$spoolerAvailable&&(str_starts_with($type,'spooler_')||in_array($type,['paper_jam','out_of_paper','paused','printer_offline','printer_error'],true)))continue;
             $healthy=(int)$row['healthy_count']+1;if($healthy>=2){$stmt=$this->db->prepare("UPDATE printer_incidents SET status='resolved',active_key=NULL,healthy_count=?,resolved_at=? WHERE id=?");$stmt->execute([$healthy,$now,$row['id']]);}else{$stmt=$this->db->prepare('UPDATE printer_incidents SET healthy_count=? WHERE id=?');$stmt->execute([$healthy,$row['id']]);}
         }
-    }
-
-    private function sendPendingHostNotifications():void
-    {
-        if(!is_file($this->notificationScript))return;
-        $rows=$this->db->query("SELECT id,title,technical_message FROM printer_incidents WHERE status='active' AND host_notified_at IS NULL ORDER BY id LIMIT 5")->fetchAll();
-        foreach($rows as $row){
-            if($this->notifyWindows((string)$row['title'],(string)$row['technical_message'])){$stmt=$this->db->prepare('UPDATE printer_incidents SET host_notified_at=? WHERE id=? AND host_notified_at IS NULL');$stmt->execute([time(),$row['id']]);}
-        }
-    }
-
-    private function notifyWindows(string $title,string $message):bool
-    {
-        if(PHP_OS_FAMILY!=='Windows')return false;
-        $path64=base64_encode(mb_convert_encoding($this->notificationScript,'UTF-16LE','UTF-8'));$title64=base64_encode(mb_convert_encoding($title,'UTF-16LE','UTF-8'));$message64=base64_encode(mb_convert_encoding(mb_substr($message,0,500),'UTF-16LE','UTF-8'));
-        $script="\$e=[Text.Encoding]::Unicode;\$p=\$e.GetString([Convert]::FromBase64String('{$path64}'));& \$p -TitleBase64 '{$title64}' -MessageBase64 '{$message64}'";
-        // Detached notifications must not inherit the queue request's output pipes.
-        $encoded=base64_encode(mb_convert_encoding($script,'UTF-16LE','UTF-8'));
-        $pipes=[];
-        $command='cmd.exe /d /c start "" /b powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand '.$encoded;
-        $process=@proc_open($command,[0=>['file','NUL','r'],1=>['file','NUL','w'],2=>['file','NUL','w']],$pipes,null,null,['bypass_shell'=>true,'create_no_window'=>true]);
-        if(!is_resource($process))return false;
-        return proc_close($process)===0;
     }
 
     private function spoolerState():array

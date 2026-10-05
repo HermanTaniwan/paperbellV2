@@ -68,8 +68,24 @@ final class LabelPdfPreparer
             $driverPageMode,
         ];
         $pipes=[];
-        $process=proc_open($command,[1=>['pipe','w'],2=>['pipe','w']],$pipes,$this->root,null,['bypass_shell'=>true]);
-        if(!is_resource($process))throw new RuntimeException('Python penyiapan label tidak dapat dijalankan.');
+        $process=false;
+        $launchError='';
+        for($attempt=0;$attempt<3;$attempt++){
+            $warning='';
+            set_error_handler(static function(int $severity,string $message)use(&$warning):bool{
+                $warning=$message;
+                return true;
+            });
+            try{
+                $process=proc_open($command,[1=>['pipe','w'],2=>['pipe','w']],$pipes,$this->root,null,['bypass_shell'=>true]);
+            }finally{
+                restore_error_handler();
+            }
+            if(is_resource($process))break;
+            $launchError=$warning;
+            if($attempt<2)usleep(250000*($attempt+1));
+        }
+        if(!is_resource($process))throw new RuntimeException('Python penyiapan label tidak dapat dijalankan.'.($launchError!==''?' '.$launchError:''));
         $stdout=stream_get_contents($pipes[1]);
         $stderr=stream_get_contents($pipes[2]);
         fclose($pipes[1]);

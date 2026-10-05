@@ -819,7 +819,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </details>
 <label class="label-global-printer">Printer label<select v-model="labelPrinter"><option v-for="printer in pageData.printers" :value="printer">{{printer}}</option></select></label>
 <button class="label-toolbar-button" :disabled="!selected.size||labelBulkFetching" @click="bulkCommand('fetch_label')">{{labelBulkFetching?'Mengambil PDF…':'Ambil PDF ('+selected.size+')'}}</button>
-<button class="label-toolbar-button" :disabled="!selected.size||!labelPrinter" @click="bulkCommand('print_label')">Cetak ({{selected.size}})</button>
+<button class="label-toolbar-button" :disabled="!selected.size||!labelPrinter||labelBulkPrinting" @click="bulkCommand('print_label')">{{labelBulkPrinting?'Mengantrekan…':'Cetak ('+selected.size+')'}}</button>
 </div>
 <div class="labels-split">
 <div class="labels-list">
@@ -1586,7 +1586,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=155">
+<script src="assets/app.js?v=156">
 </script>
 </body>
 </html>
