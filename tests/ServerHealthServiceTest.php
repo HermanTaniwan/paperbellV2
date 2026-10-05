@@ -32,6 +32,21 @@ if($result['status']!=='healthy')throw new RuntimeException('Fresh cached metric
 if($result['cpu_percent']!==25.5)throw new RuntimeException('Cached CPU metric changed unexpectedly.');
 if($result['age_seconds']<10||$result['age_seconds']>12)throw new RuntimeException('Cache age was not calculated correctly.');
 
+if(PHP_OS_FAMILY==='Windows'){
+    $sensorLibrary=$root.'/LibreHardwareMonitorLib.dll';
+    file_put_contents($sensorLibrary,'test fixture');
+    $stale=$fixture;
+    $stale['checked_at']=time()-360;
+    file_put_contents($cacheDirectory.'/server-health.json',json_encode($stale,JSON_THROW_ON_ERROR));
+    $scheduled=(new ServerHealthService([
+        'librehardwaremonitor_library'=>$sensorLibrary,
+        'thresholds'=>['offline_after_seconds'=>300],
+    ],$root))->overview();
+    if($scheduled['checked_at']!==$stale['checked_at']||$scheduled['status']!=='offline'){
+        throw new RuntimeException('Web request must not replace the elevated collector cache.');
+    }
+}
+
 $emptyRoot=sys_get_temp_dir().'/paperbell-server-health-empty-'.bin2hex(random_bytes(4));
 $empty=(new ServerHealthService(['thresholds'=>['offline_after_seconds'=>300]],$emptyRoot))->overview();
 if(PHP_OS_FAMILY==='Linux'){

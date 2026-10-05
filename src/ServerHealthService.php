@@ -12,9 +12,13 @@ final class ServerHealthService
         $lastAttempt=(int)($cache['attempted_at']??$cache['checked_at']??0);
         $cacheSeconds=max(10,(int)($this->config['cache_seconds']??60));
 
-        // The scheduled task normally keeps this cache warm. Refreshing here as a
-        // fallback makes the page self-healing when that task has not been installed.
-        $canRefresh=PHP_OS_FAMILY==='Windows'||(PHP_OS_FAMILY==='Linux'&&is_readable('/proc/stat'));
+        // The scheduled task normally keeps this cache warm. Web requests can
+        // refresh other metrics if no sensor library is installed. Once the
+        // sensor library is installed, only the elevated scheduled task may
+        // refresh this cache; otherwise web requests can replace its result
+        // with a null CPU temperature.
+        $sensorLibrary=(string)($this->config['librehardwaremonitor_library']??'');
+        $canRefresh=(PHP_OS_FAMILY==='Windows'&&!is_file($sensorLibrary))||(PHP_OS_FAMILY==='Linux'&&is_readable('/proc/stat'));
         if($canRefresh&&($lastAttempt===0||$now-$lastAttempt>=$cacheSeconds)){
             $lock=$this->lock($path.'.lock');
             if($lock!==null){
