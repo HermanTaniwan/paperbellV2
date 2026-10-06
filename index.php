@@ -12,7 +12,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=32">
+  <link rel="stylesheet" href="assets/app.css?v=33">
   <link rel="stylesheet" href="assets/print.css?v=8">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=31">
   <link rel="stylesheet" href="assets/features.css?v=28">
@@ -1426,6 +1426,13 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         </section>
       </div>
 
+      <div v-if="orderNoteDialog" class="modal-backdrop" @click.self="closeOrderNote()">
+        <section class="modal-card order-note-modal" role="dialog" aria-modal="true" aria-labelledby="order-note-title">
+          <div class="modal-head"><div><span class="eyebrow">CATATAN ORDER</span><h2 id="order-note-title">Baca sebelum cetak</h2><p>Order {{orderNoteDialog.order_sn}}</p></div></div>
+          <p class="order-note-content">{{orderNoteDialog.note}}</p>
+          <div class="order-note-actions"><button type="button" class="ghost" :disabled="orderNoteSaving" @click="closeOrderNote()">Batal</button><button type="button" :disabled="orderNoteSaving" @click="acknowledgeOrderNote">{{orderNoteSaving?'Menyimpan…':'Saya sudah baca, lanjut cetak'}}</button></div>
+        </section>
+      </div>
       <dialog ref="orderImageDialog" class="order-image-dialog" aria-labelledby="order-image-title" @cancel.stop="orderImagePreview=null" @keydown.esc.stop @click.self="closeOrderImage">
         <article v-if="orderImagePreview" class="order-image-content">
           <header class="modal-head"><div><h2 id="order-image-title">{{orderImagePreview.title}}</h2><p>{{orderImagePreview.variant}}</p></div><button type="button" class="icon-button" aria-label="Tutup gambar" autofocus @click="closeOrderImage">×</button></header>
@@ -1586,7 +1593,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=156">
+<script src="assets/app.js?v=157">
 </script>
 </body>
 </html>

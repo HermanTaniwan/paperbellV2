@@ -34,6 +34,17 @@ require __DIR__ . '/src/ProfitLossService.php';
 function respond(mixed $data, int $status = 200): never { http_response_code($status); echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; }
 function paperbellTimingLog(string $stage, float $startedAt, array $context = []): void { $context['duration_ms'] = (int) round((microtime(true) - $startedAt) * 1000); error_log('[paperbell-timing] '.$stage.' '.json_encode($context, JSON_UNESCAPED_SLASHES)); }
 function body(): array { $raw = file_get_contents('php://input'); return $raw ? (json_decode($raw, true, 512, JSON_THROW_ON_ERROR) ?: []) : []; }
+function orderNoteStatus(PDO $db, string $orderSn): array {
+    if ($orderSn==='') respond(['error'=>'Order tidak valid.'],422);
+    $db->exec('CREATE TABLE IF NOT EXISTS order_note_acknowledgements (order_sn VARCHAR(100) PRIMARY KEY, acknowledged_by VARCHAR(100) NOT NULL, acknowledged_at BIGINT NOT NULL) ENGINE=InnoDB');
+    $stmt=$db->prepare("SELECT CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.buyer_message')),'null'),'') ELSE COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.message_to_seller')),'null'),'') END customer_note, a.acknowledged_at FROM orders o LEFT JOIN order_note_acknowledgements a ON a.order_sn=o.order_sn WHERE o.order_sn=?");
+    $stmt->execute([$orderSn]);$row=$stmt->fetch();if(!$row)respond(['error'=>'Order tidak ditemukan.'],404);
+    return ['order_sn'=>$orderSn,'customer_note'=>trim((string)$row['customer_note']),'acknowledged'=>(bool)$row['acknowledged_at']];
+}
+function requireOrderNoteAcknowledged(PDO $db,string $orderSn): void {
+    $status=orderNoteStatus($db,$orderSn);
+    if($status['customer_note']!==''&&!$status['acknowledged'])respond(['error'=>'Baca dan konfirmasi catatan order sebelum mencetak.'],409);
+}
 function unixText(int|string|null $unix): string { $value=(int)$unix; return $value > 0 ? date('d M Y H:i', $value) : '-'; }
 function refreshOrderPrintSummary(PDO $db,string $orderSn): void { $stmt=$db->prepare('UPDATE orders o LEFT JOIN (SELECT order_sn,COUNT(*) line_count,COALESCE(SUM(qty),0) item_qty,SUM(printed=0) pending,MAX(printed_at) printed_at FROM order_process WHERE order_sn=? GROUP BY order_sn) s ON s.order_sn=o.order_sn SET o.print_line_count=COALESCE(s.line_count,0),o.print_item_qty=COALESCE(s.item_qty,0),o.unprinted_lines=COALESCE(s.pending,0),o.last_printed_at=s.printed_at WHERE o.order_sn=?');$stmt->execute([$orderSn,$orderSn]); }
 function appBaseUrl(array $config): string { if(($config['app']['public_url']??'')!=='')return rtrim($config['app']['public_url'],'/');$host=(string)($_SERVER['HTTP_HOST']??'localhost');if(!preg_match('/^[A-Za-z0-9.\-:\[\]]+$/',$host))throw new RuntimeException('Host URL tidak valid.');$scheme=!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'?'https':'http';return $scheme.'://'.$host.rtrim((string)$config['app']['base_path'],'/'); }
@@ -545,8 +556,10 @@ try {
     }
 
     if ($action === 'print_preview') { $sn=(string)($_GET['order_sn']??'');$items=$printing->previewOrder($sn);respond(['items'=>$items,'ready'=>count(array_filter($items,fn($x)=>$x['ready']&&(int)$x['line']['printed']===0)),'blocked'=>count(array_filter($items,fn($x)=>!$x['ready']))]); }
-    if ($action === 'print_order') { $input=body();respond($printing->queueOrder(trim((string)($input['order_sn']??'')),(string)$_SESSION['paperbell_user'],is_array($input['printers']??null)?$input['printers']:[],is_array($input['settings']??null)?$input['settings']:[])); }
-    if ($action === 'print_order_item') { $startedAt=microtime(true);$input=body();$result=$printing->queueOrderItem(trim((string)($input['order_sn']??'')),(int)($input['line_id']??0),trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user'],is_array($input['settings']??null)?$input['settings']:[]);paperbellTimingLog('api.print_order_item',$startedAt,['line_id'=>(int)($input['line_id']??0),'job_id'=>(int)$result['id']]);respond($result); }
+    if ($action === 'order_note_status') { $sn=trim((string)($_GET['order_sn']??''));respond(orderNoteStatus($mysql,$sn)); }
+    if ($action === 'acknowledge_order_note') { $input=body();$sn=trim((string)($input['order_sn']??''));$status=orderNoteStatus($mysql,$sn);if($status['customer_note']!==''){$stmt=$mysql->prepare('INSERT IGNORE INTO order_note_acknowledgements(order_sn,acknowledged_by,acknowledged_at) VALUES(?,?,?)');$stmt->execute([$sn,(string)$_SESSION['paperbell_user'],time()]);}respond(['ok'=>true]); }
+    if ($action === 'print_order') { $input=body();$sn=trim((string)($input['order_sn']??''));requireOrderNoteAcknowledged($mysql,$sn);respond($printing->queueOrder($sn,(string)$_SESSION['paperbell_user'],is_array($input['printers']??null)?$input['printers']:[],is_array($input['settings']??null)?$input['settings']:[])); }
+    if ($action === 'print_order_item') { $startedAt=microtime(true);$input=body();$sn=trim((string)($input['order_sn']??''));requireOrderNoteAcknowledged($mysql,$sn);$result=$printing->queueOrderItem($sn,(int)($input['line_id']??0),trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user'],is_array($input['settings']??null)?$input['settings']:[]);paperbellTimingLog('api.print_order_item',$startedAt,['line_id'=>(int)($input['line_id']??0),'job_id'=>(int)$result['id']]);respond($result); }
     if ($action === 'create_manual_order') {
         $input=body();$requested=is_array($input['items']??null)?$input['items']:[];if(!$requested)respond(['error'=>'Pilih minimal satu produk dari Data Mapping.'],422);
         $quantities=[];foreach($requested as $item){$mappingId=(int)($item['mapping_id']??0);$qty=(int)($item['qty']??0);if($mappingId<=0||$qty<1||$qty>999)respond(['error'=>'Produk atau quantity order manual tidak valid.'],422);$quantities[$mappingId]=min(999,($quantities[$mappingId]??0)+$qty);}
@@ -556,7 +569,7 @@ try {
         $mysql->beginTransaction();try{$order=$mysql->prepare('INSERT INTO orders(order_sn,status,create_time,update_time,buyer_username,raw_json) VALUES(?,?,?,?,?,?)');$order->execute([$orderSn,'PROCESSED',$now,$now,'Order manual',json_encode(['source'=>'manual','created_by'=>$user,'message_to_seller'=>$note],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)]);$line=$mysql->prepare('INSERT INTO order_process(order_sn,order_item_id,item_key,model_sku,item_sku,item_name,model_name,qty,status,create_time,saved_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');$position=0;foreach($ids as $mappingId){$mapping=$mappings[$mappingId];$line->execute([$orderSn,'manual-'.$mappingId.'-'.(++$position),(string)$mapping['sku_id'],(string)$mapping['sku_id'],(string)$mapping['parent_sku'],(string)$mapping['product_name'],(string)$mapping['variation_name'],$quantities[$mappingId],'PROCESSED',$now,$now]);}refreshOrderPrintSummary($mysql,$orderSn);$mysql->commit();}catch(Throwable $e){if($mysql->inTransaction())$mysql->rollBack();throw$e;}
         respond(['ok'=>true,'order_sn'=>$orderSn,'items'=>count($ids)]);
     }
-    if ($action === 'print_label') { $input=body();$id=$printing->queueLabel(trim((string)($input['order_sn']??'')),trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user']);respond(['ok'=>true,'id'=>$id]); }
+    if ($action === 'print_label') { $input=body();$sn=trim((string)($input['order_sn']??''));requireOrderNoteAcknowledged($mysql,$sn);$id=$printing->queueLabel($sn,trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user']);respond(['ok'=>true,'id'=>$id]); }
     if ($action === 'printer_settings') respond($printing->printerSettings(true));
     if ($action === 'save_printer_settings') { $input=body();respond(['ok'=>true,'settings'=>$printing->savePrinterSettings($input)]); }
 

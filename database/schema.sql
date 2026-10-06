@@ -2,6 +2,10 @@ CREATE DATABASE IF NOT EXISTS paperbell CHARACTER SET utf8mb4 COLLATE utf8mb4_un
 USE paperbell;
 
 CREATE TABLE IF NOT EXISTS app_meta (meta_key VARCHAR(100) PRIMARY KEY, meta_value TEXT NOT NULL) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS order_note_acknowledgements (
+  order_sn VARCHAR(100) PRIMARY KEY, acknowledged_by VARCHAR(100) NOT NULL,
+  acknowledged_at BIGINT NOT NULL
+) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS orders (
   order_sn VARCHAR(100) PRIMARY KEY, status VARCHAR(80) NOT NULL DEFAULT '', create_time BIGINT NOT NULL DEFAULT 0,
   update_time BIGINT NOT NULL DEFAULT 0, buyer_username VARCHAR(255) NOT NULL DEFAULT '', raw_json LONGTEXT NOT NULL,
