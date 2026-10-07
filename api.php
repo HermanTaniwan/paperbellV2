@@ -190,7 +190,7 @@ try {
     $printing = new PrintService($mysql,$config['printing']['default_label_printer'],$pathResolver);
     $oauthService = static function() use ($mysql,$config): MarketplaceOAuthService { static $service=null;return $service??=new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']); };
     $labelService = static function() use ($mysql,$config,$oauthService): MarketplaceLabelService { static $service=null;return $service??=new MarketplaceLabelService($mysql,$oauthService(),__DIR__.'/storage/labels',new LabelPdfPreparer($config['printing'],__DIR__),(string)$config['printing']['default_label_printer']); };
-    $mappingService = new DataMappingService($mysql,$config['mapping']+['python'=>$config['printing']['python']],__DIR__,$pathResolver);
+    $mappingService = new DataMappingService($mysql,__DIR__,$pathResolver);
     $queueService = static function() use ($mysql): PrintQueueService { static $service=null;return $service??=new PrintQueueService($mysql); };
     $pdfTools = new PdfToolsService($mysql,$config['printing'],__DIR__,$pathResolver);
     $scannerService = new ScannerService($config['scanner']??[],__DIR__);
@@ -233,7 +233,7 @@ try {
     }
 
     if ($action === 'mapping') respond($mappingService->overview((string)($_GET['q']??''),(int)($_GET['page']??1)));
-    if ($action === 'sync_mapping') respond($mappingService->syncFromGoogle((string)$_SESSION['paperbell_user']));
+    if ($action === 'save_mapping') {try{respond($mappingService->save(body()));}catch(InvalidArgumentException $e){respond(['error'=>$e->getMessage()],422);}}
     if ($action === 'manual_pdfs') respond(['items'=>$pdfTools->listDocuments(),'printers'=>$printing->configuredPrinters()]);
     if ($action === 'manual_mapping_pdfs') respond(['items'=>$printing->mappingPdfChoices((string)($_GET['q']??''))]);
     if ($action === 'upload_manual_pdf') respond($pdfTools->upload($_FILES['pdf']??[],(string)$_SESSION['paperbell_user']));

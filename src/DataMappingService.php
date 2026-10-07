@@ -3,29 +3,41 @@ declare(strict_types=1);
 
 final class DataMappingService
 {
-    public function __construct(private PDO $db, private array $config, private string $root, private ?HostPathResolver $pathResolver = null) {$this->pathResolver??=new HostPathResolver();}
+    public function __construct(private PDO $db, private string $root, private ?HostPathResolver $pathResolver = null) {$this->pathResolver??=new HostPathResolver();}
 
     public function overview(string $query = '', int $page = 1, int $size = 30): array
     {
         $page=max(1,$page);$offset=($page-1)*$size;$where='';$params=[];
         if(trim($query)!==''){$where='WHERE sku_id LIKE ? OR parent_sku LIKE ? OR product_name LIKE ? OR variation_name LIKE ? OR search_alias LIKE ?';$term='%'.trim($query).'%';$params=array_fill(0,5,$term);}
         $count=$this->db->prepare("SELECT COUNT(*) FROM data_mappings {$where}");$count->execute($params);$total=(int)$count->fetchColumn();
-        $stmt=$this->db->prepare("SELECT id,sku_id,parent_sku,product_name,variation_name,group_name,duplex,paper,page_from,page_to,copies,file_path,printer,imported_at FROM data_mappings {$where} ORDER BY product_name,variation_name LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();
-        foreach($items as &$item){$path=$this->pathResolver->resolve((string)$item['file_path']);$item['file_exists']=is_file($path)||is_dir($path);$item['file_name']=basename($path);unset($item['file_path']);}
+        $stmt=$this->db->prepare("SELECT * FROM data_mappings {$where} ORDER BY product_name,variation_name LIMIT {$size} OFFSET {$offset}");$stmt->execute($params);$items=$stmt->fetchAll();
+        foreach($items as &$item){$path=$this->pathResolver->resolve((string)$item['file_path']);$item['file_exists']=is_file($path)||is_dir($path);$item['file_name']=basename($path);}
         $stats=$this->db->query("SELECT COUNT(*) total,SUM(file_path='') empty_path FROM data_mappings")->fetch();$missing=0;foreach($this->db->query('SELECT file_path FROM data_mappings')->fetchAll(PDO::FETCH_COLUMN) as $path){$path=$this->pathResolver->resolve((string)$path);if($path===''||(!is_file($path)&&!is_dir($path)))$missing++;}
-        $last=(int)($this->meta('mapping_last_sync_at')?:0);
-        return ['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'stats'=>['total'=>(int)($stats['total']??0),'missing_files'=>$missing,'last_sync_at'=>$last,'last_sync_source'=>$this->meta('mapping_last_sync_source')]];
+        return ['items'=>$items,'total'=>$total,'page'=>$page,'pages'=>max(1,(int)ceil($total/$size)),'stats'=>['total'=>(int)($stats['total']??0),'missing_files'=>$missing]];
     }
 
-    public function syncFromGoogle(string $user): array
+    public function save(array $input): array
     {
-        $id=trim((string)($this->config['spreadsheet_id']??''));$gid=trim((string)($this->config['gid']??'0'));
-        if($id==='')throw new RuntimeException('Spreadsheet ID Data Mapping belum dikonfigurasi.');
-        $url="https://docs.google.com/spreadsheets/d/{$id}/export?format=xlsx&gid=".rawurlencode($gid);
-        $dir=$this->root.'/storage/imports';if(!is_dir($dir)&&!mkdir($dir,0775,true)&&!is_dir($dir))throw new RuntimeException('Folder import tidak dapat dibuat.');
-        $xlsx=$dir.'/PaperbellDataMap.sync-'.bin2hex(random_bytes(6)).'.xlsx';$json=$dir.'/PaperbellDataMap.sync-'.bin2hex(random_bytes(6)).'.json';
-        try{$this->download($url,$xlsx);$this->xlsxToJson($xlsx,$json);$rows=json_decode((string)file_get_contents($json),true,512,JSON_THROW_ON_ERROR);$result=$this->importRows($rows);$stable=$dir.'/PaperbellDataMap.json';file_put_contents($stable,json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));$now=time();$this->setMeta('mapping_last_sync_at',(string)$now);$this->setMeta('mapping_last_sync_source','Google Sheets oleh '.$user);return $result+['ok'=>true,'synced_at'=>$now];}
-        finally{if(is_file($xlsx))@unlink($xlsx);if(is_file($json))@unlink($json);}
+        $id=(int)($input['id']??0);
+        $fields=['sku_id','product_name','variation_name','group_name','product_code','variant_1','variant_2','duplex','paper','file_path','parent_sku','variation','printer','search_product','search_variant','search_alias'];
+        $data=[];foreach($fields as $field)$data[$field]=trim((string)($input[$field]??''));
+        if($data['sku_id']===''||$data['product_name']==='')throw new InvalidArgumentException('SKU dan nama produk wajib diisi.');
+        foreach(['sku_id'=>255,'parent_sku'=>255,'group_name'=>50,'product_code'=>100,'variant_1'=>100,'variant_2'=>100,'duplex'=>30,'paper'=>30,'variation'=>255,'printer'=>255,'search_product'=>255,'search_variant'=>255,'search_alias'=>255] as $field=>$limit){if(mb_strlen($data[$field])>$limit)throw new InvalidArgumentException("{$field} terlalu panjang.");}
+        $from=filter_var($input['page_from']??1,FILTER_VALIDATE_INT);$to=filter_var($input['page_to']??1,FILTER_VALIDATE_INT);$copies=filter_var($input['copies']??1,FILTER_VALIDATE_INT);
+        if($from===false||$from<1||$to===false||$to<0||($to!==0&&$to<$from)||$copies===false||$copies<1||$copies>999)throw new InvalidArgumentException('Aturan halaman atau jumlah salinan tidak valid.');
+        $data['page_from']=$from;$data['page_to']=$to;$data['copies']=$copies;
+        $this->db->beginTransaction();
+        try{
+            if($id>0){$check=$this->db->prepare('SELECT id FROM data_mappings WHERE id=? FOR UPDATE');$check->execute([$id]);if(!$check->fetchColumn())throw new InvalidArgumentException('Data Mapping tidak ditemukan.');}
+            $duplicate=$this->db->prepare('SELECT id FROM data_mappings WHERE sku_id=? AND id<>? LIMIT 1');$duplicate->execute([$data['sku_id'],$id]);if($duplicate->fetchColumn())throw new InvalidArgumentException('SKU sudah ada di Data Mapping.');
+            if($id>0){$sets=implode(',',array_map(static fn($field)=>"{$field}=?",array_keys($data)));$stmt=$this->db->prepare("UPDATE data_mappings SET {$sets} WHERE id=?");$stmt->execute([...array_values($data),$id]);}
+            else{$columns=implode(',',array_keys($data));$marks=implode(',',array_fill(0,count($data),'?'));$stmt=$this->db->prepare("INSERT INTO data_mappings({$columns},imported_at) VALUES({$marks},?)");$stmt->execute([...array_values($data),time()]);$id=(int)$this->db->lastInsertId();}
+            $this->db->prepare('DELETE FROM mapping_aliases WHERE mapping_id=?')->execute([$id]);
+            $keys=[$data['sku_id'].$data['parent_sku'],$data['parent_sku'],$data['sku_id'],$data['variant_1'].$data['variant_2'].$data['paper'].$data['duplex'].$data['product_code'],$data['parent_sku'].$data['sku_id']];
+            $alias=$this->db->prepare('INSERT IGNORE INTO mapping_aliases(alias_key,mapping_id) VALUES(?,?)');
+            foreach(array_unique(array_filter(array_map([$this,'normalize'],$keys))) as $key)$alias->execute([$key,$id]);
+            $this->db->commit();$this->invalidateOrderCaches();return ['ok'=>true,'id'=>$id];
+        }catch(Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
     }
 
     public function importRows(array $rows): array
@@ -39,13 +51,9 @@ final class DataMappingService
         }catch(Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
     }
 
-    private function download(string $url,string $target):void{$fp=fopen($target,'wb');if(!$fp)throw new RuntimeException('Tidak dapat membuat file sementara mapping.');$ch=curl_init($url);curl_setopt_array($ch,[CURLOPT_FILE=>$fp,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>120,CURLOPT_USERAGENT=>'PaperbellWeb/1.0']);$ok=curl_exec($ch);$status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE);$error=curl_error($ch);curl_close($ch);fclose($fp);if(!$ok||$status<200||$status>=300||filesize($target)<100)throw new RuntimeException('Gagal mengunduh Data Mapping: '.($error?:"HTTP {$status}"));}
-    private function xlsxToJson(string $xlsx,string $json):void{$python=(string)($this->config['python']??'python');$script=$this->root.'/tools/xlsx_to_json.py';$pipes=[];$process=proc_open([$python,$script,$xlsx,$json],[1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);if(!is_resource($process))throw new RuntimeException('Python parser Data Mapping tidak dapat dijalankan.');$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$exit=proc_close($process);if($exit!==0||!is_file($json))throw new RuntimeException('Gagal membaca XLSX Data Mapping: '.trim($err?:$out));}
     private function value(array $row,array $idx,string $key):string{return trim((string)($row[$idx[$key]??-1]??''));}
     private function valueAny(array $row,array $idx,array $keys):string{foreach($keys as $key){$v=$this->value($row,$idx,$key);if($v!=='')return$v;}return'';}
     private function invalidateOrderCaches():void{foreach(['order-mapping-cache.json','order-file-availability-cache.json'] as $file)@unlink($this->root.'/storage/'.$file);}
     public function normalize(string $value):string{return strtolower(str_replace(' ','',trim($value)));}
     private function pages(mixed $raw):array{if(is_numeric($raw)&&(float)$raw>500){$days=(int)$raw;$date=(new DateTimeImmutable('1899-12-30',new DateTimeZone('UTC')))->modify("+{$days} days");$a=(int)$date->format('n');$b=(int)$date->format('j');return[min($a,$b),max($a,$b)];}$s=trim((string)$raw);if(preg_match('/^(\d+)?\s*(?:-\s*(\d+)?)?$/',$s,$m)){$from=max(1,(int)($m[1]??1));if(!str_contains($s,'-'))return[$from,$from];return[$from,isset($m[2])&&$m[2]!==''?(int)$m[2]:0];}return[1,1];}
-    private function meta(string $key):string{$stmt=$this->db->prepare('SELECT meta_value FROM app_meta WHERE meta_key=?');$stmt->execute([$key]);return(string)($stmt->fetchColumn()?:'');}
-    private function setMeta(string $key,string $value):void{$stmt=$this->db->prepare('INSERT INTO app_meta(meta_key,meta_value) VALUES(?,?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)');$stmt->execute([$key,$value]);}
 }

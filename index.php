@@ -2,7 +2,6 @@
 $config = require __DIR__ . '/config.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-$mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((string) $config['mapping']['spreadsheet_id']) . '/edit#gid=' . rawurlencode((string) $config['mapping']['gid']);
 ?>
 <!doctype html>
 <html lang="id">
@@ -12,7 +11,7 @@ $mappingSheetUrl = 'https://docs.google.com/spreadsheets/d/' . rawurlencode((str
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=33">
+  <link rel="stylesheet" href="assets/app.css?v=34">
   <link rel="stylesheet" href="assets/print.css?v=8">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=31">
   <link rel="stylesheet" href="assets/features.css?v=28">
@@ -891,8 +890,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <div class="toolbar search-toolbar">
 <div class="search">⌕<input v-model="query" @input="debouncedLoad" placeholder="Cari SKU, SKU Inti, produk, atau varian">
 </div>
-<a class="google-sheet-link" href="<?= htmlspecialchars($mappingSheetUrl, ENT_QUOTES) ?>" target="_blank" rel="noopener noreferrer">Buka Google Sheet ↗</a>
-<button @click="syncMapping" :disabled="busy">{{busy?'Menyinkronkan…':'↻ Sync Google Sheets'}}</button>
+<button @click="openMappingForm()">+ Tambah produk</button>
 </div>
         <div v-if="mappingData.stats" class="stats compact-stats">
 <article>
@@ -902,11 +900,6 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <article>
 <span>File tidak ditemukan</span>
 <strong>{{number(mappingData.stats.missing_files)}}</strong>
-</article>
-<article>
-<span>Sync terakhir</span>
-<strong class="small-stat">{{timeText(mappingData.stats.last_sync_at)}}</strong>
-<small>{{mappingData.stats.last_sync_source||'-'}}</small>
 </article>
 </div>
         <div class="table-card">
@@ -918,6 +911,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <th>Aturan cetak</th>
 <th>PDF</th>
 <th>Printer</th>
+<th></th>
 </tr>
 </thead>
 <tbody>
@@ -930,14 +924,42 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </td>
 <td>{{row.page_from}}-{{row.page_to||'akhir'}} · {{row.duplex||'simplex'}} · {{row.paper}} · {{row.copies}}x</td>
 <td>
-<span class="badge" :class="row.file_exists?'green':'red'">{{row.file_exists?row.file_name:'File hilang'}}</span>
+<span class="badge" :class="row.file_exists?'green':'red'">{{row.file_exists?row.file_name:(row.file_path?'File hilang':'Belum ada PDF')}}</span>
 </td>
 <td>{{row.printer||'-'}}</td>
+<td><button class="ghost" @click="openMappingForm(row)">Ubah</button></td>
 </tr>
 </tbody>
 </table>
 <pagination :data="mappingData" @change="p=>{page=p;loadMapping()}"/>
 </div>
+        <div v-if="mappingForm.open" class="modal-backdrop" @click.self="mappingForm.open=false">
+          <article class="panel mapping-modal">
+            <div class="panel-head"><div><h3>{{mappingForm.id?'Ubah Data Mapping':'Tambah produk ke Data Mapping'}}</h3><p>Produk langsung tersedia untuk pencarian. Isi path PDF agar siap dicetak.</p></div><button class="icon-button" @click="mappingForm.open=false">×</button></div>
+            <form @submit.prevent="saveMapping" class="mapping-form">
+              <label>SKU ID *<input v-model.trim="mappingForm.sku_id" required maxlength="255"></label>
+              <label>Nama produk *<input v-model.trim="mappingForm.product_name" required></label>
+              <label>SKU inti<input v-model.trim="mappingForm.parent_sku" maxlength="255"></label>
+              <label>Nama variasi<input v-model.trim="mappingForm.variation_name"></label>
+              <label>Grup<input v-model.trim="mappingForm.group_name" maxlength="50" placeholder="Contoh: Planner"></label>
+              <label>Ukuran kertas<input v-model.trim="mappingForm.paper" maxlength="30" placeholder="A5 / B5"></label>
+              <label>File PDF atau folder<input v-model.trim="mappingForm.file_path" placeholder="Path file di komputer Paperbell"><small>Path harus dapat diakses oleh server Paperbell. Biarkan kosong jika PDF belum tersedia.</small></label>
+              <label>Printer<input v-model.trim="mappingForm.printer" maxlength="255"></label>
+              <label>Halaman awal<input v-model.number="mappingForm.page_from" type="number" min="1" required></label>
+              <label>Halaman akhir<input v-model.number="mappingForm.page_to" type="number" min="0" required><small>Isi 0 untuk halaman terakhir.</small></label>
+              <label>Salinan<input v-model.number="mappingForm.copies" type="number" min="1" max="999" required></label>
+              <label>Duplex<input v-model.trim="mappingForm.duplex" maxlength="30"></label>
+              <label>Kode produk<input v-model.trim="mappingForm.product_code" maxlength="100"></label>
+              <label>Variant 1<input v-model.trim="mappingForm.variant_1" maxlength="100"></label>
+              <label>Variant 2<input v-model.trim="mappingForm.variant_2" maxlength="100"></label>
+              <label>Variasi pencarian<input v-model.trim="mappingForm.variation" maxlength="255"></label>
+              <label>Nama pencarian<input v-model.trim="mappingForm.search_product" maxlength="255"></label>
+              <label>Varian pencarian<input v-model.trim="mappingForm.search_variant" maxlength="255"></label>
+              <label>Alias pencarian<input v-model.trim="mappingForm.search_alias" maxlength="255"></label>
+              <div class="mapping-form-actions"><button type="button" class="ghost" @click="mappingForm.open=false">Batal</button><button type="submit" :disabled="mappingForm.saving">{{mappingForm.saving?'Menyimpan…':'Simpan produk'}}</button></div>
+            </form>
+          </article>
+        </div>
       </section>
 
       <section v-if="view==='manual'" class="content">
@@ -1593,7 +1615,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=157">
+<script src="assets/app.js?v=158">
 </script>
 </body>
 </html>

@@ -35,10 +35,6 @@ return [
         'cache_seconds' => 60,
         'thresholds' => ['offline_after_seconds'=>300,'cpu'=>['warning'=>80,'critical'=>95],'memory'=>['warning'=>80,'critical'=>90],'disk'=>['warning'=>80,'critical'=>90],'cpu_temperature'=>['warning'=>80,'critical'=>90],'ssd_temperature'=>['warning'=>65,'critical'=>75]],
     ],
-    'mapping' => [
-        'spreadsheet_id' => getenv('PAPERBELL_MAPPING_SHEET_ID') ?: '1eXwQ_H8ofVroEYlK5X90bvlT66f5a8Q5tnVtTAKNHy4',
-        'gid' => getenv('PAPERBELL_MAPPING_SHEET_GID') ?: '0',
-    ],
     'paths' => [
         'windows_print_root' => getenv('PAPERBELL_WINDOWS_PRINT_ROOT') ?: 'H:/My Drive/Paperbell/Print',
         'ubuntu_print_root' => getenv('PAPERBELL_UBUNTU_PRINT_ROOT') ?: '/home/herman/GoogleDrive/Paperbell/Print',
