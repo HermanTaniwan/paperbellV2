@@ -321,11 +321,12 @@ final class PrintService
     private function productSettings(array $mapping,int $copies,array $options=[]): string
     {
         $o=$this->normalizePrintOptions($mapping,$options);$from=$o['page_from'];$to=$o['page_to'];$range=$to<=0?"{$from}-":($to===$from?(string)$from:"{$from}-{$to}");$parts=[$range];if($o['parity']!=='all')$parts[]=$o['parity'];$parts[]=$o['duplex'];$printer=strtoupper((string)$mapping['printer']);
-        // Borderless queues use the driver's expanded paper area. Actual-size
-        // printing leaves part of that area empty; standard A4 overrides also
-        // replace the driver's A4 Borderless preset.
-        $borderless=str_contains($printer,'BORDERLESS')&&in_array($o['paper'],['DEFAULT','A4'],true);
+        // Sumatra 3.6 replaces the driver's preset with the PDF's standard paper
+        // size unless an explicit paper name is supplied. The Brother cover
+        // queue needs its borderless paper name and scaling to the expanded area.
+        $borderless=str_contains($printer,'COVER BINDER A4 BORDERLESS')&&in_array($o['paper'],['DEFAULT','A4'],true);
         $parts[]=$borderless?'fit':'noscale';
+        if($borderless)$parts[]='paper=A4 (Borderless) (210 x 297 mm)';
         if(str_contains($printer,'BROTHER')) {
             if($o['paper']==='A5')$parts[]='bin=1'; // Tray1: tray bawah.
             elseif($o['paper']==='B5')$parts[]='bin=258'; // MP Tray: tray atas.
