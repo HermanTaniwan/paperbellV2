@@ -202,7 +202,8 @@ function printPrinterForJob(array $job, string $printSettings): string
         return $epson5790;
     }
     $brotherB5 = trim((string)($config['printing']['brother_b5_printer'] ?? ''));
-    if (($job['job_type'] ?? '') === 'label'
+    if (isWindowsPrintHost()
+        || ($job['job_type'] ?? '') === 'label'
         || $brotherB5 === ''
         || stripos($requested, 'Brother') === false
         || paperSizeFromPrintSettings($printSettings) !== 'B5') {

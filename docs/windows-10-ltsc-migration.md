@@ -65,6 +65,9 @@ user. The Google Drive mapping root expected by default is
    Windows queues. Linux queue names in the inventory are historical clues;
    select the exact Windows printer names. Confirm label size, tray/bin,
    duplex, and color behavior with one non-production test page per printer.
+   Brother product jobs use Tray1 (`bin=1`, tray bawah) for A5 and MP Tray
+   (`bin=258`, tray atas) for B5 on the same Windows printer queue. The
+   `PAPERBELL_BROTHER_B5_PRINTER` override applies only to Linux/CUPS.
 7. Confirm Google Drive has completed syncing and that
    `H:\My Drive\Paperbell\Print` exists. If it uses another drive letter, set
    `PAPERBELL_WINDOWS_PRINT_ROOT` rather than changing stored mappings.
