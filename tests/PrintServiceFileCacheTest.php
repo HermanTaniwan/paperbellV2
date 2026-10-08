@@ -39,6 +39,10 @@ try {
     $brotherMapping = array_replace($wfMapping, ['printer' => 'Brother DCP-T830DW Printer', 'paper' => 'A5']);
     assert($settingsMethod->invoke($service, $brotherMapping, 1) === '1-,simplex,noscale,bin=1,paper=A5');
     assert($settingsMethod->invoke($service, $brotherMapping, 2, ['paper' => 'B5', 'page_from' => 3, 'page_to' => 4, 'duplex' => 'duplexlong']) === '3-4,duplexlong,noscale,bin=258,paper=B5,2x');
+    $coverMapping = array_replace($wfMapping, ['printer' => 'Cover Binder A4 Borderless High', 'page_from' => 4, 'page_to' => 6]);
+    assert($settingsMethod->invoke($service, $coverMapping, 1) === '4-6,simplex,fit');
+    assert($settingsMethod->invoke($service, $coverMapping, 2, ['paper' => 'A4']) === '4-6,simplex,fit,2x');
+    assert($settingsMethod->invoke($service, $coverMapping, 1, ['paper' => 'A5']) === '4-6,simplex,noscale,paper=A5');
     echo "PrintService file cache tests passed\n";
 } finally {
     @unlink($path);
