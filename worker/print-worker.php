@@ -6,6 +6,7 @@ if (PHP_SAPI !== 'cli') exit(1);
 $root = dirname(__DIR__);
 $config = require $root . '/config.php';
 require $root . '/src/Database.php';
+require_once $root . '/src/CourierPrintPolicy.php';
 require $root . '/src/LabelPdfPreparer.php';
 require $root . '/src/HostPathResolver.php';
 $sumatra = $config['printing']['sumatra'];
@@ -598,6 +599,7 @@ do {
         $claim->execute([time(), $job['id']]);
         $db->commit();
         $processingStartedAt = microtime(true);
+        CourierPrintPolicy::assertJobAllowed($db,$job);
 
         if (isWindowsPrintHost()&&!is_file($sumatra)) throw new RuntimeException('SumatraPDF tidak ditemukan.');
         $job['file_path']=$hostPathResolver->resolve((string)$job['file_path']);

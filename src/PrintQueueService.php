@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/CourierPrintPolicy.php';
+
 final class PrintQueueService
 {
     private string $spoolerCacheFile;
@@ -76,9 +78,10 @@ final class PrintQueueService
 
     public function appAction(int $id,string $action):array
     {
-        $stmt=$this->db->prepare('SELECT status,printer,spooler_job_id FROM print_jobs WHERE id=?');$stmt->execute([$id]);$job=$stmt->fetch();$status=(string)($job['status']??'');if($status==='')throw new RuntimeException('Job cetak tidak ditemukan.');
+        $stmt=$this->db->prepare('SELECT status,printer,spooler_job_id,job_type,order_sn FROM print_jobs WHERE id=?');$stmt->execute([$id]);$job=$stmt->fetch();$status=(string)($job['status']??'');if($status==='')throw new RuntimeException('Job cetak tidak ditemukan.');
         if($action==='cancel'){if(!in_array($status,['queued','processing'],true))throw new RuntimeException('Job ini tidak dapat dibatalkan.');$next=$status==='queued'?'cancelled':'cancel_requested';$stmt=$this->db->prepare("UPDATE print_jobs SET status=?,message='Dibatalkan pengguna',completed_at=? WHERE id=?");$stmt->execute([$next,time(),$id]);}
         elseif($action==='retry'){
+            CourierPrintPolicy::assertJobAllowed($this->db,$job);
             if(!in_array($status,['failed','cancelled','cancel_requested','submitted'],true))throw new RuntimeException('Hanya job gagal, dibatalkan, atau sudah dikirim yang dapat diulang.');
             if($status==='submitted'&&(int)($job['spooler_job_id']??0)>0){$state=$this->spoolerState();foreach($state['jobs'] as $spoolerJob)if((string)($spoolerJob['printer']??'')===(string)$job['printer']&&(int)($spoolerJob['job_id']??0)===(int)$job['spooler_job_id'])throw new RuntimeException('Job lama masih ada di spooler. Batalkan job spooler terlebih dahulu agar tidak tercetak dobel.');}
             $stmt=$this->db->prepare("UPDATE print_jobs SET status='queued',message='Menunggu worker printer',error='',started_at=NULL,completed_at=NULL,submitted_at=NULL,spooler_job_id=NULL WHERE id=?");$stmt->execute([$id]);

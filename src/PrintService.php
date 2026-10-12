@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__.'/CourierPrintPolicy.php';
+
 final class PrintService
 {
     private const AVAILABLE_FILE_CACHE_TTL = 604800;
@@ -209,6 +211,7 @@ final class PrintService
 
     public function queueOrder(string $orderSn,string $user,array $printerOverrides=[],array $optionOverrides=[]): array
     {
+        CourierPrintPolicy::assertOrderAllowed($this->db,$orderSn);
         $items=$this->previewOrder($orderSn);if(!$items)throw new RuntimeException('Order tidak ditemukan.');$queued=[];$blocked=[];$installed=$this->configuredPrinters();
         foreach($items as $item){$line=$item['line'];if((int)$line['printed']===1)continue;if(in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true)){$blocked[]=['id'=>$line['id'],'reason'=>'Order dibatalkan'];continue;}if(!$item['ready']){$blocked[]=['id'=>$line['id'],'reason'=>$item['reason']];continue;}$m=$item['mapping'];$printer=trim((string)($printerOverrides[(string)$line['id']]??$item['default_printer']));if($printer===''||!in_array($printer,$installed,true)){$blocked[]=['id'=>$line['id'],'reason'=>'Printer tidak tersedia: '.($printer?:'(kosong)')];continue;}try{$requested=is_array($optionOverrides[(string)$line['id']]??null)?$optionOverrides[(string)$line['id']]:[];$options=$this->normalizePrintOptions($m,array_replace($item['print_options']??[],$requested));$m['printer']=$printer;$copies=(int)$options['copies'];$settings=$this->productSettings($m,$copies,$options);$queued[]=$this->insertJob('product',$orderSn,(int)$line['id'],$m['file_path'],$printer,$settings,$copies,$user);}catch(InvalidArgumentException $e){$blocked[]=['id'=>$line['id'],'reason'=>$e->getMessage()];}}
         return ['queued'=>$queued,'blocked'=>$blocked];
@@ -219,6 +222,7 @@ final class PrintService
         $stmt=$this->db->prepare('SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,status FROM order_process WHERE id=? AND order_sn=? LIMIT 1');$stmt->execute([$lineId,$orderSn]);$line=$stmt->fetch();
         if(!$line)throw new RuntimeException('Item tidak ditemukan pada order ini.');
         if(in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true))throw new RuntimeException('Item pada order yang dibatalkan tidak dapat dicetak.');
+        CourierPrintPolicy::assertOrderAllowed($this->db,$orderSn);
         $mapping=$this->resolveMapping($line);if(!$mapping)throw new RuntimeException('Mapping tidak ditemukan');
         $mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);if(!is_file($mapping['file_path']))throw new RuntimeException('File PDF tidak ditemukan');
         $defaultPrinter=$this->resolveMappedPrinter((string)$mapping['printer']);$printer=trim($printer!==''?$printer:$defaultPrinter);
@@ -230,6 +234,7 @@ final class PrintService
 
     public function queueLabel(string $orderSn,string $printer,string $user): int
     {
+        CourierPrintPolicy::assertOrderAllowed($this->db,$orderSn);
         $stmt=$this->db->prepare('SELECT pdf_path FROM order_resi WHERE order_sn=?');$stmt->execute([$orderSn]);$path=(string)($stmt->fetchColumn()?:'');if($path===''||!is_file($path))throw new RuntimeException('PDF label belum tersedia.');
         if(trim($printer)==='')$printer=$this->defaultLabelPrinter();
         if(!in_array($printer,$this->configuredPrinters(),true))throw new RuntimeException('Printer tidak tersedia atau dinonaktifkan di konfigurasi: '.$printer);

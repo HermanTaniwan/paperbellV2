@@ -47,3 +47,5 @@
  .order-filter-navigation .courier-filter{flex:0 0 auto}
  .courier-filter-options{left:0;right:auto;width:min(220px,calc(100vw - 24px));z-index:30}
 }
+
+.courier-print-warning{display:block;margin:8px 0;padding:10px 12px;border:1px solid #f0b9b3;border-radius:8px;background:#fff1ef;color:#a52d22;font-size:12px;font-weight:700;line-height:1.5}

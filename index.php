@@ -13,7 +13,7 @@ header('Pragma: no-cache');
 </title>
   <link rel="stylesheet" href="assets/app.css?v=34">
   <link rel="stylesheet" href="assets/print.css?v=8">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=31">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=32">
   <link rel="stylesheet" href="assets/features.css?v=28">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -479,6 +479,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <p v-if="row.customer_note&&!row.order_sn.startsWith('RANDOM-')" class="customer-note-text">Catatan: {{row.customer_note}}</p>
 </header>
+<p v-if="isCourierPrintBlocked(row)" class="courier-print-warning" role="alert">{{row.courier_print_warning}}</p>
 <p v-if="isCancelledOrder(row)" class="text-error">Order dibatalkan. Data order dan riwayat cetak tetap tersimpan.</p>
 <section v-if="isMarketplaceOrder(row)" class="order-resi-panel" :class="{'is-ready':row.has_label_pdf,'is-printed':row.resi_printed}">
 <div class="order-resi-info">
@@ -497,7 +498,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="order-resi-actions">
 <button class="ghost" :disabled="isCancelledOrder(row)||row.label_fetching||(labelFetchActive(row)&&!labelFetchRetryWaiting(row))" :title="row.label_fetch_error||row.label_fetch_message||''" @click="labelFetchRetryWaiting(row)?retryLabelNow(row):fetchOrderLabel(row)">{{labelFetchButtonText(row)}}</button>
 <button v-if="row.has_label_pdf" class="ghost" @click="openOrderLabel(row)">Buka PDF</button>
-<button v-if="row.has_label_pdf" :disabled="isCancelledOrder(row)||!row.label_printer||row.label_printing" @click="printOrderLabel(row)">{{row.label_printing?'Mengantre…':'Cetak resi'}}</button>
+<button v-if="row.has_label_pdf" :disabled="isCourierPrintBlocked(row)||isCancelledOrder(row)||!row.label_printer||row.label_printing" @click="printOrderLabel(row)">{{row.label_printing?'Mengantre…':'Cetak resi'}}</button>
 </div>
 </div>
 </section>
@@ -536,7 +537,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <small v-if="!line.printer_available&&line.default_printer" class="text-warning">Default mapping tidak tersedia</small>
 </label>
 <div class="inline-item-actions">
-<button class="inline-print-button" :class="{ghost:line.printed}" :disabled="!line.print_ready||!line.selected_printer||itemPrintActive(line)" @click="printItem(line)">{{line.queueing?'Mengantre…':(itemPrintActive(line)?'Dalam antrean…':(line.printed?'Cetak ulang':'Cetak item'))}}</button>
+<button class="inline-print-button" :class="{ghost:line.printed}" :disabled="isCourierPrintBlocked(row)||!line.print_ready||!line.selected_printer||itemPrintActive(line)" @click="printItem(line)">{{line.queueing?'Mengantre…':(itemPrintActive(line)?'Dalam antrean…':(line.printed?'Cetak ulang':'Cetak item'))}}</button>
 <button class="ghost mark-printed-button" :class="{revert:line.printed}" :disabled="isCancelledOrder(row)||line.marking_printed" @click="setOrderItemPrinted(line,!line.printed)">{{line.marking_printed?'Menyimpan…':(line.printed?'Belum tercetak':'Sudah dicetak')}}</button>
 <button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" :disabled="isCancelledOrder(row)||line.inventoryUsing" @click="useInventory(line)">{{line.inventoryUsing?'Memproses…':('Gunakan inventory ('+line.inventory_qty+')')}}</button>
 </div>
@@ -860,6 +861,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <td>
 <b>{{row.order_sn}}</b>
 <small>{{row.status}}</small>
+<small v-if="isCourierPrintBlocked(row)" class="courier-print-warning" role="alert">{{row.courier_print_warning}}</small>
 <small v-if="row.shipping_due_today" class="shipping-due-label">{{shippingDueBadgeText()}}</small>
 </td>
 <td class="label-item-qty"><b>{{number(row.item_qty)}}</b><small>pcs</small></td>
@@ -875,7 +877,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </td>
 <td class="actions">
 <button class="ghost" :disabled="row.label_fetching||labelFetches.has(row.order_sn)||(labelFetchActive(row)&&!labelFetchRetryWaiting(row))" :title="row.label_fetch_error||row.label_fetch_message||''" @click="labelFetchRetryWaiting(row)?retryLabelNow(row):queue('fetch_label',row.order_sn)">{{labelFetches.has(row.order_sn)?'Mengambil…':labelFetchButtonText(row,true)}}</button>
-<button :disabled="!row.hasPdf||!labelPrinter||row.labelPrinting" @click="queue('print_label',row.order_sn,labelPrinter)">{{row.labelPrinting?'Mengantre…':'Cetak'}}</button>
+<button :disabled="isCourierPrintBlocked(row)||!row.hasPdf||!labelPrinter||row.labelPrinting" @click="queue('print_label',row.order_sn,labelPrinter)">{{row.labelPrinting?'Mengantre…':'Cetak'}}</button>
 <button class="ghost mark-printed-button" :class="{revert:row.resi_printed}" :disabled="row.statusChanging" @click="queue('set_label_printed',row.order_sn+'|'+(row.resi_printed?'0':'1'))">{{row.statusChanging?'Menyimpan…':(row.resi_printed?'Belum tercetak':'Sudah dicetak')}}</button>
 </td>
 </tr>
@@ -1616,7 +1618,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=160">
+<script src="assets/app.js?v=161">
 </script>
 </body>
 </html>
