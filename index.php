@@ -13,7 +13,7 @@ header('Pragma: no-cache');
 </title>
   <link rel="stylesheet" href="assets/app.css?v=34">
   <link rel="stylesheet" href="assets/print.css?v=8">
-  <link rel="stylesheet" href="assets/order-enhancements.css?v=32">
+  <link rel="stylesheet" href="assets/order-enhancements.css?v=33">
   <link rel="stylesheet" href="assets/features.css?v=28">
   <link rel="stylesheet" href="assets/tablet.css?v=7">
   <link rel="stylesheet" href="assets/status.css?v=4">
@@ -468,6 +468,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </span>
 <span class="customer-order-date">· {{row.createdText}}</span></p>
 <p v-if="row.unprinted_lines==0&&row.printed_at" class="printed-update-time">Dipindahkan ke Sudah Dicetak: {{timeText(row.printed_at)}}</p>
+<p v-if="isCourierPrintBlocked(row)" class="courier-print-warning" role="alert">{{row.courier_print_warning}}</p>
 </div>
 <div class="order-group-overview-actions">
 <div class="order-group-status">
@@ -479,7 +480,6 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <p v-if="row.customer_note&&!row.order_sn.startsWith('RANDOM-')" class="customer-note-text">Catatan: {{row.customer_note}}</p>
 </header>
-<p v-if="isCourierPrintBlocked(row)" class="courier-print-warning" role="alert">{{row.courier_print_warning}}</p>
 <p v-if="isCancelledOrder(row)" class="text-error">Order dibatalkan. Data order dan riwayat cetak tetap tersimpan.</p>
 <section v-if="isMarketplaceOrder(row)" class="order-resi-panel" :class="{'is-ready':row.has_label_pdf,'is-printed':row.resi_printed}">
 <div class="order-resi-info">
