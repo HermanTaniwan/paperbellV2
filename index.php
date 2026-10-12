@@ -495,7 +495,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="order-resi-controls">
 <label v-if="row.has_label_pdf">Printer resi<select v-model="row.label_printer" aria-label="Printer resi"><option value="">Pilih printer…</option><option v-for="printer in (pageData.labelPrinters||pageData.printers)" :value="printer">{{printer}}</option></select></label>
 <div class="order-resi-actions">
-<button class="ghost" :disabled="isCancelledOrder(row)||row.label_fetching||labelFetchActive(row)" :title="row.label_fetch_error||row.label_fetch_message||''" @click="fetchOrderLabel(row)">{{labelFetchButtonText(row)}}</button>
+<button class="ghost" :disabled="isCancelledOrder(row)||row.label_fetching||(labelFetchActive(row)&&!labelFetchRetryWaiting(row))" :title="row.label_fetch_error||row.label_fetch_message||''" @click="labelFetchRetryWaiting(row)?retryLabelNow(row):fetchOrderLabel(row)">{{labelFetchButtonText(row)}}</button>
 <button v-if="row.has_label_pdf" class="ghost" @click="openOrderLabel(row)">Buka PDF</button>
 <button v-if="row.has_label_pdf" :disabled="isCancelledOrder(row)||!row.label_printer||row.label_printing" @click="printOrderLabel(row)">{{row.label_printing?'Mengantre…':'Cetak resi'}}</button>
 </div>
@@ -874,7 +874,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <small v-if="row.resi_printed&&row.resi_printed_at">{{timeText(row.resi_printed_at)}}</small>
 </td>
 <td class="actions">
-<button class="ghost" :disabled="labelFetches.has(row.order_sn)||labelFetchActive(row)" :title="row.label_fetch_error||row.label_fetch_message||''" @click="queue('fetch_label',row.order_sn)">{{labelFetches.has(row.order_sn)?'Mengambil…':labelFetchButtonText(row,true)}}</button>
+<button class="ghost" :disabled="row.label_fetching||labelFetches.has(row.order_sn)||(labelFetchActive(row)&&!labelFetchRetryWaiting(row))" :title="row.label_fetch_error||row.label_fetch_message||''" @click="labelFetchRetryWaiting(row)?retryLabelNow(row):queue('fetch_label',row.order_sn)">{{labelFetches.has(row.order_sn)?'Mengambil…':labelFetchButtonText(row,true)}}</button>
 <button :disabled="!row.hasPdf||!labelPrinter||row.labelPrinting" @click="queue('print_label',row.order_sn,labelPrinter)">{{row.labelPrinting?'Mengantre…':'Cetak'}}</button>
 <button class="ghost mark-printed-button" :class="{revert:row.resi_printed}" :disabled="row.statusChanging" @click="queue('set_label_printed',row.order_sn+'|'+(row.resi_printed?'0':'1'))">{{row.statusChanging?'Menyimpan…':(row.resi_printed?'Belum tercetak':'Sudah dicetak')}}</button>
 </td>
@@ -1616,7 +1616,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=159">
+<script src="assets/app.js?v=160">
 </script>
 </body>
 </html>

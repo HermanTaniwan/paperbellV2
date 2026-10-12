@@ -265,6 +265,16 @@ try {
     if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauthService()->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauthService()->statuses(appBaseUrl($config))]); }
     if ($action === 'oauth_connect') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));respond(['ok'=>true,'url'=>$oauthService()->connectUrl($provider,appBaseUrl($config),(string)$_SESSION['paperbell_user'])]); }
     if ($action === 'oauth_disconnect') { $input=body();$oauthService()->disconnect(strtolower(trim((string)($input['provider']??''))));respond(['ok'=>true]); }
+    if ($action === 'retry_label_now') {
+        $input=body();$orderSn=trim((string)($input['order_sn']??''));
+        if($orderSn==='')respond(['error'=>'Order SN wajib diisi.'],422);
+        // Only bring a waiting retry forward; the worker keeps exclusive ownership.
+        $stmt=$mysql->prepare("UPDATE label_fetch_jobs SET available_at=?,message='Diminta mencoba lagi sekarang' WHERE order_sn=? AND status='queued' AND attempts>0");
+        $stmt->execute([time(),$orderSn]);
+        $stmt=$mysql->prepare('SELECT status FROM label_fetch_jobs WHERE order_sn=?');$stmt->execute([$orderSn]);$status=$stmt->fetchColumn();
+        if($status===false)respond(['error'=>'Antrean pengambilan resi tidak ditemukan.'],404);
+        respond(['ok'=>true,'status'=>$status,'message'=>$status==='queued'?'Jeda retry dilewati; resi akan diambil saat worker tersedia.':($status==='processing'?'Resi sedang diambil oleh worker.':'Status pengambilan resi sudah berubah. Muat ulang untuk melihat hasilnya.')]);
+    }
     if ($action === 'fetch_label') { $input=body();respond($labelService()->fetch(trim((string)($input['order_sn']??'')))); }
     if ($action === 'set_label_printed') { $input=body();$sn=trim((string)($input['order_sn']??''));$printed=(bool)($input['printed']??false);if($sn==='')respond(['error'=>'Order SN wajib diisi.'],422);$stmt=$mysql->prepare('INSERT INTO order_resi(order_sn,pdf_path,resi_printed,resi_printed_at) VALUES(?,\'\',?,?) ON DUPLICATE KEY UPDATE resi_printed=VALUES(resi_printed),resi_printed_at=VALUES(resi_printed_at)');$stmt->execute([$sn,$printed?1:0,$printed?time():null]);respond(['ok'=>true,'printed'=>$printed]); }
     if ($action === 'set_order_item_printed') { $input=body();$lineId=(int)($input['line_id']??0);$printed=(bool)($input['printed']??true);if($lineId<=0)respond(['error'=>'Item order tidak valid.'],422);$check=$mysql->prepare('SELECT order_sn FROM order_process WHERE id=?');$check->execute([$lineId]);$sn=(string)($check->fetchColumn()?:'');if($sn==='')respond(['error'=>'Item order tidak ditemukan.'],404);$stmt=$mysql->prepare('UPDATE order_process SET printed=?,printed_odd=?,printed_even=?,printed_at=? WHERE id=?');$stmt->execute([$printed?1:0,$printed?1:0,$printed?1:0,$printed?time():null,$lineId]);refreshOrderPrintSummary($mysql,$sn);$remaining=$mysql->prepare('SELECT unprinted_lines FROM orders WHERE order_sn=?');$remaining->execute([$sn]);respond(['ok'=>true,'printed'=>$printed,'order_sn'=>$sn,'remaining'=>(int)$remaining->fetchColumn()]); }
