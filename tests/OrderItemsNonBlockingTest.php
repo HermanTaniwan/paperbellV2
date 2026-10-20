@@ -27,14 +27,16 @@ class OrderItemsDatabase extends PDO
     public function prepare(string $query, array $options = []): PDOStatement|false
     {
         if (str_contains($query, 'FROM order_process')) {
-            $base = ['order_sn'=>'test-order','model_sku'=>'','item_sku'=>'','item_name'=>'Test','model_name'=>'','qty'=>2,'printed_odd'=>0,'printed_even'=>0,'printed_at'=>null];
+            $base = ['order_sn'=>'test-order','status'=>'READY_TO_SHIP','model_sku'=>'','item_sku'=>'','item_name'=>'Test','model_name'=>'','qty'=>2,'printed_odd'=>0,'printed_even'=>0,'printed_at'=>null];
             return new OrderItemsStatement([
                 $base + ['id'=>1,'item_key'=>'mapped','printed'=>0],
                 array_replace($base, ['id'=>2,'item_key'=>'mapped','printed'=>1,'printed_at'=>123]),
                 $base + ['id'=>3,'item_key'=>'unmapped','printed'=>0],
             ]);
         }
-        if (str_contains($query, 'FROM product_inventory')) return new OrderItemsStatement([]);
+        if (str_contains($query, 'FROM product_inventory')) return new OrderItemsStatement([
+            ['item_key'=>'mapped','qty'=>1], ['item_key'=>'UNPUNCHED:MAPPED','qty'=>2],
+        ]);
         throw new RuntimeException('Unexpected query: ' . $query);
     }
     public function query(string $query, ?int $fetchMode = null, mixed ...$args): PDOStatement|false
@@ -61,6 +63,10 @@ try {
     assert($lines[1]['printed'] && $lines[1]['printed_at'] === 123);
     assert(!$lines[2]['print_ready'] && $lines[2]['print_reason'] === 'Mapping tidak ditemukan');
     assert($lines[0]['print_options']['copies'] === 2);
+    assert($lines[0]['inventory_ready_qty'] === 1);
+    assert($lines[0]['inventory_unpunched_qty'] === 2);
+    assert($lines[0]['inventory_qty'] === 3 && $lines[0]['has_inventory']);
+    assert(!$lines[2]['has_inventory']);
     echo "Order items load without remote PDF checks: passed\n";
 } finally {
     unlink($cache);

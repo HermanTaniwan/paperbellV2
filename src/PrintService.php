@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/CourierPrintPolicy.php';
+require_once __DIR__.'/InventoryStock.php';
 
 final class PrintService
 {
@@ -167,7 +168,7 @@ final class PrintService
         $marks=implode(',',array_fill(0,count($orderSns),'?'));
         $stageStartedAt=microtime(true);$stmt=$this->db->prepare("SELECT id,order_sn,item_key,model_sku,item_sku,item_name,model_name,qty,printed,printed_odd,printed_even,printed_at,status FROM order_process WHERE order_sn IN ($marks) ORDER BY order_sn,id");$stmt->execute($orderSns);$lines=$stmt->fetchAll();$lineQueryMs=(int)round((microtime(true)-$stageStartedAt)*1000);
         $stageStartedAt=microtime(true);$mappingByKey=$this->orderMappingCache();$resolved=[];$inventoryCandidates=[];
-        foreach($lines as $line){$mapping=$this->specialPdfMapping((string)$line['item_key']);if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}if($mapping)$mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);$resolved[]=['line'=>$line,'mapping'=>$mapping];foreach([(string)$line['item_key'],(string)($mapping['sku_id']??'')] as $candidate)if(trim($candidate)!=='')$inventoryCandidates[]=trim($candidate);}
+        foreach($lines as $line){$mapping=$this->specialPdfMapping((string)$line['item_key']);if($mapping===null)foreach($this->lineKeys($line) as $key)if(isset($mappingByKey[$key])){$mapping=$mappingByKey[$key];break;}if($mapping)$mapping['file_path']=$this->pathResolver->resolve((string)$mapping['file_path']);$resolved[]=['line'=>$line,'mapping'=>$mapping];foreach(InventoryStock::candidates($line,$mapping) as $candidate)if(trim($candidate)!=='')$inventoryCandidates[]=trim($candidate);}
         $mappingMs=(int)round((microtime(true)-$stageStartedAt)*1000);
         $stageStartedAt=microtime(true);
         $inventory=[];$inventoryCandidates=array_values(array_unique($inventoryCandidates));
@@ -183,13 +184,12 @@ final class PrintService
         $stageStartedAt=microtime(true);$printers=$this->configuredPrinters();$result=[];
         $fileCheckMs=(int)round((microtime(true)-$stageStartedAt)*1000);
         foreach($resolved as $entry){$line=$entry['line'];$mapping=$entry['mapping'];
-            $inventoryQty=null;
-            $inventoryKeys=array_values(array_unique(array_filter([$this->norm((string)$line['item_key']),$this->norm((string)($mapping['sku_id']??''))])));
-            foreach($inventoryKeys as $inventoryKey)if(array_key_exists($inventoryKey,$inventory)){$inventoryQty=$inventory[$inventoryKey];break;}
+            $inventoryAmounts=InventoryStock::quantities(InventoryStock::candidates($line,$mapping),$inventory);
+            $inventoryQty=$inventoryAmounts['total'];
             $requiredQty=max(1,(int)$line['qty']);
             $path=(string)($mapping['file_path']??'');
             $ready=$path!=='';
-            $defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready&&!in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true),'print_reason'=>in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true)?'Order dibatalkan':($mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap')),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
+            $defaultPrinter=$mapping?$this->resolveMappedPrinter((string)$mapping['printer']):'';$options=$mapping?$this->normalizePrintOptions($mapping,[]):['page_from'=>1,'page_to'=>0,'parity'=>'all','duplex'=>'simplex','paper'=>'DEFAULT','copies'=>1];$options['copies']=$requiredQty*max(1,(int)$options['copies']);$result[(string)$line['order_sn']][]=['id'=>(int)$line['id'],'order_sn'=>$line['order_sn'],'item_name'=>$line['item_name'],'model_name'=>$line['model_name'],'qty'=>(int)$line['qty'],'printed'=>(bool)$line['printed'],'printed_odd'=>(bool)$line['printed_odd'],'printed_even'=>(bool)$line['printed_even'],'printed_at'=>$line['printed_at']!==null?(int)$line['printed_at']:null,'sku_id'=>$mapping['sku_id']??$line['item_key'],'sku_inti'=>$mapping['parent_sku']??$line['item_sku'],'file_name'=>$mapping?basename((string)$mapping['file_path']):'','has_pdf'=>$ready,'print_ready'=>$ready&&!in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true),'print_reason'=>in_array(strtoupper(trim((string)$line['status'])),['CANCELLED','CANCELED'],true)?'Order dibatalkan':($mapping===null?'Mapping tidak ditemukan':(!$ready?'File PDF tidak ditemukan':'Siap')),'default_printer'=>$defaultPrinter,'printer_available'=>$defaultPrinter!==''&&in_array($defaultPrinter,$printers,true),'print_options'=>$options,'inventory_ready_qty'=>$inventoryAmounts['ready'],'inventory_unpunched_qty'=>$inventoryAmounts['unpunched'],'inventory_qty'=>$inventoryQty??0,'has_inventory'=>$inventoryQty!==null&&$inventoryQty>=$requiredQty,'queued'=>isset($activeLineIds[(int)$line['id']])];
         }
         error_log('[paperbell-timing] print.list_order_items '.json_encode(['orders'=>count($orderSns),'lines'=>count($lines),'paths_checked'=>0,'line_query_ms'=>$lineQueryMs,'mapping_ms'=>$mappingMs,'inventory_ms'=>$inventoryMs,'queue_ms'=>$queueMs,'file_printer_ms'=>$fileCheckMs,'total_ms'=>(int)round((microtime(true)-$startedAt)*1000)],JSON_UNESCAPED_SLASHES));
         return$result;

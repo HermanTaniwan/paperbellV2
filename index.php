@@ -539,7 +539,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <div class="inline-item-actions">
 <button class="inline-print-button" :class="{ghost:line.printed}" :disabled="isCourierPrintBlocked(row)||!line.print_ready||!line.selected_printer||itemPrintActive(line)" @click="printItem(line)">{{line.queueing?'Mengantre…':(itemPrintActive(line)?'Dalam antrean…':(line.printed?'Cetak ulang':'Cetak item'))}}</button>
 <button class="ghost mark-printed-button" :class="{revert:line.printed}" :disabled="isCancelledOrder(row)||line.marking_printed" @click="setOrderItemPrinted(line,!line.printed)">{{line.marking_printed?'Menyimpan…':(line.printed?'Belum tercetak':'Sudah dicetak')}}</button>
-<button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" :disabled="isCancelledOrder(row)||line.inventoryUsing" @click="useInventory(line)">{{line.inventoryUsing?'Memproses…':('Gunakan inventory ('+line.inventory_qty+')')}}</button>
+<button v-if="!line.printed&&line.has_inventory" class="ghost inventory-use-button" :disabled="isCancelledOrder(row)||line.inventoryUsing" :title="'Sesuai varian: '+line.inventory_ready_qty+'; belum dilubangi: '+line.inventory_unpunched_qty" @click="useInventory(line)">{{line.inventoryUsing?'Memproses…':('Gunakan inventory ('+line.inventory_qty+')')}}</button>
+<small v-if="!line.printed&&line.inventory_unpunched_qty>0">{{line.inventory_ready_qty}} pak sesuai varian + {{line.inventory_unpunched_qty}} pak belum dilubangi (stok bersama)</small>
 </div>
 <details class="advanced-print inline-advanced">
 <summary>Pengaturan cetak item</summary>
@@ -660,7 +661,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
                 <td><span class="stock-trend" :class="{up:row.trend>0,down:row.trend<0}">{{row.trend>0?'+':''}}{{number(row.trend)}}%</span><small>vs 30H sebelumnya</small></td>
                 <td><b>{{number(row.dailyVelocity)}}</b><small>pak / hari</small></td>
                 <td><b>{{number(row.activeDays30)}} hari</b><small>{{number(row.orders30)}} order / 30H</small></td>
-                <td><strong class="inventory-stock" :class="{empty:row.stock<=0}">{{number(row.stock)}}</strong><small>pak di inventory</small></td>
+                <td><strong class="inventory-stock" :class="{empty:row.stock<=0}">{{number(row.stock)}}</strong><small>pak tersedia untuk varian ini</small><small>{{number(row.unpunchedStock)}} pak belum dilubangi (stok bersama)</small></td>
                 <td class="starter-reason">{{row.reason}}</td>
                 <td><strong class="stock-recommendation" :class="{zero:!row.openingQty}">{{number(row.openingQty)}}</strong><small>{{row.openingQty?'pak pembukaan · '+number(row.openingSheets)+' lembar':'jangan dulu'}}</small></td>
                 <td class="stock-print-cell">
@@ -763,7 +764,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <tr>
 <th>Produk</th>
 <th>SKU / No. Ref</th>
-<th>Varian</th>
+<th>Kondisi / varian</th>
 <th>Stok</th>
 <th>Diperbarui</th>
 <th>Aksi</th>
@@ -781,7 +782,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </td>
 <td>{{ row.model_sku || row.item_sku || '-' }}<small>{{ row.no_ref || '-' }}</small>
 </td>
-<td>{{ row.model_name || '-' }}</td>
+<td><b>{{isUnpunchedStock(row)?'Belum dilubangi':'Sesuai varian'}}</b><small>{{isUnpunchedStock(row)?'Rekomendasi stok / pemisahan stok lama':(row.model_name || '-')}}</small><small v-if="isUnpunchedStock(row)&&/A5/i.test(row.model_sku)">Bisa untuk 6 atau 20 lubang</small></td>
 <td>
 <div class="qty">
 <button @click="setQty(row,row.qty-1)">−</button>
@@ -791,6 +792,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </td>
 <td>{{ timeText(row.updated_at) }}</td>
 <td class="actions">
+<button v-if="!isUnpunchedStock(row)&&Number(row.qty)>0" class="ghost" @click="markInventoryUnpunched(row)">Pisahkan belum dilubangi</button>
 <button class="ghost" @click="openInventoryHistory(row)">Riwayat</button>
 <button class="danger-button" :disabled="row.deleting" @click="deleteInventory(row)">{{row.deleting?'Menghapus…':'Hapus'}}</button>
 </td>
@@ -1618,7 +1620,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=162">
+<script src="assets/app.js?v=163">
 </script>
 </body>
 </html>
