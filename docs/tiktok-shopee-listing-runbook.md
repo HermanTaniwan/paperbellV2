@@ -72,6 +72,24 @@ Gunakan alur ini untuk menyalin satu produk Shopee ke TikTok Shop serta memperba
 
 Sebelum memakai endpoint tulis untuk produk lain, sesuaikan aturan prefix seller SKU dan pengaman jumlah SKU di `TikTokShopeeListingService`. Jangan mengasumsikan pola `WMAZ`, jumlah 2 + 28, atau tujuh gambar berlaku untuk produk lain.
 
+## Menyamakan nama variasi pada listing yang sudah ada
+
+Jalankan dari checkout aktif Windows dengan PHP XAMPP:
+
+```powershell
+C:/xampp/php/php.exe tools/align-tiktok-variation-names.php
+C:/xampp/php/php.exe tools/align-tiktok-variation-names.php --cached --apply
+C:/xampp/php/php.exe tools/align-tiktok-variation-names.php --cached --verify
+```
+
+Perintah pertama hanya membaca katalog Shopee dan TikTok lalu menyimpan katalog dan rencana ke `output/variation-names/`. Perintah `--apply` membaca ulang produk sumber dan target, menolak rencana yang berubah, menyimpan snapshot sebelum edit, lalu mengirim perubahan nama. Gunakan `--only=<product_id>` bersama `--apply` untuk satu listing. Hasil verifikasi dapat terlambat beberapa menit setelah respons edit berhasil; ulangi `--verify`, bukan `--apply`.
+
+Pencocokan memakai seller SKU, baik model SKU Shopee langsung maupun gabungan SKU induk + model SKU. Produk dengan SKU kosong, ganda, pasangan ambigu, atau struktur variasi yang tidak dapat dipertahankan dicatat sebagai `skipped` dalam `plan.json`. Nilai diambil dari pilihan tier Shopee; bila TikTok memakai satu dimensi, pilihan Shopee digabung dengan koma. ID SKU, kode seller SKU, atribut, dan gambar pilihan TikTok dipertahankan. Harga dan stok tidak dikirim dalam edit. Ukuran/berat SKU dan pengaturan COD yang ada dipertahankan; status nonaktif dikembalikan setelah edit.
+
+`journal.json` mencatat setiap upaya sebelum request dikirim, termasuk respons atau error. ID yang sudah tercatat tidak dikirim ulang otomatis, termasuk bila hasilnya belum pasti. Simpan arsip katalog, rencana, jurnal, dan verifikasi sebelum memulai batch baru di folder yang sama; periksa hasil upaya sebelumnya sebelum menghapus penanda jurnal. Jangan memakai katalog lama sebagai persetujuan terhadap perubahan baru.
+
+Untuk SKU sumber ganda atau kosong, gunakan `--mapping=<file.json>` hanya setelah pasangan model diperiksa. Format per produk TikTok: `{"<product_id>":{"shopee_id":"<item_id>","rows":[{"tiktok_sku_id":"<sku_id>","new_sku":"<seller_sku_saat_ini>","shopee_model_id":"<model_id>"}]}}`. Pemetaan diperiksa terhadap ID produk, ID SKU TikTok, kode seller SKU saat ini, dan model Shopee yang masih ada. Gunakan file yang sama untuk rencana dan `--apply`. Listing tanpa atribut variasi tidak memerlukan penyamaan nama.
+
 ## Pemetaan field
 
 | Shopee | TikTok |
