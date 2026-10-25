@@ -1,30 +1,29 @@
-# Daily Shopee review replies
+# Shopee review replies
 
-The Windows task `Paperbell Shopee Review Replies` runs at 09:00 WIB daily.
-Install with `powershell.exe -NoProfile -File tools/install-shopee-review-task.ps1`.
-It uses the existing encrypted Shopee connection and refreshes tokens as needed.
-No Apache or print-worker restart is required.
+The Windows task `Paperbell Shopee Review Replies` was disabled on 2026-10-25
+at the user's request. It must stay disabled: the user wants AI-written replies
+from a desktop Scheduled task, not keyword/template replies. No AI schedule has
+been created yet because scheduling tools were unavailable in the setup chat.
+See `shopee-review-ai-task.md` for the ready-to-use Scheduled task prompt.
 
-Only new reviews since first installation are processed: stars 4 or 5, nonempty
-text, visible, and no existing seller reply. Multiple product reviews from the
-same buyer/order receive one reply. Without an order ID, grouping uses buyer
-and review date. Reviews already replied to block the rest of that order.
-The replies use Indonesian templates in `ShopeeReviewService::draft`; four-star
-or mixed feedback receives an acknowledgement and an invitation to contact the
-shop. No AI provider or extra credentials are required.
+The CLI only reads reviews unless an explicit AI draft file is supplied:
 
-Run `C:\xampp\php\php.exe tools/reply-shopee-reviews.php --dry-run` to inspect
-eligible reviews without sending or changing the checkpoint. Run without the
-flag to execute. `--init` creates the initial checkpoint only if none exists.
+```
+C:\xampp\php\php.exe tools/reply-shopee-reviews.php --dry-run
+C:\xampp\php\php.exe tools/reply-shopee-reviews.php --reply-file=storage/shopee-review-replies/ai-drafts-YYYYMMDD.json --dry-run
+C:\xampp\php\php.exe tools/reply-shopee-reviews.php --reply-file=storage/shopee-review-replies/ai-drafts-YYYYMMDD.json
+```
 
-Runtime files are in `storage/shopee-review-replies/`: state, an exclusive worker
-lock, and `events.jsonl`. A pending marker is persisted before each send and the
-reply is then read back for verification. An uncertain or failed send remains
-pending and is never retried automatically; inspect it against Shopee before
-manually resolving its review/group markers. The task returns a nonzero exit
-code for failures. Pagination must cover the processing window before sending.
+Draft format: a JSON array of objects containing `comment_id` (string) and
+`reply` (string, 1-500 characters). The helper never generates any reply text.
+It validates eligibility again immediately before sending and reads it back.
+Only written, visible, new four/five-star reviews qualify; existing replies
+and repeated reviews for the same buyer/order are excluded.
 
-Inspect with `Get-ScheduledTaskInfo -TaskName 'Paperbell Shopee Review Replies'`.
-Pause with `Disable-ScheduledTask -TaskName 'Paperbell Shopee Review Replies'`.
-The computer must be running and the Windows user must be signed in (a locked
-session is fine). Missed starts run when the signed-in session becomes available.
+Runtime state and events are in `storage/shopee-review-replies/`, protected by
+the existing storage access restrictions. The original activation cutoff is
+preserved. A pending marker is persisted before sending; uncertain sends are
+never retried automatically. Inspect pending records against Shopee before
+resolving them. The task returns a nonzero exit code on errors. The checkpoint
+advances only past resolved groups so omitted reviews are not lost. Pagination must cover the
+processing window before any replies are sent.

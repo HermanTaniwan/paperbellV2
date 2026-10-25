@@ -28,7 +28,15 @@ try {
     $config = require $root.'/config.php';
     $oauth = new MarketplaceOAuthService(Database::mysql($config['mysql']),new OAuthVault($config['oauth']['key_file']),$config['oauth']);
     $service = new ShopeeReviewService($oauth);
-    $dry = in_array('--dry-run',$argv,true);
+    $options = getopt('', ['init','dry-run','reply-file:']);
+    $replyFile = $options['reply-file'] ?? null;
+    $dry = $replyFile === null || in_array('--dry-run',$argv,true);
+    $drafts = [];
+    if ($replyFile !== null) {
+        $input = json_decode((string)file_get_contents($replyFile),true,512,JSON_THROW_ON_ERROR);
+        if (!is_array($input) || !array_is_list($input)) throw new RuntimeException('File draf harus berupa array JSON.');
+        $drafts = ShopeeReviewService::validateDrafts($input);
+    }
     $since = max((int)$state['started_at'],(int)$state['checkpoint']-86400);
     $started = time(); $cursor = ''; $seen = []; $reviews = []; $complete = false;
     for ($page=0;$page<20;$page++) {
@@ -44,14 +52,17 @@ try {
     // An existing reply on any product of this order suppresses the other reviews.
     foreach ($reviews as $review) if (!empty($review['comment_reply']['reply'])) $state['groups'][ShopeeReviewService::group($review)] = 'already_replied';
     uasort($reviews,static fn($a,$b)=>(int)$b['create_time']<=>(int)$a['create_time']);
+    foreach ($drafts as $id=>$draft) if (!isset($reviews[$id])) throw new RuntimeException('ID draf tidak ada di jendela review: '.$id);
     $sent = 0; $planned = 0;
     foreach ($reviews as $id=>$review) {
         $id = (string)$id; $group = ShopeeReviewService::group($review);
         if (!ShopeeReviewService::eligible($review,$since) || isset($state['groups'][$group]) || isset($state['reviews'][$id])) continue;
         $fresh = $service->find($id);
         if (!ShopeeReviewService::eligible($fresh,$since)) continue;
-        $draft = ShopeeReviewService::draft($fresh); $planned++;
-        if ($dry) { $log(['status'=>'draft','comment_id'=>$id,'buyer'=>$fresh['buyer_username']??'','rating'=>$fresh['rating_star'],'comment'=>$fresh['comment'],'draft'=>$draft]); $state['groups'][$group] = 'dry_run'; continue; }
+        if ($replyFile !== null && !isset($drafts[$id])) continue;
+        $planned++;
+        if ($dry) { $log(['status'=>'needs_ai_draft','comment_id'=>$id,'buyer'=>$fresh['buyer_username']??'','item_id'=>$fresh['item_id']??null,'model_id'=>$fresh['model_id']??null,'created_at'=>date(DATE_ATOM,(int)$fresh['create_time']),'rating'=>$fresh['rating_star'],'comment'=>$fresh['comment'],'draft'=>$drafts[$id]??null]); $state['groups'][$group] = 'dry_run'; continue; }
+        $draft = $drafts[$id];
         // Persist before sending: an uncertain response must never trigger an automatic resend.
         $state['reviews'][$id] = ['status'=>'pending','reply'=>$draft,'time'=>time()];
         $state['groups'][$group] = $id; $save($state);
@@ -61,6 +72,13 @@ try {
         $state['reviews'][$id]['status'] = 'verified'; $save($state); $sent++;
         $log(['status'=>'verified','comment_id'=>$id,'buyer'=>$fresh['buyer_username']??'','reply'=>$draft]);
     }
-    if (!$dry) { $state['checkpoint'] = $started; $save($state); }
+    if (!$dry) {
+        // Advance only past resolved groups; keep omitted reviews available to the AI.
+        $checkpoint = $started;
+        foreach ($reviews as $review) {
+            if (ShopeeReviewService::eligible($review,$since) && !isset($state['groups'][ShopeeReviewService::group($review)])) $checkpoint = min($checkpoint,(int)$review['create_time']);
+        }
+        $state['checkpoint'] = $checkpoint; $save($state);
+    }
     $log(['status'=>$dry?'dry_run_complete':'complete','scanned'=>count($reviews),'planned'=>$planned,'sent'=>$sent]);
 } catch (Throwable $e) { $log(['status'=>'error','message'=>$e->getMessage()]); exit(1); }

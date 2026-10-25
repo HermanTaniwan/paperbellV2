@@ -22,15 +22,16 @@ final class ShopeeReviewService
             && empty($review['hidden']);
     }
 
-    public static function draft(array $review): string
+    public static function validateDrafts(array $rows): array
     {
-        $text = mb_strtolower((string)$review['comment']);
-        if ((int)$review['rating_star'] === 4 || preg_match('/(?:tapi|tetapi|sayang|kurang|ringkih|rusak|sobek|salah|kecewa|kecil|tipis|lama|hilang|tidak|nggak|gak|ga |belum)/u', $text)) {
-            return 'Terima kasih sudah berbelanja dan berbagi ulasan kak 😊 Masukan kakak kami terima. Kalau ada kendala pada produknya, boleh chat kami dengan detailnya supaya bisa kami bantu cek ya.';
+        $drafts = [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !preg_match('/^\d+$/',(string)($row['comment_id']??'')) || !is_string($row['reply']??null)) throw new InvalidArgumentException('Draf harus berisi comment_id dan reply.');
+            $id = (string)$row['comment_id']; $reply = trim($row['reply']);
+            if ($reply === '' || mb_strlen($reply)>500 || isset($drafts[$id])) throw new InvalidArgumentException('Draf kosong, terlalu panjang, atau ID duplikat: '.$id);
+            $drafts[$id] = $reply;
         }
-        if (str_contains($text, 'bonus')) return 'Makasih banyak kak! Senang produknya disukai 🥰 Semoga bonusnya juga bermanfaat ya. Terima kasih sudah belanja di Paperbell! ✨';
-        if (str_contains($text, 'lucu') || str_contains($text, 'desain')) return 'Makasih banyak kak! Senang desainnya disukai 🥰 Semoga produknya bermanfaat dan bikin kegiatan kakak makin menyenangkan. Terima kasih sudah memilih Paperbell! 💕';
-        return 'Makasih banyak kak sudah belanja dan berbagi ulasan 😊 Semoga produk Paperbell-nya bermanfaat dan nyaman dipakai. Ditunggu kunjungan berikutnya ya! ✨';
+        return $drafts;
     }
 
     public function comments(array $query): array
