@@ -58,7 +58,7 @@ final class ShippingFeeAlertService
         return $this->summary();
     }
 
-    public function listing(int $page=1,string $query='',bool $unreadOnly=false): array
+    public function listing(int $page=1,string $query='',bool $unreadOnly=false,bool $unreadFirst=false): array
     {
         $pageSize=25;$query=trim($query);$sql=$this->notificationSql();
         $where='fees.actual<>fees.estimated';$params=[$this->reader];
@@ -67,11 +67,12 @@ final class ShippingFeeAlertService
         $count=$this->db->prepare("SELECT COUNT(*) FROM ($sql) fees WHERE $where");
         $count->execute($params);$total=(int)$count->fetchColumn();
         $pages=max(1,(int)ceil($total/$pageSize));$page=max(1,min($page,$pages));$offset=($page-1)*$pageSize;
+        $order=$unreadFirst?'fees.unread DESC,':'';
         $stmt=$this->db->prepare("SELECT fees.*,fees.actual-fees.estimated difference,
             COALESCE(JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.shipping_carrier')),
                 JSON_UNQUOTE(JSON_EXTRACT(o.raw_json,'$.package_list[0].shipping_carrier')),'') carrier
             FROM ($sql) fees LEFT JOIN orders o ON o.order_sn=fees.order_sn WHERE $where
-            ORDER BY ABS(fees.actual-fees.estimated) DESC,fees.order_sn DESC LIMIT $pageSize OFFSET $offset");
+            ORDER BY $order ABS(fees.actual-fees.estimated) DESC,fees.order_sn DESC LIMIT $pageSize OFFSET $offset");
         $stmt->execute($params);$items=[];
         foreach($stmt->fetchAll() as $row){
             $items[]=['order_sn'=>$row['order_sn'],'unread'=>(bool)$row['unread'],'currency'=>$row['currency'],'carrier'=>$row['carrier'],

@@ -24,7 +24,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=10">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
-  <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=2">
+  <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=3">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
@@ -94,9 +94,9 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <span class="dot" :class="error?'danger':'online'">
 </span>{{ syncText }}</span>
 <button class="ghost" @click="refresh(true)" :disabled="loading||busy">{{loading?'Memuat…':'↻ Refresh'}}</button>
-<button ref="shippingBell" type="button" class="ghost shipping-notification-bell" :class="{'has-unread':shippingFeeSummary?.unread}" :aria-label="'Notifikasi: '+(shippingFeeSummary?.unread||0)+' belum dibaca'" :aria-expanded="String(shippingNotificationsOpen)" aria-controls="shipping-notifications" aria-haspopup="dialog" @click="toggleShippingNotifications">
+<button ref="shippingBell" type="button" class="ghost shipping-notification-bell" :class="{'has-unread':appNotificationSummary?.unread}" :aria-label="'Notifikasi: '+(appNotificationSummary?.unread||0)+' belum dibaca'" :aria-expanded="String(shippingNotificationsOpen)" aria-controls="shipping-notifications" aria-haspopup="dialog" @click="toggleShippingNotifications">
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
-  <span v-if="shippingFeeSummary?.unread" class="shipping-notification-count">{{shippingFeeSummary.unread>99?'99+':shippingFeeSummary.unread}}</span>
+  <span v-if="appNotificationSummary?.unread" class="shipping-notification-count">{{appNotificationSummary.unread>99?'99+':appNotificationSummary.unread}}</span>
 </button>
 <button v-if="authEnabled" class="avatar" @click="logout">A</button>
 </div>
@@ -117,19 +117,22 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button type="button" @click="go('server-health')">Lihat Server Health</button>
       </section>
       <div v-if="shippingNotificationsOpen" class="shipping-notification-overlay" @click.self="closeShippingNotifications" @keydown.esc.stop="closeShippingNotifications">
-        <section id="shipping-notifications" class="shipping-notification-panel" role="dialog" aria-modal="true" aria-label="Notifikasi ongkir Shopee" @keydown.tab="trapShippingNotificationFocus">
-          <div class="shipping-notification-head"><div><h3>Notifikasi</h3><small>Selisih ongkir Shopee</small></div><button ref="shippingNotificationsClose" type="button" class="ghost" @click="closeShippingNotifications" aria-label="Tutup notifikasi">&times;</button></div>
-          <p v-if="shippingNotificationsLoading" role="status">Memuat notifikasi...</p>
-          <p v-if="shippingNotificationsError" class="alert error" role="alert">{{shippingNotificationsError}} <button class="ghost" @click="loadShippingNotifications">Coba lagi</button></p>
-          <div v-if="shippingNotifications && !shippingNotificationsLoading" class="shipping-notification-items">
-            <p v-if="!shippingNotifications.items.length" class="shipping-notification-empty">Belum ada notifikasi selisih ongkir.</p>
-            <article v-for="item in shippingNotifications.items" :key="item.order_sn" class="shipping-notification-item">
-              <b>{{item.order_sn}}</b><span>Estimasi {{currency(item.estimated)}} &rarr; aktual {{currency(item.actual)}}</span>
+        <section id="shipping-notifications" class="shipping-notification-panel" role="dialog" aria-modal="true" aria-label="Notifikasi Paperbell" @keydown.tab="trapShippingNotificationFocus">
+          <div class="shipping-notification-head"><div><h3>Notifikasi</h3><small>Ongkir &amp; sampel gratis Shopee</small></div><button ref="shippingNotificationsClose" type="button" class="ghost" @click="closeShippingNotifications" aria-label="Tutup notifikasi">&times;</button></div>
+          <p v-if="shippingNotificationsLoading && !shippingNotifications" role="status">Memuat notifikasi...</p>
+          <p v-if="shippingNotificationsError" class="alert error" role="alert">{{shippingNotificationsError}} <button class="ghost" @click="loadShippingNotifications(true)">Coba lagi</button></p>
+          <div v-if="shippingNotifications" class="shipping-notification-items">
+            <p v-if="!shippingNotifications.items.length" class="shipping-notification-empty">Belum ada notifikasi.</p>
+            <article v-for="item in shippingNotifications.items" :key="item.id" class="shipping-notification-item">
+              <template v-if="item.type==='sample'">
+                <small class="sample-notification-label">SAMPEL GRATIS</small><b>{{item.title}}</b><span>{{item.content}}</span><small>Tercatat {{item.recordedAt}}</small>
+                <a :href="item.url" target="_blank" rel="noopener noreferrer">Lihat di Seller Centre &rarr;</a>
+              </template><template v-else><small class="shipping-notification-label">SELISIH ONGKIR</small><b>{{item.order_sn}}</b><span>Estimasi {{currency(item.estimated)}} &rarr; aktual {{currency(item.actual)}}</span>
               <strong :class="item.actual===0?'':item.difference>0?'shipping-fee-higher':'shipping-fee-lower'">{{item.actual===0?'Aktual Rp0; perlu verifikasi':(item.difference>0?'Lebih mahal ':'Lebih murah ')+currency(Math.abs(item.difference))}}</strong>
-              <small>{{item.carrier||'Shopee'}} &middot; {{item.syncedAt}}</small>
+              <small>{{item.carrier||'Shopee'}} &middot; {{item.syncedAt}}</small></template>
             </article>
           </div>
-          <div class="shipping-notification-footer"><span>{{shippingFeeSummary?.unread?number(shippingFeeSummary.unread)+' belum dibaca':'Semua notifikasi sudah dibaca'}}</span><button v-if="shippingFeeSummary?.unread" type="button" class="ghost" :disabled="shippingNotificationsLoading" @click="loadShippingNotifications">Lihat berikutnya</button><button type="button" @click="openShippingFeeList">Lihat semua selisih</button></div>
+          <div class="shipping-notification-footer"><small v-if="shippingNotifications?.sampleCheckedAt">Sampel terakhir diperiksa {{shippingNotifications.sampleCheckedAt}}. Status pengajuan terbaru ada di Seller Centre.</small><span>{{appNotificationSummary?.unread?number(appNotificationSummary.unread)+' belum dibaca':'Semua notifikasi sudah dibaca'}}</span><button v-if="appNotificationSummary?.unread" type="button" class="ghost" :disabled="shippingNotificationsLoading" @click="loadShippingNotifications">Perbarui</button><button type="button" @click="openShippingFeeList">Lihat semua selisih</button></div>
         </section>
       </div>
       <div v-if="loading||busy" class="page-status is-loading" role="status" aria-live="polite">
@@ -1671,7 +1674,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=165">
+<script src="assets/app.js?v=166">
 </script>
 </body>
 </html>

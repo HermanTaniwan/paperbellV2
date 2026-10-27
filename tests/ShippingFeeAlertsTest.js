@@ -32,41 +32,65 @@ async function test() {
   await context.syncShippingFeeAlerts();
   assert(notified.includes('valid'), 'Reject a reversed date range before syncing');
 
-  const notice = {order_sn:'HIGH',estimated:13000,actual:125400,unread:true};
+  const notice = {id:'shipping:HIGH',type:'shipping',order_sn:'HIGH',estimated:13000,actual:125400,unread:true};
+  const feed = () => ({items:[{...notice}],summary:{unread:1,shipping:{unread:1}}});
   const calls = [];
+  let finishRead;
   context.api = async (action, options) => {
     calls.push(action);
-    if(action==='shipping_fee_alerts') return {items:[notice],total:1,summary:{unread:1}};
-    assert.equal(action,'read_shipping_fee_alerts');
+    if(action==='notifications') return feed();
+    assert.equal(action,'read_notifications');
     assert.equal(options.body.items[0].actual,125400);
-    return {unread:0};
+    return new Promise(resolve=>{finishRead=resolve;});
   };
+  await context.loadShippingNotifications(true);
+  assert.equal(context.shippingNotificationsOpen,false,'Prefetch must not open the bell');
+  const cached=context.shippingNotifications;
   await context.toggleShippingNotifications();
-  assert.equal(context.shippingNotificationsOpen,true);
-  assert.equal(context.shippingFeeSummary.unread,0,'Opening bell clears displayed unread notifications');
-  assert.deepEqual(calls,['shipping_fee_alerts','read_shipping_fee_alerts']);
+  assert.equal(context.shippingNotifications,cached,'Opening displays prefetched data immediately');
+  assert.equal(context.appNotificationSummary.unread,0,'Unread badge clears without waiting for the read API');
+  assert.equal(context.shippingNotificationsLoading,false,'Read persistence must not show a loading screen');
+  assert.deepEqual(calls,['notifications','read_notifications'],'A warm bell never fetches the list again');
+  const ack=context.notificationAckPromise;
+  finishRead({items:[{...notice,unread:false}],summary:{unread:0,shipping:{unread:0}}});await ack;
   await context.toggleShippingNotifications();
-  assert.equal(context.shippingNotificationsOpen,false);
+  await context.toggleShippingNotifications();
+  assert.deepEqual(calls,['notifications','read_notifications'],'Repeated open/close reuses cached read items');
+  context.closeShippingNotifications();
 
-  let finishSummary;
-  context.api = async () => new Promise(resolve => {finishSummary=resolve;});
-  const pending = context.loadShippingFeeSummary();
+  let finishFeed;
+  context.api=async()=>new Promise(resolve=>{finishFeed=resolve;});
+  const pending=context.loadShippingNotifications(true);
   context.shippingFeeReadVersion++;
-  context.shippingFeeSummary={unread:0};
-  finishSummary({unread:1});
-  await pending;
-  assert.equal(context.shippingFeeSummary.unread,0,'An older poll must not restore a badge after reading');
+  context.appNotificationSummary={unread:0};
+  finishFeed(feed());await pending;
+  assert.equal(context.appNotificationSummary.unread,0,'An older background response cannot restore the badge after reading');
 
-  context.shippingNotificationsOpen=true;
+  context.api=async()=>{throw new Error('Offline');};
+  await context.loadShippingNotifications(true);
+  assert.equal(context.shippingNotifications,cached,'A failed refresh keeps cached notifications visible');
+  assert.equal(context.shippingNotificationsError,'Offline');
+
+  context.notificationCacheAt=0;
+  context.shippingNotificationsOpen=false;
   let finishList;
   context.api=async action=>{
-    assert.equal(action,'shipping_fee_alerts','Closing before load must not mark unseen items read');
+    assert.equal(action,'notifications','Background prefetch must not acknowledge unseen notifications');
     return new Promise(resolve=>{finishList=resolve;});
   };
-  const loading=context.loadShippingNotifications();
-  context.closeShippingNotifications();
-  finishList({items:[notice],total:1,summary:{unread:1}});
-  await loading;
+  const loading=context.loadShippingNotifications(true);
+  finishList(feed());await loading;
+  assert.equal(context.appNotificationSummary.unread,1,'Prefetch retains unread count until opened');
+
+  const sample={id:'sample:123',type:'sample',notification_id:'123',unread:true};
+  context.applyNotificationFeed({items:[sample],summary:{unread:1,shipping:{unread:0}}});
+  context.api=async(action,options)=>{
+    assert.equal(action,'read_notifications');assert.equal(options.body.items[0].notification_id,'123');
+    throw new Error('Read failed');
+  };
+  await context.acknowledgeAppNotifications([sample]);
+  assert.equal(sample.unread,true,'Failed read persistence restores unread state');
+  assert.equal(context.appNotificationSummary.unread,1);
   console.log('Shipping fee alert UI tests passed');
 }
 test().catch(error => {console.error(error); process.exitCode = 1;});

@@ -17,6 +17,7 @@ require __DIR__ . '/src/MarketplaceLabelService.php';
 require __DIR__ . '/src/MarketplaceOrderSyncService.php';
 require __DIR__ . '/src/ShopeeEscrowService.php';
 require __DIR__ . '/src/ShippingFeeAlertService.php';
+require __DIR__ . '/src/AppNotificationService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
@@ -329,6 +330,14 @@ try {
     if ($action === 'session') respond(['authenticated'=>true,'authEnabled'=>$authEnabled,'user'=>$_SESSION['paperbell_user'],'pollSeconds'=>$config['app']['poll_seconds']]);
     if ($action === 'sync') respond(['ok'=>true,'message'=>'MySQL adalah sumber data utama; gunakan sync_marketplace.']);
 
+    if ($action === 'notifications' || $action === 'read_notifications') {
+        $service=new AppNotificationService($mysql,(string)$_SESSION['paperbell_user'],__DIR__.'/storage/shopee-free-samples/state.json',__DIR__.'/storage/notification-cache');
+        if($action==='notifications')respond($service->feed());
+        if($_SERVER['REQUEST_METHOD']!=='POST')respond(['error'=>'Gunakan POST.'],405);
+        $items=body()['items']??null;
+        if(!is_array($items)||count($items)>25)respond(['error'=>'Daftar notifikasi tidak valid.'],422);
+        respond($service->acknowledge($items));
+    }
     if ($action === 'shipping_fee_alerts') {
         $service=new ShippingFeeAlertService($mysql,(string)$_SESSION['paperbell_user']);
         respond(($_GET['summary']??'')==='1'?$service->summary():$service->listing(
