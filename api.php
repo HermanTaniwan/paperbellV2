@@ -330,9 +330,15 @@ try {
     if ($action === 'sync') respond(['ok'=>true,'message'=>'MySQL adalah sumber data utama; gunakan sync_marketplace.']);
 
     if ($action === 'shipping_fee_alerts') {
-        $service=new ShippingFeeAlertService($mysql);
+        $service=new ShippingFeeAlertService($mysql,(string)$_SESSION['paperbell_user']);
         respond(($_GET['summary']??'')==='1'?$service->summary():$service->listing(
-            (int)($_GET['page']??1),substr(trim((string)($_GET['q']??'')),0,64)));
+            (int)($_GET['page']??1),substr(trim((string)($_GET['q']??'')),0,64),($_GET['unread']??'')==='1'));
+    }
+    if ($action === 'read_shipping_fee_alerts') {
+        if($_SERVER['REQUEST_METHOD']!=='POST')respond(['error'=>'Gunakan POST.'],405);
+        $input=body();$items=$input['items']??null;
+        if(!is_array($items)||count($items)>25)respond(['error'=>'Daftar notifikasi tidak valid.'],422);
+        respond((new ShippingFeeAlertService($mysql,(string)$_SESSION['paperbell_user']))->acknowledge($items));
     }
 
     if ($action === 'shopee_finance') {
