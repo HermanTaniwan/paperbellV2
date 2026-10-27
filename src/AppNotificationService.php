@@ -1,12 +1,15 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/OrderStallAlertService.php';
 
 final class AppNotificationService
 {
     private ShippingFeeAlertService $shipping;
+    private OrderStallAlertService $stalls;
     public function __construct(private PDO $db,private string $reader,private string $sampleStatePath,private string $cacheDirectory)
     {
         $this->shipping=new ShippingFeeAlertService($db,$reader);
+        $this->stalls=new OrderStallAlertService($db);
         $this->db->exec("CREATE TABLE IF NOT EXISTS sample_notification_reads (
             reader_key VARCHAR(100) NOT NULL,notification_id VARCHAR(64) NOT NULL,read_at BIGINT NOT NULL,
             PRIMARY KEY(reader_key,notification_id)
@@ -26,23 +29,26 @@ final class AppNotificationService
         $readStmt->execute([$this->reader]);$sampleRead=$readStmt->fetchAll(PDO::FETCH_COLUMN);
         $sampleRaw=is_file($this->sampleStatePath)?file_get_contents($this->sampleStatePath):'';
         if($sampleRaw===false)throw new RuntimeException('Data sampel gratis belum dapat dibaca.');
-        $version=hash('sha256',json_encode([$stamp,$shippingRead,$sampleRead,date_default_timezone_get()]).$sampleRaw);
+        $stalls=$this->stalls->notifications($this->reader);
+        $version=hash('sha256',json_encode([$stamp,$shippingRead,$sampleRead,$stalls,date_default_timezone_get()]).$sampleRaw);
         $path=$this->cachePath();
         $cache=is_file($path)?json_decode((string)file_get_contents($path),true):null;
         if(is_array($cache)&&($cache['version']??'')===$version&&($cache['expires']??0)>time())return $cache['data'];
         $samples=$this->samples($sampleRaw);
         $shipping=$this->shipping->listing(1,'',false,true);
-        $items=$samples['items'];
+        $items=array_merge($stalls['items'],$samples['items']);
         foreach($shipping['items'] as $item)$items[]=$item+['id'=>'shipping:'.$item['order_sn'],'type'=>'shipping'];
         usort($items,static function(array $a,array $b): int {
             $unread=(int)$b['unread']<=>(int)$a['unread'];
             if($unread!==0)return $unread;
-            if($a['type']!==$b['type'])return $a['type']==='sample'?-1:1;
+            if($a['type']!==$b['type'])return ['stall'=>0,'sample'=>1,'shipping'=>2][$a['type']]<=>['stall'=>0,'sample'=>1,'shipping'=>2][$b['type']];
+            if($a['type']==='stall')return $b['businessHours']<=>$a['businessHours'];
             return $a['type']==='sample'?($b['createdAt']<=>$a['createdAt']):(abs($b['difference'])<=>abs($a['difference']));
         });
         $data=['items'=>array_slice($items,0,25),'summary'=>[
-            'unread'=>$shipping['summary']['unread']+$samples['unread'],
-            'total'=>$shipping['summary']['total']+count($samples['items']),
+            'unread'=>$shipping['summary']['unread']+$samples['unread']+$stalls['unread'],
+            'total'=>$shipping['summary']['total']+count($samples['items'])+$stalls['total'],
+            'stalls'=>['total'=>$stalls['total'],'unread'=>$stalls['unread']],
             'shipping'=>$shipping['summary'],'samples'=>['total'=>count($samples['items']),'unread'=>$samples['unread']],
         ],'sampleCheckedAt'=>$samples['checkedAt'],'cachedAt'=>time()];
         if(!is_dir($this->cacheDirectory)&&!mkdir($this->cacheDirectory,0700,true)&&!is_dir($this->cacheDirectory))return $data;
@@ -82,8 +88,10 @@ final class AppNotificationService
     {
         if(count($items)>25)throw new InvalidArgumentException('Maksimal 25 notifikasi.');
         if(!$items)return $this->feed();
-        $shipping=[];$sampleIds=[];
+        $shipping=[];$sampleIds=[];$episodes=[];
         foreach($items as $item){if(!is_array($item))continue;if(($item['type']??'')==='shipping')$shipping[]=$item;elseif(($item['type']??'')==='sample')$sampleIds[(string)($item['notification_id']??'')]=true;}
+        foreach($items as $item)if(is_array($item)&&($item['type']??'')==='stall')$episodes[]=$item['episode_key']??'';
+        if($episodes)$this->stalls->acknowledge($this->reader,$episodes);
         if($shipping)$this->shipping->acknowledge($shipping);
         $raw=is_file($this->sampleStatePath)?file_get_contents($this->sampleStatePath):'';
         if($raw===false)throw new RuntimeException('Data sampel gratis belum dapat dibaca.');

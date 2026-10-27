@@ -4,6 +4,7 @@ require dirname(__DIR__).'/src/Database.php';
 require dirname(__DIR__).'/src/ShippingFeeAlertService.php';
 require dirname(__DIR__).'/src/AppNotificationService.php';
 $config=require dirname(__DIR__).'/config.php';$db=Database::mysql($config['mysql']);
+require __DIR__.'/OrderStallTestTables.php';
 // All database writes use connection-local temporary tables.
 $db->exec('CREATE TEMPORARY TABLE shopee_escrow_details(order_sn VARCHAR(64) PRIMARY KEY,order_create_time BIGINT,synced_at BIGINT,currency VARCHAR(10),raw_json LONGTEXT)');
 $db->exec('CREATE TEMPORARY TABLE orders(order_sn VARCHAR(64) PRIMARY KEY,raw_json LONGTEXT)');
@@ -34,6 +35,14 @@ try{
     check($service->feed()['summary']['unread']===1,'A new collected sample invalidates the cache immediately.');
     $db->exec("UPDATE shopee_escrow_details SET synced_at=synced_at+1,raw_json=JSON_SET(raw_json,'$.order_income.actual_shipping_fee',7000) WHERE order_sn='ORDER'");
     check($service->feed()['summary']['unread']===2,'Updated escrow invalidates the cache and notifies again.');
+    $db->exec("INSERT INTO order_status_observations VALUES('RISK','PROCESSED',1700000000,1700000000,1700100000)");
+    $episode=hash('sha256','risk-test');$stmt=$db->prepare("INSERT INTO order_stall_alerts VALUES('RISK','PROCESSED',1700000000,100000,1700100000,?)");$stmt->execute([$episode]);
+    $feed=$service->feed();
+    check($feed['summary']['stalls']['unread']===1 && $feed['items'][0]['type']==='stall','Risk reminders join the cached bell with priority.');
+    $service->acknowledge([$feed['items'][0]]);
+    check($service->feed()['summary']['stalls']['unread']===0,'Reading a risk reminder persists its episode receipt.');
+    $db->exec("UPDATE order_status_observations SET status='SHIPPED' WHERE order_sn='RISK'");
+    check($service->feed()['summary']['stalls']['total']===0,'A resolved status invalidates the cached reminder.');
     echo "Combined notification cache and sample tests passed (temporary tables only).\n";
 }finally{
     foreach(['test-user','other-user'] as $reader){$path=$cacheDir.'/'.hash('sha256',$reader).'.json';if(is_file($path))unlink($path);}

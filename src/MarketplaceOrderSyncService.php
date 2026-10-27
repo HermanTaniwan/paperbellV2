@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/OrderStallAlertService.php';
 
 final class MarketplaceOrderSyncService
 {
     private ProfitLossService $profitLoss;
-    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth){$this->ensureSchema();$this->profitLoss=new ProfitLossService($db);}
+    private OrderStallAlertService $stallAlerts;
+    public function __construct(private PDO $db,private MarketplaceOAuthService $oauth){$this->ensureSchema();$this->profitLoss=new ProfitLossService($db);$this->stallAlerts=new OrderStallAlertService($db);}
 
     private function ensureSchema(): void
     {
@@ -56,7 +58,7 @@ final class MarketplaceOrderSyncService
         $this->refreshPrintSummary($sn);
     }
 
-    private function upsertOrder(string $sn,string $status,int $create,int $update,string $buyer,array $raw): void{$stmt=$this->db->prepare('INSERT INTO orders(order_sn,status,create_time,update_time,buyer_username,raw_json) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE status=VALUES(status),create_time=VALUES(create_time),update_time=VALUES(update_time),buyer_username=VALUES(buyer_username),raw_json=VALUES(raw_json)');$stmt->execute([$sn,$status,$create,$update,$buyer,json_encode($raw,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)]);}
+    private function upsertOrder(string $sn,string $status,int $create,int $update,string $buyer,array $raw): void{$stmt=$this->db->prepare('INSERT INTO orders(order_sn,status,create_time,update_time,buyer_username,raw_json) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE status=VALUES(status),create_time=VALUES(create_time),update_time=VALUES(update_time),buyer_username=VALUES(buyer_username),raw_json=VALUES(raw_json)');$stmt->execute([$sn,$status,$create,$update,$buyer,json_encode($raw,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)]);$this->stallAlerts->observe($sn,$status,$update,$create,time());}
     private function existingStatuses(array $sns): array{if(!$sns)return[];$found=[];foreach(array_chunk(array_values(array_unique($sns)),200) as $batch){$marks=implode(',',array_fill(0,count($batch),'?'));$stmt=$this->db->prepare("SELECT order_sn,status FROM orders WHERE order_sn IN ($marks)");$stmt->execute($batch);foreach($stmt->fetchAll() as $row)$found[(string)$row['order_sn']]=(string)$row['status'];}return$found;}
     private function isCancellationRequest(string $status): bool{return str_contains($status,'CANCEL')&&!in_array($status,['CANCELLED','CANCELED'],true);}
     private function isCancellationStatus(string $status): bool{return str_contains($status,'CANCEL');}

@@ -91,6 +91,11 @@ async function test() {
   await context.acknowledgeAppNotifications([sample]);
   assert.equal(sample.unread,true,'Failed read persistence restores unread state');
   assert.equal(context.appNotificationSummary.unread,1);
+  const risk={id:'stall:abc',type:'stall',episode_key:'abc',unread:true};
+  context.applyNotificationFeed({items:[risk],summary:{unread:1,shipping:{unread:0}}});
+  context.api=async(action,options)=>{assert.equal(action,'read_notifications');assert.equal(options.body.items[0].episode_key,'abc');return {summary:{unread:0,shipping:{unread:0}}};};
+  await context.acknowledgeAppNotifications([risk]);
+  assert.equal(context.appNotificationSummary.unread,0,'Risk notifications share the persistent bell read flow');
   console.log('Shipping fee alert UI tests passed');
 }
 test().catch(error => {console.error(error); process.exitCode = 1;});

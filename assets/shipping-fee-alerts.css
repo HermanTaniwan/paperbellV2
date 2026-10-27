@@ -10,3 +10,5 @@
 @media(max-width:600px){.shipping-notification-panel{top:72px;right:12px;max-height:calc(100dvh - 88px)}.header-actions{gap:8px}.shipping-notification-bell{width:38px;height:38px}}
 
 .sample-notification-label{color:#7852a0!important;font-weight:750;letter-spacing:.6px}.shipping-notification-label{font-weight:750;letter-spacing:.6px}.shipping-notification-item a{color:#27644c;font-weight:650}.shipping-notification-item span{white-space:pre-line;overflow-wrap:anywhere}.shipping-notification-footer>small{width:100%;font-size:11px;color:var(--muted);line-height:1.5}
+
+.stall-notification-label{color:#ad3829!important;font-weight:750;letter-spacing:.6px}

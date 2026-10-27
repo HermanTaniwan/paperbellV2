@@ -24,7 +24,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=10">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
-  <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=3">
+  <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=4">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
@@ -118,13 +118,15 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </section>
       <div v-if="shippingNotificationsOpen" class="shipping-notification-overlay" @click.self="closeShippingNotifications" @keydown.esc.stop="closeShippingNotifications">
         <section id="shipping-notifications" class="shipping-notification-panel" role="dialog" aria-modal="true" aria-label="Notifikasi Paperbell" @keydown.tab="trapShippingNotificationFocus">
-          <div class="shipping-notification-head"><div><h3>Notifikasi</h3><small>Ongkir &amp; sampel gratis Shopee</small></div><button ref="shippingNotificationsClose" type="button" class="ghost" @click="closeShippingNotifications" aria-label="Tutup notifikasi">&times;</button></div>
+          <div class="shipping-notification-head"><div><h3>Notifikasi</h3><small>Risiko pembatalan, ongkir &amp; sampel gratis</small></div><button ref="shippingNotificationsClose" type="button" class="ghost" @click="closeShippingNotifications" aria-label="Tutup notifikasi">&times;</button></div>
           <p v-if="shippingNotificationsLoading && !shippingNotifications" role="status">Memuat notifikasi...</p>
           <p v-if="shippingNotificationsError" class="alert error" role="alert">{{shippingNotificationsError}} <button class="ghost" @click="loadShippingNotifications(true)">Coba lagi</button></p>
           <div v-if="shippingNotifications" class="shipping-notification-items">
             <p v-if="!shippingNotifications.items.length" class="shipping-notification-empty">Belum ada notifikasi.</p>
             <article v-for="item in shippingNotifications.items" :key="item.id" class="shipping-notification-item">
-              <template v-if="item.type==='sample'">
+              <template v-if="item.type==='stall'">
+                <small class="stall-notification-label">RISIKO PEMBATALAN</small><b>{{item.order_sn}}</b><span>Status {{item.status}} belum berubah selama {{number(item.businessHours)}} jam, di luar akhir pekan dan Hari Libur Toko.</span><small>Sejak {{item.statusSince}} WIB &middot; diperiksa {{item.checkedAt}} WIB</small><button type="button" class="ghost" @click="openStalledOrder(item.order_sn)">Lihat pesanan</button>
+              </template><template v-else-if="item.type==='sample'">
                 <small class="sample-notification-label">SAMPEL GRATIS</small><b>{{item.title}}</b><span>{{item.content}}</span><small>Tercatat {{item.recordedAt}}</small>
                 <a :href="item.url" target="_blank" rel="noopener noreferrer">Lihat di Seller Centre &rarr;</a>
               </template><template v-else><small class="shipping-notification-label">SELISIH ONGKIR</small><b>{{item.order_sn}}</b><span>Estimasi {{currency(item.estimated)}} &rarr; aktual {{currency(item.actual)}}</span>
@@ -1674,7 +1676,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=166">
+<script src="assets/app.js?v=167">
 </script>
 </body>
 </html>
