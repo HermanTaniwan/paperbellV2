@@ -16,6 +16,7 @@ require __DIR__ . '/src/LabelPdfPreparer.php';
 require __DIR__ . '/src/MarketplaceLabelService.php';
 require __DIR__ . '/src/MarketplaceOrderSyncService.php';
 require __DIR__ . '/src/ShopeeEscrowService.php';
+require __DIR__ . '/src/ShippingFeeAlertService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
@@ -327,6 +328,12 @@ try {
 
     if ($action === 'session') respond(['authenticated'=>true,'authEnabled'=>$authEnabled,'user'=>$_SESSION['paperbell_user'],'pollSeconds'=>$config['app']['poll_seconds']]);
     if ($action === 'sync') respond(['ok'=>true,'message'=>'MySQL adalah sumber data utama; gunakan sync_marketplace.']);
+
+    if ($action === 'shipping_fee_alerts') {
+        $service=new ShippingFeeAlertService($mysql);
+        respond(($_GET['summary']??'')==='1'?$service->summary():$service->listing(
+            (int)($_GET['page']??1),substr(trim((string)($_GET['q']??'')),0,64)));
+    }
 
     if ($action === 'shopee_finance') {
         $today=new DateTimeImmutable('today');

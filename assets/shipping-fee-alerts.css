@@ -1,0 +1,4 @@
+.shipping-fee-banner{display:flex;align-items:center;gap:16px;padding:14px 18px;margin:16px 0;background:#fff4df;border:1px solid #edcc91;border-radius:14px;color:#694616}
+.shipping-fee-banner>div{flex:1}.shipping-fee-banner b,.shipping-fee-banner span{display:block}.shipping-fee-banner span{font-size:13px;margin-top:4px}
+.shipping-fee-page .shipping-fee-tools{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}.shipping-fee-tools label{flex:1;min-width:180px}.shipping-fee-page .shipping-fee-table{overflow:auto}.shipping-fee-table table{width:100%;min-width:720px}.shipping-fee-table td,.shipping-fee-table th{padding:12px;text-align:left}.shipping-fee-table small{display:block;color:#6a6c76;margin-top:4px}.shipping-fee-higher{color:#ad3829;font-weight:700}.shipping-fee-lower{color:#237351;font-weight:700}
+@media(max-width:600px){.shipping-fee-banner{align-items:flex-start;flex-direction:column;gap:10px}.shipping-fee-banner button{width:100%}}

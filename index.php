@@ -24,6 +24,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=10">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
+  <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=1">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
@@ -111,6 +112,10 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <div><b>{{cpuTemperatureAlert().label}}: {{cpuTemperatureAlert().temperature}}°C</b><span>Ambang peringatan 80°C · kritis 90°C</span></div>
         <button type="button" @click="go('server-health')">Lihat Server Health</button>
       </section>
+      <section v-if="shippingFeeSummary?.total && view!=='shipping-alerts'" class="shipping-fee-banner" role="status" aria-live="polite">
+        <div><b>{{number(shippingFeeSummary.total)}} order Shopee memiliki selisih ongkir</b><span>{{number(shippingFeeSummary.higher)}} lebih mahal ? {{number(shippingFeeSummary.lower)}} lebih murah ? {{number(shippingFeeSummary.zeroActual)}} aktual masih Rp0.</span></div>
+        <button type="button" @click="go('shipping-alerts')">Lihat selisih ongkir</button>
+      </section>
       <div v-if="loading||busy" class="page-status is-loading" role="status" aria-live="polite">
         <span class="status-spinner" aria-hidden="true"></span>
         <div><b>{{ activityText }}</b><span>Mohon tunggu, proses masih berjalan.</span></div>
@@ -122,6 +127,36 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
         <button class="status-dismiss" type="button" aria-label="Tutup pesan error" @click="error=''">×</button>
       </div>
 
+      <section v-if="view==='shipping-alerts'" class="content shipping-fee-page">
+        <article class="panel">
+          <h3>Selisih Ongkir Shopee</h3>
+          <p v-if="shippingFeeSummary">{{number(shippingFeeSummary.total)}} order berbeda: {{number(shippingFeeSummary.higher)}} lebih mahal dan {{number(shippingFeeSummary.lower)}} lebih murah, {{number(shippingFeeSummary.zeroActual)}} aktual masih Rp0.</p>
+          <p>Perbandingan menggunakan data escrow tersimpan dari semua tanggal pesanan. Nilai dapat diperbarui oleh Shopee; selisih ini belum memperhitungkan subsidi ongkir. Aktual Rp0 perlu diverifikasi dan belum tentu berarti ongkir gratis.</p>
+          <p>Untuk mengambil data terbaru, pilih tanggal pesanan lalu klik Sinkronkan ongkir. Maksimal 366 hari per sinkronisasi.</p>
+          <form class="shipping-fee-tools" @submit.prevent="syncShippingFeeAlerts">
+            <label>Tanggal pesanan dari<input type="date" v-model="shippingFeeFrom" required></label>
+            <label>Sampai<input type="date" v-model="shippingFeeTo" :min="shippingFeeFrom" required></label>
+            <button :disabled="financeSyncing">{{financeSyncing?'Menyinkronkan?':'Sinkronkan ongkir'}}</button>
+          </form>
+          <form class="shipping-fee-tools" @submit.prevent="loadShippingFeeAlerts(1)">
+            <label>Cari nomor pesanan<input v-model="shippingFeeQuery" placeholder="Contoh: 260801785S5DJH" maxlength="64"></label>
+            <button class="ghost" :disabled="shippingFeeLoading">Cari</button>
+          </form>
+          <p v-if="shippingFeeError" class="alert error" role="alert">{{shippingFeeError}}</p>
+          <div v-if="shippingFeeAlerts" class="shipping-fee-table">
+            <table><thead><tr><th>Pesanan</th><th>Estimasi</th><th>Aktual</th><th>Selisih</th><th>Sinkron terakhir</th></tr></thead>
+              <tbody><tr v-for="item in shippingFeeAlerts.items" :key="item.order_sn">
+                <td><b>{{item.order_sn}}</b><small>{{item.date}} ? {{item.carrier||'Kurir tidak tersedia'}}</small></td>
+                <td>{{item.currency==='IDR'?currency(item.estimated):item.currency+' '+number(item.estimated)}}</td>
+                <td>{{item.currency==='IDR'?currency(item.actual):item.currency+' '+number(item.actual)}}</td>
+                <td :class="item.actual===0?'':item.difference>0?'shipping-fee-higher':'shipping-fee-lower'">{{item.difference>0?'+':'?'}} {{item.currency==='IDR'?currency(Math.abs(item.difference)):item.currency+' '+number(Math.abs(item.difference))}}<small>{{item.actual===0?'Aktual Rp0; perlu verifikasi':item.difference>0?'Lebih mahal':'Lebih murah'}}</small></td>
+                <td>{{item.syncedAt}}</td>
+              </tr><tr v-if="!shippingFeeAlerts.items.length"><td colspan="5">Tidak ada selisih ongkir untuk pencarian ini pada data yang sudah tersinkron.</td></tr></tbody>
+            </table>
+            <pagination :data="shippingFeeAlerts" @change="loadShippingFeeAlerts($event)"></pagination>
+          </div>
+        </article>
+      </section>
       <section v-if="view==='dashboard'" class="content">
         <div class="stats" v-if="dashboard">
           <article>
@@ -1620,7 +1655,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=163">
+<script src="assets/app.js?v=164">
 </script>
 </body>
 </html>
