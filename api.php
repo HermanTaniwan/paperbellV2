@@ -7,6 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 $config = require __DIR__ . '/config.php';
 date_default_timezone_set($config['app']['timezone']);
 require __DIR__ . '/src/Database.php';
+require __DIR__ . '/src/OrderSearch.php';
 require_once __DIR__ . '/src/InventoryStock.php';
 require __DIR__ . '/src/PrintService.php';
 require __DIR__ . '/src/HostPathResolver.php';
@@ -543,7 +544,7 @@ try {
         $holidayLookup=array_fill_keys(storeHolidays($mysql),true);$shippingTarget=activeShippingTarget($mysql,$holidayLookup);$dueRange=$shippingTarget['range'];$shippingSummary=$shippingTarget['summary']+['period'=>$shippingTarget['period'],'date'=>$shippingTarget['date'],'rollover'=>$shippingTarget['rollover']];
         $where=[]; $params=[];
         $courierData=orderCourierData($mysql);$requestedCouriers=array_values(array_filter(array_map('trim',explode(',',(string)($_GET['couriers']??'')))));if($requestedCouriers){$wanted=array_fill_keys(array_map('mb_strtolower',$requestedCouriers),true);$courierOrderSns=array_keys(array_filter($courierData['byOrder'],fn($courier)=>isset($wanted[mb_strtolower($courier)])));if(!$courierOrderSns)$where[]='1=0';else{$marks=implode(',',array_fill(0,count($courierOrderSns),'?'));$where[]="o.order_sn IN ({$marks})";$params=array_merge($params,$courierOrderSns);}}
-        if ($q!=='') { $where[]='(o.order_sn LIKE ? OR o.buyer_username LIKE ? OR r.tracking_number LIKE ? OR EXISTS(SELECT 1 FROM order_process op WHERE op.order_sn=o.order_sn AND (op.item_name LIKE ? OR op.model_name LIKE ? OR op.model_sku LIKE ? OR op.item_sku LIKE ?)))'; $term="%{$q}%"; $params=array_merge($params,array_fill(0,7,$term)); }
+        if ($q!=='') { $search=OrderSearch::condition($q);$where[]=$search['sql'];$params=array_merge($params,$search['params']); }
         if($dueToday){if($dueRange===null)$where[]='1=0';else{$where[]="o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED') AND o.create_time>=? AND o.create_time<?";$params[]=$dueRange[0];$params[]=$dueRange[1];}}
         if($paperFilter!=='all'&&in_array($filter,['unprinted','printed'],true))$where[]="UPPER(TRIM(o.status)) NOT IN ('CANCELLED','CANCELED')";
         if ($paperFilter==='all'&&$filter==='unprinted') $where[]="UPPER(TRIM(o.status)) NOT IN ('CANCELLED','CANCELED') AND (o.print_line_count=0 OR o.unprinted_lines>0)";
