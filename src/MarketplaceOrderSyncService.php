@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/OrderStallAlertService.php';
+require_once __DIR__.'/ShopeeSkuIdentity.php';
 
 final class MarketplaceOrderSyncService
 {
@@ -45,7 +46,7 @@ final class MarketplaceOrderSyncService
     private function upsertShopee(array $order): void
     {
         $sn=(string)($order['order_sn']??'');if($sn==='')return;$status=(string)($order['order_status']??'');$create=(int)($order['create_time']??0);$update=(int)($order['update_time']??0);$buyer=(string)($order['buyer_username']??'');$this->upsertOrder($sn,$status,$create,$update,$buyer,$order);$lineIds=[];$i=0;
-        foreach(($order['item_list']??[]) as $item){$itemSku=strtoupper(str_replace(' ','',trim((string)($item['item_sku']??''))));$modelSku=strtoupper(str_replace(' ','',trim((string)($item['model_sku']??$item['variation_sku']??''))));$itemId=(string)($item['item_id']??'');$modelId=(string)($item['model_id']??'');$lineId=$modelId!==''&&$modelId!=='0'?$itemId.':'.$modelId:(string)($item['order_item_id']??$itemId.':'.$i);$i++;$lineIds[]=$lineId;$this->upsertLine($sn,$lineId,$itemSku.$modelSku,$modelSku,$itemSku,(string)($item['item_name']??''),(string)($item['model_name']??''),max(1,(int)($item['model_quantity_purchased']??1)),$status,$create);}
+        foreach(($order['item_list']??[]) as $item){$itemSku=strtoupper(str_replace(' ','',trim((string)($item['item_sku']??''))));$modelSku=strtoupper(str_replace(' ','',trim((string)($item['model_sku']??$item['variation_sku']??''))));$itemId=(string)($item['item_id']??'');$modelId=(string)($item['model_id']??'');$lineId=$modelId!==''&&$modelId!=='0'?$itemId.':'.$modelId:(string)($item['order_item_id']??$itemId.':'.$i);$i++;$lineIds[]=$lineId;$itemKey=ShopeeSkuIdentity::itemKey($this->db,$lineId,$itemSku.$modelSku);$this->upsertLine($sn,$lineId,$itemKey,$modelSku,$itemSku,(string)($item['item_name']??''),(string)($item['model_name']??''),max(1,(int)($item['model_quantity_purchased']??1)),$status,$create);}
         $this->finishSyncedLines($sn,$status,$lineIds);
         $this->refreshPrintSummary($sn);
     }

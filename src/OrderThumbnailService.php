@@ -37,6 +37,10 @@ final class OrderThumbnailService
         $aliases=$this->db->prepare("SELECT a.alias_key FROM mapping_aliases a JOIN data_mappings m ON m.id=a.mapping_id WHERE m.sku_id IN ($marks)");
         $aliases->execute($keys);
         $keys=array_values(array_unique(array_merge($keys,array_filter($aliases->fetchAll(PDO::FETCH_COLUMN)))));
+        // Audited marketplace identities are unambiguous even when historical orders reuse a SKU.
+        $identities=[];
+        foreach($keys as $key)if(preg_match('/^shopee:(\d+):(\d+)$/i',$key,$match))$identities[$match[1].':'.$match[2]]=[$match[1],$match[2]];
+        if(count($identities)===1){[$itemId,$modelId]=reset($identities);if(($image=$this->forProduct((int)$itemId,$modelId))!==null)return $image;}
         $marks=implode(',',array_fill(0,count($keys),'?'));
         // Match full SKU keys or a complete parent/variant pair, never product names.
         $sql="SELECT p.id FROM order_process p WHERE p.order_sn NOT LIKE 'TIKTOK:%' AND p.order_sn NOT LIKE 'MANUAL-%' AND p.order_sn NOT LIKE 'RANDOM-%' AND (p.item_key IN ($marks)";

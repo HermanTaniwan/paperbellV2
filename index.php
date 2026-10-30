@@ -569,7 +569,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <article v-for="line in row.items" :key="line.id" class="inline-print-item" :class="{'six-hole-item':isSixHole(line),'is-status-changing':line.marking_printed}">
 <div class="inline-item-main">
-<button v-if="!row.order_sn.startsWith('TIKTOK:')&&isMarketplaceOrder(row)" type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(line.model_name||line.item_name)" title="Klik untuk memperbesar gambar" @click="openOrderImage(line)"><img class="order-item-thumbnail" :src="'api.php?action=order_thumbnail&line_id='+line.id" :alt="line.model_name||line.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
+<button v-if="!row.order_sn.startsWith('TIKTOK:')&&isMarketplaceOrder(row)" type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(line.model_name||line.item_name)" title="Klik untuk memperbesar gambar" @click="openOrderImage(line)"><img class="order-item-thumbnail" :src="'api.php?action=order_thumbnail&v=2&line_id='+line.id" :alt="line.model_name||line.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
 <b>{{line.item_name||line.model_name||line.sku_id}}</b>
 <small>{{line.model_name||'-'}}</small>
 <span v-if="line.print_options?.paper==='A5'||line.print_options?.paper==='B5'" class="paper-size-indicator" :class="line.print_options.paper==='B5'?'paper-b5':'paper-a5'" :title="'Ukuran kertas '+line.print_options.paper">
@@ -832,7 +832,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </tr>
 <tr v-for="row in pageData.items" :key="row.item_key" :class="{'is-deleting':row.deleting}">
 <td>
-<button type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(row.model_name||row.item_name||row.item_key)" title="Klik untuk memperbesar gambar" @click="openInventoryImage(row)"><img class="order-item-thumbnail" :src="'api.php?action=inventory_thumbnail&item_key='+encodeURIComponent(row.item_key)" :alt="row.model_name||row.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
+<button type="button" class="order-item-thumbnail-button" :aria-label="'Perbesar gambar '+(row.model_name||row.item_name||row.item_key)" title="Klik untuk memperbesar gambar" @click="openInventoryImage(row)"><img class="order-item-thumbnail" :src="'api.php?action=inventory_thumbnail&v=2&item_key='+encodeURIComponent(row.item_key)" :alt="row.model_name||row.item_name" loading="lazy" @error="$event.target.parentElement.style.display='none'"></button>
 <b>{{ row.item_name || row.model_name || row.item_key }}</b>
 <small>{{ row.item_key }}</small>
 </td>
@@ -1676,7 +1676,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=167">
+<script src="assets/app.js?v=169">
 </script>
 </body>
 </html>
