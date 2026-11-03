@@ -6,7 +6,7 @@ final class DashboardAnalyticsService
     private const COMPARISON_METRICS = [
         'shopee', 'tiktok', 'total', 'items', 'itemsPerOrder',
         'ordersPerDay', 'itemsPerDay', 'revenue', 'pricedOrders',
-        'shopeePayout', 'shopeeFees', 'escrowOrders', 'shopeePayoutPercent',
+        'shopeePayout', 'shopeeFees', 'escrowOrders', 'shopeeFeePercent',
     ];
 
     // Use the same primary amount and item fallback as operational revenue.
@@ -128,7 +128,7 @@ final class DashboardAnalyticsService
             'pricedOrders' => $pricedOrders,
             'shopeePayout' => $shopeePayout,
             'shopeePayoutRevenue' => $payoutRevenue,
-            'shopeePayoutPercent' => $payoutRevenue > 0 ? round($matchedPayout / $payoutRevenue * 100, 2) : null,
+            'shopeeFeePercent' => $payoutRevenue > 0 ? round((1 - $matchedPayout / $payoutRevenue) * 100, 2) : null,
             'shopeeFees' => $shopeeFees,
             'escrowOrders' => $escrowOrders,
         ]];
@@ -146,7 +146,7 @@ final class DashboardAnalyticsService
     ): array {
         $metrics = [];
         foreach (self::COMPARISON_METRICS as $key) {
-            if ($key === 'shopeePayoutPercent' && (!isset($current[$key]) || !isset($previous[$key]))) {
+            if ($key === 'shopeeFeePercent' && (!isset($current[$key]) || !isset($previous[$key]))) {
                 $metrics[$key] = ['previous' => $previous[$key] ?? null, 'percentStatus' => 'unavailable'];
                 continue;
             }
@@ -155,7 +155,7 @@ final class DashboardAnalyticsService
             $delta = $currentValue - $previousValue;
             $direction = $delta > 0 ? 'up' : ($delta < 0 ? 'down' : 'flat');
             $percentChange = $previousValue == 0.0 ? null : round(($delta / abs($previousValue)) * 100, 2);
-            $lower = in_array($key, $lowerIsBetter, true);
+            $lower = $key === 'shopeeFeePercent' || in_array($key, $lowerIsBetter, true);
             $tone = $direction === 'flat' ? 'neutral' : (($direction === 'down') === $lower ? 'positive' : 'negative');
             $metrics[$key] = [
                 'current' => $currentValue,
