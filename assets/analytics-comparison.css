@@ -90,3 +90,41 @@
     grid-column: auto;
   }
 }
+
+.analytics-summary .metric-pair {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.analytics-metric-content {
+  min-width: 0;
+}
+
+.analytics-summary .analytics-metric-content > span {
+  display: block;
+  font-size: 9px;
+}
+
+.analytics-summary .analytics-metric-content > small {
+  display: block;
+  color: var(--muted);
+  font-size: 8px;
+  margin-top: 4px;
+}
+
+.analytics-summary .analytics-metric-content > strong {
+  margin-top: 5px;
+}
+
+.analytics-summary .metric-pair > .analytics-metric-content + .analytics-metric-content {
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
+@media (max-width: 420px) {
+  .analytics-summary .metric-pair {
+    grid-column: auto;
+  }
+}

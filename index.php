@@ -29,7 +29,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/shipping-progress.css?v=3">
   <link rel="stylesheet" href="assets/nav-groups.css?v=6">
   <link rel="stylesheet" href="assets/loyalty-badges.css?v=3">
-  <link rel="stylesheet" href="assets/analytics-comparison.css?v=1">
+  <link rel="stylesheet" href="assets/analytics-comparison.css?v=2">
   <link rel="stylesheet" href="assets/stock-management.css?v=3">
   <link rel="stylesheet" href="assets/stock-management-fix.css?v=4">
 </head>
@@ -205,14 +205,16 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </div>
           <div v-if="analytics?.comparison" class="analytics-period-comparison" aria-live="polite">{{analyticsComparisonPeriodText()}}</div>
           <div v-if="analytics" class="analytics-summary">
-            <div v-for="card in analyticsMetricCards()" :key="card.key" class="analytics-metric" :class="card.className">
-              <i v-if="card.icon" class="legend-dot" :class="card.icon"></i>
-              <span>{{card.label}}</span>
-              <strong>{{card.value}}</strong>
-              <small v-if="card.note">{{card.note}}</small>
-              <div v-if="card.comparable" class="metric-period-comparison" :class="card.tone">
-                <span>{{card.previousLabel}} <b>{{card.previous}}</b></span>
-                <em><i aria-hidden="true">{{card.arrow}}</i> Selisih {{card.difference}} · {{card.changeLabel}}</em>
+            <div v-for="card in analyticsMetricCards()" :key="card.key" class="analytics-metric" :class="[card.className,{'metric-pair':card.sideMetric}]">
+              <div v-for="metric in (card.sideMetric?[card,card.sideMetric]:[card])" :key="metric.key" class="analytics-metric-content">
+                <i v-if="metric.icon" class="legend-dot" :class="metric.icon"></i>
+                <span>{{metric.label}}</span>
+                <strong>{{metric.value}}</strong>
+                <small v-if="metric.note">{{metric.note}}</small>
+                <div v-if="metric.comparable" class="metric-period-comparison" :class="metric.tone">
+                  <span>{{metric.previousLabel}} <b>{{metric.previous}}</b></span>
+                  <em><i aria-hidden="true">{{metric.arrow}}</i> Selisih {{metric.difference}} · {{metric.changeLabel}}</em>
+                </div>
               </div>
             </div>
           </div>
@@ -1676,7 +1678,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=171">
+<script src="assets/app.js?v=172">
 </script>
 </body>
 </html>
