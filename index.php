@@ -210,7 +210,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
               <span>{{card.label}}</span>
               <strong>{{card.value}}</strong>
               <small v-if="card.note">{{card.note}}</small>
-              <div class="metric-period-comparison" :class="card.tone">
+              <div v-if="card.comparable" class="metric-period-comparison" :class="card.tone">
                 <span>{{card.previousLabel}} <b>{{card.previous}}</b></span>
                 <em><i aria-hidden="true">{{card.arrow}}</i> Selisih {{card.difference}} · {{card.changeLabel}}</em>
               </div>
@@ -1676,7 +1676,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=169">
+<script src="assets/app.js?v=170">
 </script>
 </body>
 </html>

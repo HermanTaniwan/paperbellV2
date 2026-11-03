@@ -527,9 +527,20 @@ try {
         $stmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
         $counts=[];
         foreach($stmt->fetchAll() as $row)$counts[(string)$row['order_date']][(string)$row['marketplace']]=['orders'=>(int)$row['total'],'items'=>(int)$row['item_total'],'revenue'=>(float)$row['revenue_total'],'pricedOrders'=>(int)$row['priced_orders']];
-        $fallbackStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(create_time)) order_date,CASE WHEN order_sn LIKE 'TIKTOK:%' THEN 'tiktok' ELSE 'shopee' END marketplace,raw_json FROM orders WHERE create_time>=? AND create_time<? AND order_sn NOT LIKE 'MANUAL-%' AND order_sn NOT LIKE 'RANDOM-%' AND UPPER(status) NOT IN ('CANCELLED','CANCELED')");
+        $fallbackStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(o.create_time)) order_date,CASE WHEN o.order_sn LIKE 'TIKTOK:%' THEN 'tiktok' ELSE 'shopee' END marketplace,o.raw_json,e.payout_amount FROM orders o LEFT JOIN shopee_escrow_details e ON e.order_sn=o.order_sn WHERE o.create_time>=? AND o.create_time<? AND o.order_sn NOT LIKE 'MANUAL-%' AND o.order_sn NOT LIKE 'RANDOM-%' AND UPPER(o.status) NOT IN ('CANCELLED','CANCELED')");
         $fallbackStmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);
-        foreach($fallbackStmt->fetchAll() as $row){$raw=json_decode((string)$row['raw_json'],true);if(!is_array($raw))continue;$marketplace=(string)$row['marketplace'];$primary=$marketplace==='tiktok'?(float)($raw['payment']['total_amount']??0):(float)($raw['total_amount']??0);if($primary>0)continue;$fallback=0.0;if($marketplace==='tiktok'){$fallback=(float)($raw['payment']['sub_total']??0);if($fallback<=0)foreach(($raw['line_items']??[]) as $line)$fallback+=(float)($line['sale_price']??0)*max(1,(int)($line['quantity']??1));}else foreach(($raw['item_list']??[]) as $line)$fallback+=(float)($line['model_discounted_price']??$line['model_original_price']??0)*max(1,(int)($line['model_quantity_purchased']??1));if($fallback<=0)continue;$key=(string)$row['order_date'];$counts[$key][$marketplace]['revenue']=(float)($counts[$key][$marketplace]['revenue']??0)+$fallback;$counts[$key][$marketplace]['pricedOrders']=(int)($counts[$key][$marketplace]['pricedOrders']??0)+1;}
+        foreach($fallbackStmt->fetchAll() as $row){
+            $raw=json_decode((string)$row['raw_json'],true);
+            if(!is_array($raw))continue;
+            $marketplace=(string)$row['marketplace'];
+            // Match revenue and payout by order, including legitimate zero payouts.
+            if($marketplace==='shopee'&&$row['payout_amount']!==null){
+                $key=(string)$row['order_date'];
+                $revenue=DashboardAnalyticsService::shopeeOrderRevenue($raw);
+                $counts[$key]['shopee']['payoutRevenue']=(float)($counts[$key]['shopee']['payoutRevenue']??0)+$revenue;
+                $counts[$key]['shopee']['matchedPayout']=(float)($counts[$key]['shopee']['matchedPayout']??0)+(float)$row['payout_amount'];
+            }
+            $primary=$marketplace==='tiktok'?(float)($raw['payment']['total_amount']??0):(float)($raw['total_amount']??0);if($primary>0)continue;$fallback=0.0;if($marketplace==='tiktok'){$fallback=(float)($raw['payment']['sub_total']??0);if($fallback<=0)foreach(($raw['line_items']??[]) as $line)$fallback+=(float)($line['sale_price']??0)*max(1,(int)($line['quantity']??1));}else $fallback=DashboardAnalyticsService::shopeeOrderRevenue($raw);if($fallback<=0)continue;$key=(string)$row['order_date'];$counts[$key][$marketplace]['revenue']=(float)($counts[$key][$marketplace]['revenue']??0)+$fallback;$counts[$key][$marketplace]['pricedOrders']=(int)($counts[$key][$marketplace]['pricedOrders']??0)+1;}
         $escrowStmt=$mysql->prepare("SELECT DATE(FROM_UNIXTIME(order_create_time)) order_date,COUNT(*) orders,COALESCE(SUM(payout_amount),0) payout,COALESCE(SUM(total_marketplace_fee),0) fees FROM shopee_escrow_details WHERE order_create_time>=? AND order_create_time<? GROUP BY order_date");
         $escrowStmt->execute([$previousFrom->getTimestamp(),$to->modify('+1 day')->getTimestamp()]);$escrowCounts=[];foreach($escrowStmt->fetchAll() as $row)$escrowCounts[(string)$row['order_date']]=['orders'=>(int)$row['orders'],'payout'=>(float)$row['payout'],'fees'=>(float)$row['fees']];
         $holidays=storeHolidays($mysql);$holidayLookup=array_fill_keys($holidays,true);

@@ -33,11 +33,11 @@ analyticsExpectSame('2026-02-28', $clampedMtdTo->format('Y-m-d'), 'MTD-1 must cl
 
 $counts = [
     '2026-08-20' => [
-        'shopee' => ['orders' => 2, 'items' => 5, 'revenue' => 150000, 'pricedOrders' => 2],
+        'shopee' => ['orders' => 2, 'items' => 5, 'revenue' => 150000, 'pricedOrders' => 2, 'payoutRevenue' => 100000, 'matchedPayout' => 80000],
         'tiktok' => ['orders' => 1, 'items' => 2, 'revenue' => 50000, 'pricedOrders' => 1],
     ],
     '2026-08-19' => [
-        'shopee' => ['orders' => 1, 'items' => 2, 'revenue' => 90000, 'pricedOrders' => 1],
+        'shopee' => ['orders' => 1, 'items' => 2, 'revenue' => 90000, 'pricedOrders' => 1, 'payoutRevenue' => 90000, 'matchedPayout' => 63000],
     ],
 ];
 $escrow = [
@@ -101,5 +101,17 @@ $zeroBaseline = DashboardAnalyticsService::comparison(
 analyticsExpectSame(null, $zeroBaseline['metrics']['total']['percentChange'], 'Zero baselines must never produce infinity or NaN.');
 analyticsExpectSame('not_comparable', $zeroBaseline['metrics']['total']['percentStatus'], 'A non-zero value over a zero baseline must be explicitly non-comparable.');
 analyticsExpectSame('unchanged_zero', $zeroBaseline['metrics']['revenue']['percentStatus'], 'Two zero values must be reported as unchanged zero.');
+
+analyticsExpectSame(100000.0, $current['summary']['shopeePayoutRevenue'], 'Only matched Shopee revenue belongs in the denominator.');
+analyticsExpectSame(80.0, $current['summary']['shopeePayoutPercent'], 'Ratio must exclude unmatched Shopee revenue, TikTok revenue and unrelated escrow payouts.');
+analyticsExpectSame(70.0, $comparison['metrics']['shopeePayoutPercent']['previous'], 'Previous period must use its own matched orders.');
+analyticsExpectSame(10.0, $comparison['metrics']['shopeePayoutPercent']['delta'], 'Ratio difference must compare period ratios.');
+analyticsExpectSame(12000.0, DashboardAnalyticsService::shopeeOrderRevenue(['total_amount'=>12000, 'item_list'=>[['model_original_price'=>9000]]]), 'Primary revenue takes priority.');
+analyticsExpectSame(15000.0, DashboardAnalyticsService::shopeeOrderRevenue(['item_list'=>[['model_discounted_price'=>5000, 'model_original_price'=>8000, 'model_quantity_purchased'=>3]]]), 'Missing primary revenue falls back to discounted price times quantity.');
+$empty = DashboardAnalyticsService::summarize($from, $to, [], [], []);
+analyticsExpectSame(null, $empty['summary']['shopeePayoutPercent'], 'Missing payout revenue must not display a misleading zero percent.');
+$zeroPayout = DashboardAnalyticsService::summarize($from, $to, ['2026-08-20'=>['shopee'=>['payoutRevenue'=>100000, 'matchedPayout'=>0]]], [], []);
+analyticsExpectSame(0.0, $zeroPayout['summary']['shopeePayoutPercent'], 'An available zero payout is a valid zero percent.');
+analyticsExpectSame('unavailable', $zeroBaseline['metrics']['shopeePayoutPercent']['percentStatus'], 'Missing ratio data must not produce a comparison.');
 
 echo "DashboardAnalyticsService tests passed\n";

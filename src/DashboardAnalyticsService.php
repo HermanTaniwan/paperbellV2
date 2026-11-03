@@ -6,8 +6,21 @@ final class DashboardAnalyticsService
     private const COMPARISON_METRICS = [
         'shopee', 'tiktok', 'total', 'items', 'itemsPerOrder',
         'ordersPerDay', 'itemsPerDay', 'revenue', 'pricedOrders',
-        'shopeePayout', 'shopeeFees', 'escrowOrders',
+        'shopeePayout', 'shopeeFees', 'escrowOrders', 'shopeePayoutPercent',
     ];
+
+    // Use the same primary amount and item fallback as operational revenue.
+    public static function shopeeOrderRevenue(array $raw): float
+    {
+        $revenue = (float) ($raw['total_amount'] ?? 0);
+        if ($revenue > 0) return $revenue;
+        $revenue = 0.0;
+        foreach (($raw['item_list'] ?? []) as $line) {
+            $revenue += (float) ($line['model_discounted_price'] ?? $line['model_original_price'] ?? 0)
+                * max(1, (int) ($line['model_quantity_purchased'] ?? 1));
+        }
+        return max(0.0, $revenue);
+    }
 
     public static function previousPeriod(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
@@ -44,6 +57,8 @@ final class DashboardAnalyticsService
         $pricedOrders = 0;
         $shopeePayout = 0.0;
         $shopeeFees = 0.0;
+        $payoutRevenue = 0.0;
+        $matchedPayout = 0.0;
         $escrowOrders = 0;
         $holidayDays = 0;
 
@@ -63,6 +78,8 @@ final class DashboardAnalyticsService
             $dayFees = (float) ($escrowCounts[$key]['fees'] ?? 0);
             $dayEscrowOrders = (int) ($escrowCounts[$key]['orders'] ?? 0);
 
+            $payoutRevenue += (float) ($counts[$key]['shopee']['payoutRevenue'] ?? 0);
+            $matchedPayout += (float) ($counts[$key]['shopee']['matchedPayout'] ?? 0);
             $shopee += $dayShopee;
             $tiktok += $dayTiktok;
             $itemTotal += $dayItems;
@@ -110,6 +127,8 @@ final class DashboardAnalyticsService
             'revenue' => $revenueTotal,
             'pricedOrders' => $pricedOrders,
             'shopeePayout' => $shopeePayout,
+            'shopeePayoutRevenue' => $payoutRevenue,
+            'shopeePayoutPercent' => $payoutRevenue > 0 ? round($matchedPayout / $payoutRevenue * 100, 2) : null,
             'shopeeFees' => $shopeeFees,
             'escrowOrders' => $escrowOrders,
         ]];
@@ -127,6 +146,10 @@ final class DashboardAnalyticsService
     ): array {
         $metrics = [];
         foreach (self::COMPARISON_METRICS as $key) {
+            if ($key === 'shopeePayoutPercent' && (!isset($current[$key]) || !isset($previous[$key]))) {
+                $metrics[$key] = ['previous' => $previous[$key] ?? null, 'percentStatus' => 'unavailable'];
+                continue;
+            }
             $currentValue = (float) ($current[$key] ?? 0);
             $previousValue = (float) ($previous[$key] ?? 0);
             $delta = $currentValue - $previousValue;
