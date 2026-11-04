@@ -7,10 +7,12 @@ vm.runInNewContext(fs.readFileSync('assets/app.js','utf8'), {
 });
 async function test() {
   const ctx=Object.assign(app.data(),app.methods);
-  const data={from:'2026-10-01',to:'2026-10-31',minDate:'2026-01-01',maxDate:'2026-10-31',items:[],summary:{days:31}};
+  const data={from:'2025-11-01',to:'2026-10-31',minDate:'2025-11-01',dataMinDate:'2026-01-01',maxDate:'2026-10-31',items:[],summary:{days:31}};
+  assert.equal(ctx.productClicksInterval,'monthly','Open the chart in monthly mode.');
+  assert.equal(ctx.productClicksFollowLatest,true,'Follow the latest 12 calendar months by default.');
   ctx.api=async action=>{assert.equal(action,'shopee_product_clicks');return data;};
   await ctx.loadProductClicks();
-  assert.equal(ctx.productClicksFrom,'2026-10-01');
+  assert.equal(ctx.productClicksFrom,'2025-11-01');
   assert.equal(ctx.productClicksTo,'2026-10-31');
   const loads=[];ctx.loadProductClicks=()=>loads.push([ctx.productClicksFrom,ctx.productClicksTo]);
   ctx.setProductClicksRange(7);assert.deepEqual(loads.at(-1),['2026-10-25','2026-10-31']);
@@ -60,6 +62,20 @@ async function test() {
   ctx.api=async()=>{throw new Error('Offline');};await ctx.loadProductClicks();
   assert.equal(ctx.productClicks.summary.clicks,200,'Keep the existing chart on a failed refresh.');
   assert.equal(ctx.productClicksError,'Offline');assert.equal(ctx.productClicksLoading,false);
+  const rolling=Object.assign(app.data(),app.methods);
+  let query;
+  rolling.api=async(action,options)=>{query=options.query;return data;};
+  await rolling.loadProductClicks();assert.equal(query.from,'');assert.equal(query.to,'');
+  rolling.api=async(action,options)=>{query=options.query;return {...data,from:'2025-12-01',to:'2026-11-30',maxDate:'2026-11-30'};};
+  await rolling.loadProductClicks(true);
+  assert.equal(query.from,'','Automatic refresh must recalculate the latest window on the server.');
+  assert.equal(rolling.productClicksFrom,'2025-12-01');
+  assert.equal(rolling.productClicksTo,'2026-11-30','Roll forward when a new month is imported.');
+  rolling.productClicksFrom='2026-10-01';rolling.productClicksTo='2026-10-10';
+  await rolling.applyProductClicksRange();
+  assert.equal(query.from,'2026-10-01');assert.equal(query.to,'2026-10-10');
+  await rolling.setProductClicksRange('12months');
+  assert.equal(query.from,'');assert.equal(query.to,'');assert.equal(rolling.productClicksFollowLatest,true);
   console.log('ProductClicksChart tests passed');
 }
 test().catch(e=>{console.error(e);process.exitCode=1;});

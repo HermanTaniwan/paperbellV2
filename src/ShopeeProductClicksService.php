@@ -13,7 +13,8 @@ final class ShopeeProductClicksService
         if ($min === '' || $max === '') {
             return ['from'=>'','to'=>'','minDate'=>'','maxDate'=>'','items'=>[], 'summary'=>['clicks'=>0,'days'=>0,'missingDays'=>0,'average'=>0,'peak'=>null]];
         }
-        $from = $from === '' ? max($min, substr($max, 0, 7).'-01') : $from;
+        $defaultFrom = (new DateTimeImmutable($max))->modify('first day of this month')->modify('-11 months')->format('Y-m-d');
+        $from = $from === '' ? $defaultFrom : $from;
         $to = $to === '' ? $max : $to;
         foreach ([$from, $to] as $date) {
             if (!self::validDate($date)) throw new InvalidArgumentException('Tanggal grafik klik tidak valid.');
@@ -24,7 +25,10 @@ final class ShopeeProductClicksService
         }
         $stmt = $this->db->prepare('SELECT stat_date, clicks FROM shopee_product_clicks_daily WHERE stat_date BETWEEN ? AND ? ORDER BY stat_date');
         $stmt->execute([$from, $to]);
-        return self::series($from, $to, $stmt->fetchAll()) + ['minDate'=>$min,'maxDate'=>$max];
+        return self::series($from, $to, $stmt->fetchAll()) + [
+            'minDate'=>min($min, $defaultFrom),'maxDate'=>$max,'dataMinDate'=>$min,
+            'defaultFrom'=>$defaultFrom,'defaultTo'=>$max,
+        ];
     }
 
     public static function validDate(string $value): bool
