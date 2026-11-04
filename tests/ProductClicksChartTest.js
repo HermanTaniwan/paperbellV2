@@ -17,12 +17,35 @@ async function test() {
   ctx.setProductClicksRange(30);assert.deepEqual(loads.at(-1),['2026-10-02','2026-10-31']);
   ctx.setProductClicksRange('all');assert.deepEqual(loads.at(-1),['2026-01-01','2026-10-31']);
   ctx.setProductClicksRange('month');assert.deepEqual(loads.at(-1),['2026-10-01','2026-10-31']);
-  ctx.productClicks={items:[{clicks:10},{clicks:null},{clicks:0},{clicks:20}]};
+  ctx.productClicksChartItems=[{clicks:10},{clicks:null},{clicks:0},{clicks:20}];
   assert.equal(ctx.productClicksPaths().length,2,'Missing dates must break the line; real zeros must remain.');
   assert(ctx.productClicksPaths().every(path=>!path.includes('NaN')));
-  ctx.productClicks={items:[{clicks:0}]};
+  ctx.productClicksChartItems=[{clicks:0}];
   assert(Number.isFinite(ctx.productClicksY(0)),'All-zero and one-day ranges need finite coordinates.');
   assert.equal(ctx.productClicksZoneWidth(0),756,'A single day must have a usable hover target.');
+  ctx.productClicks={items:[
+    {date:'2026-09-29',clicks:10},{date:'2026-09-30',clicks:0},
+    {date:'2026-10-01',clicks:20},{date:'2026-10-02',clicks:null},
+    {date:'2026-11-01',clicks:null},
+  ]};
+  ctx.setProductClicksInterval('monthly');
+  assert.equal(ctx.productClicksChartItems.length,3,'Group across month boundaries.');
+  assert.equal(ctx.productClicksChartItems[0].clicks,10);
+  assert.equal(ctx.productClicksChartItems[0].days,2,'Recorded zeros count as covered days.');
+  assert.equal(ctx.productClicksChartItems[1].clicks,20,'Only sum dates inside the selected range.');
+  assert.equal(ctx.productClicksChartItems[1].missingDays,1);
+  assert.equal(ctx.productClicksChartItems[1].partial,true,'Flag incomplete months.');
+  assert.equal(ctx.productClicksChartItems[2].clicks,null,'A month with no data must not become zero.');
+  assert.equal(ctx.productClicksPeak().date,'2026-10-01');
+  ctx.productClicksSelected=ctx.productClicksChartItems[1];
+  assert(ctx.productClicksTooltipLeft()>16,'Tooltip position follows monthly buckets.');
+  ctx.productClicks={items:Array.from({length:31},(_,i)=>({date:`2026-10-${String(i+1).padStart(2,'0')}`,clicks:1}))};
+  ctx.setProductClicksInterval('monthly');
+  assert.equal(ctx.productClicksChartItems[0].partial,false,'Recognize a complete calendar month.');
+  assert.equal(ctx.productClicksChartItems[0].clicks,31);
+  assert.equal(ctx.productClicksPaths()[0].split(' ').length,2,'One month still renders a visible line without circle markers.');
+  ctx.setProductClicksInterval('daily');
+  assert.equal(ctx.productClicksChartItems.length,31,'Switch back without changing the selected dates or refetching.');
   ctx.loadProductClicks=app.methods.loadProductClicks;
   ctx.productClicksFrom='2026-10-02';ctx.productClicksTo='2026-10-01';
   ctx.api=()=>{throw new Error('Invalid range reached API');};

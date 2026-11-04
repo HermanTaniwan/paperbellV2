@@ -5,6 +5,12 @@ laporan Seller Centre, dengan rentang 7/30/90 hari, bulan data terakhir,
 semua data, dan tanggal khusus. Rentang cepat berakhir pada tanggal terakhir
 yang tersedia, bukan hari ini. Rincian harian per SKU tidak tersedia.
 
+Pilihan **Harian / Bulanan** mengubah interval grafik tanpa mengubah rentang
+tanggal. Mode bulanan menjumlahkan klik harian per bulan kalender, hanya untuk
+tanggal yang dipilih. Tooltip menyebut jumlah hari berdata dan menandai bulan
+yang tidak lengkap; bulan tanpa data tetap kosong. Kartu rata-rata tetap
+menggunakan hari berdata, sedangkan kartu tertinggi mengikuti interval grafik.
+
 Data grafik disimpan terpisah dalam `shopee_product_clicks_daily` agar impor
 metrik klik tidak mengubah omzet, atribusi, dan tabel produk historis lainnya.
 Endpoint baca: `api.php?action=shopee_product_clicks&from=YYYY-MM-DD&to=YYYY-MM-DD`.
