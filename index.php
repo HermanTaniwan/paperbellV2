@@ -22,7 +22,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/pdf-drawer.css?v=3">
   <link rel="stylesheet" href="assets/motion.css?v=2">
   <link rel="stylesheet" href="assets/scanner.css?v=2">
-  <link rel="stylesheet" href="assets/shopee-insights.css?v=10">
+  <link rel="stylesheet" href="assets/shopee-insights.css?v=11">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=4">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
@@ -412,6 +412,29 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </section>
 
       <section v-if="view==='products'" class="content shopee-page" v-cloak>
+        <article class="panel shopee-card product-clicks-card" :aria-busy="productClicksLoading">
+          <div class="shopee-card-head"><div><h4>Produk diklik per hari</h4><p>Total klik produk seluruh toko Shopee. Satu orang dapat melakukan lebih dari satu klik.</p></div><small v-if="productClicks?.maxDate" class="shopee-source-badge">Data s.d. {{holidayDateText(productClicks.maxDate)}}</small></div>
+          <div class="product-clicks-presets" aria-label="Pilih rentang grafik klik"><button v-for="range in [{key:7,label:'7 hari'},{key:30,label:'30 hari'},{key:90,label:'90 hari'},{key:'month',label:'Bulan terakhir'},{key:'all',label:'Semua data'}]" :key="range.key" type="button" class="ghost" :disabled="productClicksLoading||!productClicks?.maxDate" @click="setProductClicksRange(range.key)">{{range.label}}</button><small>Rentang cepat berakhir pada tanggal data terakhir.</small></div>
+          <form class="shopee-date-controls" @submit.prevent="loadProductClicks()"><label><span>Dari</span><input v-model="productClicksFrom" type="date" required :min="productClicks?.minDate" :max="productClicks?.maxDate"></label><label><span>Sampai</span><input v-model="productClicksTo" type="date" required :min="productClicks?.minDate" :max="productClicks?.maxDate"></label><button type="submit" :disabled="productClicksLoading">{{productClicksLoading?'Memuat...':'Terapkan'}}</button></form>
+          <p v-if="productClicksError" role="alert" class="product-clicks-error">{{productClicksError}} <button type="button" class="ghost" :disabled="productClicksLoading" @click="loadProductClicks()">Coba lagi</button></p>
+          <template v-if="productClicks?.summary.days">
+            <div class="shopee-comparison-summary"><div><span>Total klik</span><strong>{{number(productClicks.summary.clicks)}}</strong></div><div><span>Rata-rata / hari berdata</span><strong>{{number(Math.round(productClicks.summary.average))}}</strong></div><div><span>Hari tertinggi · {{productClicks.summary.peak.fullLabel}}</span><strong>{{number(productClicks.summary.peak.clicks)}} klik</strong></div></div>
+            <p class="product-clicks-period">{{holidayDateText(productClicks.from)}} – {{holidayDateText(productClicks.to)}} · {{number(productClicks.summary.days)}} hari berdata</p>
+            <div class="shopee-comparison-scroll product-clicks-scroll"><div class="shopee-comparison-canvas" @mouseleave="productClicksSelected=null">
+              <svg viewBox="0 0 860 280" role="img" aria-label="Grafik total klik produk Shopee per hari">
+                <g class="shopee-comparison-grid"><g v-for="tick in productClicksTicks()" :key="tick.value"><line x1="72" x2="828" :y1="tick.y" :y2="tick.y"></line><text x="62" :y="tick.y+3" text-anchor="end">{{number(tick.value)}}</text></g></g>
+                <text class="shopee-comparison-axis-title visitors" x="72" y="22">Klik produk</text><line class="shopee-comparison-axis" x1="72" x2="828" y1="222" y2="222"></line>
+                <polyline v-for="(points,index) in productClicksPaths()" :key="'click-line-'+index" class="shopee-comparison-line" :points="points"></polyline>
+                <g class="shopee-comparison-points"><template v-for="(item,index) in productClicks.items" :key="item.date"><circle v-if="item.clicks!==null" :cx="productClicksX(index)" :cy="productClicksY(item.clicks)" r="3"><title>{{item.fullLabel}}: {{number(item.clicks)}} klik</title></circle></template></g>
+                <g class="shopee-comparison-x-axis"><text v-for="tick in productClicksDateTicks()" :key="tick.index" :x="productClicksX(tick.index)" y="248" text-anchor="middle">{{tick.label}}</text></g>
+                <g class="shopee-comparison-hover"><rect v-for="(item,index) in productClicks.items" :key="'click-hit-'+item.date" :x="productClicksZoneX(index)" :width="productClicksZoneWidth(index)" y="35" height="187" tabindex="0" role="button" :aria-label="item.fullLabel+': '+(item.clicks===null?'Data belum tersedia':number(item.clicks)+' klik')" @mouseenter="productClicksSelected=item" @click="productClicksSelected=item" @focus="productClicksSelected=item" @blur="productClicksSelected=null" @keydown.enter.prevent="productClicksSelected=item" @keydown.space.prevent="productClicksSelected=item" @keydown.escape="productClicksSelected=null"></rect></g>
+              </svg>
+              <div v-if="productClicksSelected" class="shopee-comparison-tooltip" :style="{left:productClicksTooltipLeft()+'%'}"><b>{{productClicksSelected.fullLabel}}</b><span>{{productClicksSelected.clicks===null?'Data belum tersedia':number(productClicksSelected.clicks)+' klik'}}</span></div>
+            </div></div>
+            <small class="shopee-comparison-note">Sumber: laporan harian Seller Centre. Grafik mencakup seluruh produk; rincian harian per SKU belum tersedia.<template v-if="productClicks.summary.missingDays"> {{number(productClicks.summary.missingDays)}} hari belum memiliki data dan ditampilkan sebagai jeda.</template></small>
+          </template>
+          <div v-else class="shopee-comparison-empty" role="status">{{productClicksLoading?'Memuat data klik harian...':'Belum ada data klik pada rentang ini.'}}</div>
+        </article>
         <template v-if="shopeeStats"><article class="panel shopee-page-hero"><div><span class="eyebrow">PRODUK & SKU</span><h2>Produk penggerak omzet</h2><p>Top SKU pada {{shopeeStats.meta.latestLabel}} berdasarkan laporan Seller Centre.</p></div><span class="shopee-source-badge">Top 5 menyumbang {{shopeePercent(shopeeStats.topProductsShare,1)}}</span></article>
         <article class="panel shopee-card"><div class="shopee-table-wrap"><table class="shopee-product-table"><thead><tr><th>Produk / SKU</th><th>Kontribusi</th><th>Omzet</th><th>Order atribusi</th><th>Unit</th><th>Konversi</th></tr></thead><tbody><tr v-for="product in shopeeStats.topProducts" :key="product.code"><td><b>{{product.name}}</b><small>{{product.code}}</small></td><td><span class="shopee-share"><i :style="{'--share':shopeeProductBar(product)+'%'}"></i>{{shopeePercent(product.share,1)}}</span></td><td>{{currency(product.sales)}}</td><td>{{number(product.orders)}}</td><td>{{number(product.units)}}</td><td>{{shopeePercent(product.conversion,2)}}</td></tr></tbody></table></div></article>
         <section class="shopee-page-grid"><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Sumber traffic produk</h4><p>Channel yang paling banyak menghasilkan penjualan halaman produk.</p></div></div><div class="shopee-traffic-list"><div v-for="source in shopeeStats.trafficSources" :key="source.name" class="shopee-traffic-row"><span>{{source.name}}</span><i><b :style="{width:shopeeTrafficBar(source)+'%'}"></b></i><strong>{{shopeePercent(source.share,1)}}</strong></div></div></article><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Arah stok</h4><p>Gunakan halaman Rekomendasi Stok untuk menggabungkan demand SKU dengan stok aktual.</p></div></div><button type="button" @click="go('stock')">Lihat rekomendasi stok →</button></article></section></template>
@@ -1678,7 +1701,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=172">
+<script src="assets/app.js?v=173">
 </script>
 </body>
 </html>
