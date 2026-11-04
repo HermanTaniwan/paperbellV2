@@ -8,6 +8,17 @@ async function test(){
  const data={from:'2025-04',to:'2026-03',minMonth:'2025-04',maxMonth:'2026-03',months,products};
  let query;c.api=async(action,options)=>{assert.equal(action,'shopee_product_traffic');query=options.query;return data;};
  await c.load();assert.equal(c.selected.length,3);assert.equal(c.from,'2025-04');assert.equal(query.from,'');
+ const sorted=context();sorted.data=data;sorted.selected=['3','1','2'];sorted.hover=0;
+ assert.equal(sorted.pillProducts.map(p=>p.code).join(','),'1,2,3','Pills sort by selected metric totals descending.');
+ assert.equal(sorted.tooltipProducts.map(p=>p.code).join(','),'3,2,1','Tooltip sorts by the hovered month, including real zeros.');
+ const productColor=sorted.color(products[2]);
+ sorted.metric='ctr';assert.equal(sorted.pillProducts.map(p=>p.code).join(','),'3,2,1','Changing metric reorders pills.');
+ assert.equal(sorted.color(products[2]),productColor,'Sorting must not reassign product colors.');
+ assert.equal(sorted.selected.join(','),'3,1,2','Sorting must not mutate selection or chart order.');
+ const values=[{v:null},{v:0},{v:10},{v:null},{v:10}];
+ const ordered=sorted.sortProducts(values,p=>p.v);
+ assert.equal(ordered.map(p=>p.v===null?'null':p.v).join(','),'10,10,0,null,null','Unknown values go below actual zeros.');
+ assert.equal(ordered[0],values[2]);assert.equal(ordered[1],values[4],'Ties preserve original order.');
  for(let i=4;i<=10;i++)c.toggle(String(i));
  assert.equal(c.selected.length,10,'Allow ten simultaneous products.');
  assert.equal(new Set(c.colors.slice(0,10)).size,10,'Every selected product needs its own color.');

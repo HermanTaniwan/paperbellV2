@@ -5,6 +5,8 @@ window.PaperbellProductTraffic={
  watch:{refreshKey(){this.load(true)}},
  computed:{
   chosen(){return this.selected.map(code=>this.data?.products.find(p=>p.code===code)).filter(Boolean)},
+  pillProducts(){return this.sortProducts(this.chosen,p=>p.totals[this.metric])},
+  tooltipProducts(){const month=this.months[this.hover]?.month;return this.sortProducts(this.chosen,p=>this.value(p,month))},
   rows(){const q=this.search.trim().toLocaleLowerCase('id-ID');return(this.data?.products||[]).filter(p=>!q||`${p.name} ${p.sku} ${p.code}`.toLocaleLowerCase('id-ID').includes(q)).slice().sort((a,b)=>(b.totals[this.sort]??-1)-(a.totals[this.sort]??-1)||a.name.localeCompare(b.name))},
   months(){return this.data?.months||[]},
   metricLabel(){return this.metrics.find(m=>m.key===this.metric)?.label||'Klik produk'},
@@ -21,6 +23,8 @@ window.PaperbellProductTraffic={
   shortName(p){return p.name.split(' - ')[0].split(' – ')[0]},
   number(value,percent=false){return value===null||value===undefined?'—':new Intl.NumberFormat('id-ID',{maximumFractionDigits:percent?2:0}).format(value)+(percent?'%':'')},
   value(product,month){return product.series[month]?.[this.metric]??null},
+  sortProducts(products,value){return products.slice().sort((a,b)=>{const av=value(a),bv=value(b);if(av==null)return bv==null?0:1;if(bv==null)return-1;return bv-av})},
+  color(product){return this.colors[this.selected.indexOf(product.code)]},
   x(index){return this.months.length===1?450:72+index/Math.max(1,this.months.length-1)*756},
   y(value){return 222-value/this.scale.max*182},
   paths(product){const paths=[];let segment=[];const flush=()=>{if(segment.length===1){const [x,y]=segment[0].split(',').map(Number);paths.push(`${x-4},${y} ${x+4},${y}`)}else if(segment.length)paths.push(segment.join(' '));segment=[]};for(const [i,m] of this.months.entries()){const value=this.value(product,m.month);if(value===null)flush();else segment.push(`${this.x(i).toFixed(2)},${this.y(value).toFixed(2)}`)}flush();return paths},
@@ -40,7 +44,7 @@ window.PaperbellProductTraffic={
   </form>
   <p v-if="error" role="alert" class="product-clicks-error">{{error}} <button class="ghost" type="button" :disabled="loading" @click="load()">Coba lagi</button></p>
   <p v-if="notice" role="status" class="product-traffic-note">{{notice}}</p>
-  <div v-if="chosen.length" class="product-traffic-legend"><button v-for="(product,index) in chosen" :key="product.code" type="button" :title="product.name+' — hapus dari perbandingan'" @click="toggle(product.code)"><i :style="{background:colors[index]}"></i><span>{{shortName(product)}}</span><b>{{number(product.totals[metric],metric==='ctr')}}</b><span aria-hidden="true">×</span></button><button type="button" class="ghost" @click="selected=[];hover=null">Kosongkan pilihan</button></div>
+  <div v-if="chosen.length" class="product-traffic-legend"><button v-for="product in pillProducts" :key="product.code" type="button" :title="product.name+' — hapus dari perbandingan'" @click="toggle(product.code)"><i :style="{background:color(product)}"></i><span>{{shortName(product)}}</span><b>{{number(product.totals[metric],metric==='ctr')}}</b><span aria-hidden="true">×</span></button><button type="button" class="ghost" @click="selected=[];hover=null">Kosongkan pilihan</button></div>
   <p v-if="data" class="product-clicks-period">{{data.from}} – {{data.to}} · {{chosen.length}} produk dibandingkan · {{metricLabel}}</p>
   <div v-if="chosen.length&&months.length" class="shopee-comparison-scroll product-clicks-scroll"><div class="shopee-comparison-canvas" @mouseleave="hover=null">
    <svg viewBox="0 0 860 280" role="img" :aria-label="'Tren bulanan '+metricLabel+' per produk'">
@@ -50,7 +54,7 @@ window.PaperbellProductTraffic={
     <g class="shopee-comparison-x-axis"><text v-for="tick in dateTicks" :key="tick.index" :x="x(tick.index)" y="248" text-anchor="middle">{{tick.label}}</text></g>
     <g class="shopee-comparison-hover"><rect v-for="(month,index) in months" :key="month.month" :x="zoneX(index)" :width="zoneWidth(index)" y="35" height="187" tabindex="0" role="button" :aria-label="month.label+': '+chosen.map(p=>shortName(p)+' '+number(value(p,month.month),metric==='ctr')).join(', ')" @mouseenter="hover=index" @click="hover=index" @focus="hover=index" @blur="hover=null" @keydown.enter.prevent="hover=index" @keydown.space.prevent="hover=index" @keydown.escape="hover=null"></rect></g>
    </svg>
-   <div v-if="hover!==null" class="shopee-comparison-tooltip product-traffic-tooltip" :style="{left:tooltipLeft()+'%'}"><b>{{hoverLabel()}}</b><span v-for="(product,index) in chosen" :key="product.code"><i :style="{background:colors[index]}"></i>{{shortName(product)}} <strong>{{number(value(product,months[hover].month),metric==='ctr')}}</strong></span></div>
+   <div v-if="hover!==null" class="shopee-comparison-tooltip product-traffic-tooltip" :style="{left:tooltipLeft()+'%'}"><b>{{hoverLabel()}}</b><span v-for="product in tooltipProducts" :key="product.code"><i :style="{background:color(product)}"></i>{{shortName(product)}} <strong>{{number(value(product,months[hover].month),metric==='ctr')}}</strong></span></div>
   </div></div>
   <div v-else class="shopee-comparison-empty" role="status">{{loading?'Memuat trafik produk...':data?.products.length?'Pilih hingga '+maxProducts+' produk dari tabel untuk melihat grafik.':'Belum ada data produk pada rentang ini.'}}</div>
   <p class="product-traffic-note">Data per bulan; bulan tanpa catatan ditampilkan kosong. Klik, dilihat, dan keranjang dijumlahkan dalam rentang ini. CTR dihitung dari total klik ÷ total dilihat. Pengunjung diakumulasi dari laporan bulanan dan dapat menghitung orang yang sama lintas bulan.</p>

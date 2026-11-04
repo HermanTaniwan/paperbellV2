@@ -7,6 +7,11 @@ rentang tersebut. Pilihan produk, pencarian, metrik, dan urutan tabel tetap
 dipertahankan saat refresh. Klik nama produk untuk melihat satu produk;
 checkbox menambah/menghapus produk dari perbandingan.
 
+Pill di atas grafik diurutkan dari total metrik terbesar ke terkecil pada
+rentang pilihan. Tooltip diurutkan berdasarkan nilai bulan yang ditunjuk.
+Urutan mengikuti metrik aktif; nilai kosong di bawah nol. Warna tiap produk
+tetap sama ketika urutannya berubah.
+
 Metrik grafik: klik, dilihat, CTR, pengunjung produk, dan jumlah produk
 ditambahkan ke keranjang. Filter menggunakan bulan kalender penuh, sebab
 data sumber tidak menyediakan trafik harian per produk. Bulan tanpa catatan
