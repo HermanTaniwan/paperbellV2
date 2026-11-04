@@ -4,14 +4,17 @@ const component=scope.window.PaperbellProductTraffic;
 function context(){const c=Object.assign(component.data(),component.methods);for(const [k,get] of Object.entries(component.computed))Object.defineProperty(c,k,{get:()=>get.call(c)});return c;}
 async function test(){
  const c=context(),months=[{month:'2026-01',label:'Jan 26'},{month:'2026-02',label:'Feb 26'},{month:'2026-03',label:'Mar 26'}];
- const products=Array.from({length:4},(_,i)=>({code:String(i+1),sku:'SKU'+i,name:'Product '+i,totals:{clicks:100-i,ctr:i},series:{'2026-01':{clicks:i,ctr:0},'2026-03':{clicks:10,ctr:2}}}));
+ const products=Array.from({length:11},(_,i)=>({code:String(i+1),sku:'SKU'+i,name:'Product '+i,totals:{clicks:100-i,ctr:i},series:{'2026-01':{clicks:i,ctr:0},'2026-03':{clicks:10,ctr:2}}}));
  const data={from:'2025-04',to:'2026-03',minMonth:'2025-04',maxMonth:'2026-03',months,products};
  let query;c.api=async(action,options)=>{assert.equal(action,'shopee_product_traffic');query=options.query;return data;};
  await c.load();assert.equal(c.selected.length,3);assert.equal(c.from,'2025-04');assert.equal(query.from,'');
- c.toggle('4');assert.equal(c.selected.length,3);assert(c.notice.includes('Maksimal'));
- c.toggle('1');c.toggle('4');assert(c.selected.includes('4'));
+ for(let i=4;i<=10;i++)c.toggle(String(i));
+ assert.equal(c.selected.length,10,'Allow ten simultaneous products.');
+ assert.equal(new Set(c.colors.slice(0,10)).size,10,'Every selected product needs its own color.');
+ c.toggle('11');assert.equal(c.selected.length,10);assert(c.notice.includes('Maksimal 10'));
+ c.toggle('1');c.toggle('11');assert(c.selected.includes('11'));
  c.search='SKU3';assert.equal(c.rows.length,1);assert.equal(c.rows[0].code,'4');
- c.search='no match';assert.equal(c.rows.length,0);assert.equal(c.chosen.length,3,'Search filters table without hiding chart selections.');
+ c.search='no match';assert.equal(c.rows.length,0);assert.equal(c.chosen.length,10,'Search filters table without hiding chart selections.');
  c.focusProduct('1');assert.equal(c.chosen.length,1);
  assert.equal(c.value(products[0],'2026-01'),0);assert.equal(c.value(products[0],'2026-02'),null);
  assert.equal(c.paths(products[0]).length,2,'Missing months must break lines; isolated observations need visible dashes.');

@@ -1,6 +1,6 @@
 # Trafik bulanan per produk
 
-Bagian **Trafik per produk** di Produk & SKU membandingkan maksimal tiga
+Bagian **Trafik per produk** di Produk & SKU membandingkan maksimal sepuluh
 produk dalam satu grafik tanpa marker bulat. Default adalah 12 bulan hingga
 bulan data terbaru, dengan tiga produk dengan total klik tertinggi pada
 rentang tersebut. Pilihan produk, pencarian, metrik, dan urutan tabel tetap

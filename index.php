@@ -23,7 +23,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/motion.css?v=2">
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=11">
-  <link rel="stylesheet" href="assets/product-traffic.css?v=1">
+  <link rel="stylesheet" href="assets/product-traffic.css?v=2">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=4">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
@@ -1703,7 +1703,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/product-traffic.js?v=1"></script>
+<script src="assets/product-traffic.js?v=2"></script>
 <script src="assets/app.js?v=176">
 </script>
 </body>
