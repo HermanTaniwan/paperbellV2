@@ -13,7 +13,7 @@ function loadScannerLibrary(){
 const Pagination={props:['data'],emits:['change'],template:`<div class="pagination" v-if="data.pages>1"><span>Halaman {{data.page}} dari {{data.pages}} · {{data.total}} data</span><div><button class="ghost" :disabled="data.page<=1" @click="$emit('change',data.page-1)">← Sebelumnya</button><button class="ghost" :disabled="data.page>=data.pages" @click="$emit('change',data.page+1)">Berikutnya →</button></div></div>`};
 
 createApp({
- components:{Pagination},
+ components:{Pagination,ProductTraffic:window.PaperbellProductTraffic},
   data(){return{
    appNotificationSummary:null,notificationCacheAt:0,notificationFeedPromise:null,notificationAckPromise:null,shippingFeeReadVersion:0,shippingNotificationsOpen:false,shippingNotificationsLoading:false,shippingNotifications:null,shippingNotificationsError:'',shippingFeeSummary:null,shippingFeeAlerts:null,shippingFeeQuery:'',shippingFeeFrom:'',shippingFeeTo:'',shippingFeeLoading:false,shippingFeeError:'',
    orderImagePreview:null,orderNoteDialog:null,orderNoteDecision:null,orderNoteSaving:false,

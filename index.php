@@ -23,6 +23,7 @@ header('Pragma: no-cache');
   <link rel="stylesheet" href="assets/motion.css?v=2">
   <link rel="stylesheet" href="assets/scanner.css?v=2">
   <link rel="stylesheet" href="assets/shopee-insights.css?v=11">
+  <link rel="stylesheet" href="assets/product-traffic.css?v=1">
   <link rel="stylesheet" href="assets/server-health.css?v=1">
   <link rel="stylesheet" href="assets/shipping-fee-alerts.css?v=4">
   <link rel="stylesheet" href="assets/server-temperature-alert.css?v=1">
@@ -435,6 +436,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </template>
           <div v-else class="shopee-comparison-empty" role="status">{{productClicksLoading?'Memuat data klik harian...':'Belum ada data klik pada rentang ini.'}}</div>
         </article>
+        <product-traffic :api="api" :refresh-key="shopeeStats"></product-traffic>
         <template v-if="shopeeStats"><article class="panel shopee-page-hero"><div><span class="eyebrow">PRODUK & SKU</span><h2>Produk penggerak omzet</h2><p>Top SKU pada {{shopeeStats.meta.latestLabel}} berdasarkan laporan Seller Centre.</p></div><span class="shopee-source-badge">Top 5 menyumbang {{shopeePercent(shopeeStats.topProductsShare,1)}}</span></article>
         <article class="panel shopee-card"><div class="shopee-table-wrap"><table class="shopee-product-table"><thead><tr><th>Produk / SKU</th><th>Kontribusi</th><th>Omzet</th><th>Order atribusi</th><th>Unit</th><th>Konversi</th></tr></thead><tbody><tr v-for="product in shopeeStats.topProducts" :key="product.code"><td><b>{{product.name}}</b><small>{{product.code}}</small></td><td><span class="shopee-share"><i :style="{'--share':shopeeProductBar(product)+'%'}"></i>{{shopeePercent(product.share,1)}}</span></td><td>{{currency(product.sales)}}</td><td>{{number(product.orders)}}</td><td>{{number(product.units)}}</td><td>{{shopeePercent(product.conversion,2)}}</td></tr></tbody></table></div></article>
         <section class="shopee-page-grid"><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Sumber traffic produk</h4><p>Channel yang paling banyak menghasilkan penjualan halaman produk.</p></div></div><div class="shopee-traffic-list"><div v-for="source in shopeeStats.trafficSources" :key="source.name" class="shopee-traffic-row"><span>{{source.name}}</span><i><b :style="{width:shopeeTrafficBar(source)+'%'}"></b></i><strong>{{shopeePercent(source.share,1)}}</strong></div></div></article><article class="panel shopee-card"><div class="shopee-card-head"><div><h4>Arah stok</h4><p>Gunakan halaman Rekomendasi Stok untuk menggabungkan demand SKU dengan stok aktual.</p></div></div><button type="button" @click="go('stock')">Lihat rekomendasi stok →</button></article></section></template>
@@ -1701,7 +1703,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
 <script src="assets/vue.global.prod.js">
 </script>
-<script src="assets/app.js?v=175">
+<script src="assets/product-traffic.js?v=1"></script>
+<script src="assets/app.js?v=176">
 </script>
 </body>
 </html>

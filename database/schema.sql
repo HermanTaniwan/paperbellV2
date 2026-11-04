@@ -199,6 +199,21 @@ CREATE TABLE IF NOT EXISTS shopee_shop_stats_monthly (
   INDEX ix_shopee_shop_stats_period(month_end)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS shopee_product_traffic_monthly (
+  month_start DATE NOT NULL,
+  product_code VARCHAR(50) NOT NULL,
+  product_name VARCHAR(1000) NOT NULL,
+  parent_sku VARCHAR(255) NOT NULL,
+  impressions INT NULL,
+  clicks INT NULL,
+  visitors INT NULL,
+  carts INT NULL,
+  orders INT NULL,
+  source_file VARCHAR(255) NOT NULL,
+  imported_at BIGINT NOT NULL,
+  PRIMARY KEY(month_start,product_code)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS shopee_product_clicks_daily (
   stat_date DATE PRIMARY KEY,
   clicks INT NOT NULL,

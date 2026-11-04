@@ -21,6 +21,7 @@ require __DIR__ . '/src/ShippingFeeAlertService.php';
 require __DIR__ . '/src/AppNotificationService.php';
 require __DIR__ . '/src/ShopeeShopStatsService.php';
 require __DIR__ . '/src/ShopeeProductClicksService.php';
+require __DIR__ . '/src/ShopeeProductTrafficService.php';
 require __DIR__ . '/src/MarketplacePriceService.php';
 require __DIR__ . '/src/ShopeeStockService.php';
 require __DIR__ . '/src/OrderThumbnailService.php';
@@ -373,6 +374,13 @@ try {
 
     if ($action === 'shopee_shop_stats') {
         respond((new ShopeeShopStatsService($mysql))->dashboard());
+    }
+
+    if ($action === 'shopee_product_traffic') {
+        respond((new ShopeeProductTrafficService($mysql))->monthly(
+            trim((string)($_GET['from'] ?? '')),
+            trim((string)($_GET['to'] ?? ''))
+        ));
     }
 
     if ($action === 'shopee_product_clicks') {
