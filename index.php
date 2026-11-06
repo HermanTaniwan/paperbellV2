@@ -12,6 +12,7 @@ header('Pragma: no-cache');
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
   <link rel="stylesheet" href="assets/app.css?v=34">
+  <link rel="stylesheet" href="assets/instagram-reels.css?v=1">
   <link rel="stylesheet" href="assets/print.css?v=8">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=33">
   <link rel="stylesheet" href="assets/features.css?v=28">
@@ -102,6 +103,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <button v-if="authEnabled" class="avatar" @click="logout">A</button>
 </div>
       </header>
+      <instagram-reels v-if="view==='instagram-reels'" :refresh-key="dashboard?.lastSyncText"></instagram-reels>
       <div v-if="toast" class="toast" :class="toast.type">{{ toast.message }}</div>
       <section v-if="unacknowledgedPrinterIncidents().length" class="printer-incident-banner" role="alert" aria-live="assertive">
         <span class="printer-incident-banner-icon" aria-hidden="true">!</span>
@@ -1704,7 +1706,8 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <script src="assets/vue.global.prod.js">
 </script>
 <script src="assets/product-traffic.js?v=3"></script>
-<script src="assets/app.js?v=176">
+<script src="assets/instagram-reels.js?v=1"></script>
+<script src="assets/app.js?v=177">
 </script>
 </body>
 </html>
