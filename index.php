@@ -11,7 +11,7 @@ header('Pragma: no-cache');
   <title>
 <?= htmlspecialchars($config['app']['name']) ?>
 </title>
-  <link rel="stylesheet" href="assets/app.css?v=34">
+  <link rel="stylesheet" href="assets/app.css?v=35">
   <link rel="stylesheet" href="assets/instagram-reels.css?v=1">
   <link rel="stylesheet" href="assets/print.css?v=8">
   <link rel="stylesheet" href="assets/order-enhancements.css?v=33">
@@ -1352,6 +1352,19 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </section>
 
       <section v-if="view==='printers'" class="content printer-settings">
+        <article v-if="printerUsage" class="panel usage-panel">
+          <div class="panel-head"><div><h3>Pemakaian WF-C5390</h3><p>{{printerUsage.reason==='refill'?'Sejak refill':'Sejak pencatatan dimulai'}}: {{printerUsage.started_text}}</p></div><span class="badge" :class="printerUsage.needs_check?'red':'blue'">{{printerUsage.needs_check?'Cek tinta / isi bila perlu':'Pencatatan berjalan'}}</span></div>
+          <p>1 sisi A5 = 1 poin; 1 sisi B5 = 2 poin. Satu lembar B5 bolak-balik = 4 poin.</p>
+          <div class="usage-totals"><div><strong>{{printerUsage.a5.toLocaleString('id-ID')}}</strong><span>Halaman A5</span></div><div><strong>{{printerUsage.b5.toLocaleString('id-ID')}}</strong><span>Halaman B5</span></div><div><strong>{{printerUsage.points.toLocaleString('id-ID')}}</strong><span>Total poin</span></div></div>
+          <div v-if="printerUsage.point_limit>0" class="usage-progress"><progress :value="printerUsage.points" :max="printerUsage.point_limit" :aria-label="'Pemakaian '+printerUsage.percent+' persen'"></progress><span>{{printerUsage.percent}}% dari batas {{printerUsage.point_limit.toLocaleString('id-ID')}} poin · cek mulai {{Math.ceil(printerUsage.point_limit/2).toLocaleString('id-ID')}} poin</span></div>
+          <p v-else class="muted">Batas poin belum ditentukan. Penghitungan tetap berjalan; isi batas untuk mengaktifkan pengingat 50%.</p>
+          <p v-if="printerUsage.unresolved_jobs" class="text-warning">{{printerUsage.unresolved_jobs}} job belum terhitung lengkap karena PDF/ukuran tidak terbaca. Periksa riwayat dan catat koreksi manual.</p>
+          <div class="usage-actions"><label>Batas pemakaian satu periode (poin)<input type="number" min="0" max="1000000000" step="1" v-model.number="usageLimit" @input="usageLimitDirty=true"><small>0 = pengingat dinonaktifkan. Ini indeks pemakaian, bukan sisa tinta fisik.</small></label><button type="button" :disabled="usageBusy" @click="savePrinterUsage('limit')">Simpan batas</button><button type="button" class="ghost" :disabled="usageBusy" @click="savePrinterUsage('refill')">Sudah refill · mulai dari 0</button></div>
+          <p class="muted">Dihitung setelah job selesai diproses antrean, termasuk salinan dan cetak ulang. Cetak di luar Paperbell, hasil macet/batal sebagian, dan test print dapat dicatat melalui koreksi. Cleaning tidak dikonversi menjadi poin otomatis.</p>
+          <details class="usage-details"><summary>Koreksi / cetak di luar Paperbell</summary><div class="usage-actions"><label>Tambahan halaman A5<input type="number" step="1" v-model.number="usageAdjustment.a5"></label><label>Tambahan halaman B5<input type="number" step="1" v-model.number="usageAdjustment.b5"></label><label>Alasan<input v-model.trim="usageAdjustment.note" maxlength="255" placeholder="Contoh: cetak di luar Paperbell / kurangi hasil gagal"></label><button type="button" :disabled="usageBusy" @click="savePrinterUsage('adjust')">Catat koreksi</button></div><small>Isi jumlah sisi tercetak. Gunakan angka minus untuk mengurangi hitungan.</small></details>
+          <details class="usage-details"><summary>Riwayat periode refill</summary><div class="usage-table-wrap"><table><thead><tr><th>Mulai</th><th>Selesai</th><th>A5</th><th>B5</th><th>Poin</th><th>Batas</th></tr></thead><tbody><tr v-for="period in printerUsage.history" :key="period.id"><td>{{period.started_text}}</td><td>{{period.ended_text}}</td><td>{{period.a5}}</td><td>{{period.b5}}</td><td>{{period.points}}</td><td>{{period.point_limit||'Belum diatur'}}</td></tr><tr v-if="!printerUsage.history.length"><td colspan="6">Belum ada periode selesai.</td></tr></tbody></table></div></details>
+          <details class="usage-details"><summary>Aktivitas periode ini (maks. 30; yang perlu koreksi di atas)</summary><div class="usage-table-wrap"><table><thead><tr><th>Waktu</th><th>Sumber</th><th>A5</th><th>B5</th><th>Catatan</th></tr></thead><tbody><tr v-for="event in printerUsage.events" :key="event.id"><td>{{new Date(Number(event.created_at)*1000).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})}}</td><td>{{event.job_id?'Job #'+event.job_id:'Koreksi manual'}}</td><td>{{event.a5}}</td><td>{{event.b5}}</td><td>{{event.note||'Selesai diproses antrean'}}<span v-if="event.created_by"> · {{event.created_by}}</span></td></tr><tr v-if="!printerUsage.events.length"><td colspan="5">Belum ada aktivitas.</td></tr></tbody></table></div></details>
+        </article>
         <div v-if="printerSettings" class="settings-grid">
           <article class="panel printer-list-panel">
             <div class="panel-head">
@@ -1415,11 +1428,11 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
       </section>
 
       <div v-if="queueWidgetVisible" class="printer-queue-widget">
-        <button v-if="!queuePanelOpen" class="printer-queue-fab" :class="{'has-incident':unacknowledgedPrinterIncidents().length}" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
+        <button v-if="!queuePanelOpen" class="printer-queue-fab" :class="{'has-incident':unacknowledgedPrinterIncidents().length,'usage-check':queueData.printerUsage?.needs_check}" type="button" aria-expanded="false" aria-controls="printer-queue-drawer" @click="openQueuePanel">
           <span class="printer-queue-fab-icon" aria-hidden="true">&#128424;</span>
           <span class="printer-queue-fab-copy">
             <b>{{unacknowledgedPrinterIncidents().length?unacknowledgedPrinterIncidents().length+' masalah':(queueWidgetAppJobs.length+unmatchedSpoolerJobs().length)+' job berjalan'}}</b>
-            <small>{{unacknowledgedPrinterIncidents().length?'Segera periksa printer':queueWidgetPrinterSummary}}</small>
+            <small>{{unacknowledgedPrinterIncidents().length?'Segera periksa printer':(queueData.printerUsage?.needs_check?'WF-C5390: cek tinta':queueWidgetPrinterSummary)}}</small>
           </span>
           <span class="printer-queue-fab-count">{{unacknowledgedPrinterIncidents().length||(queueWidgetAppJobs.length+unmatchedSpoolerJobs().length)}}</span>
         </button>
@@ -1437,6 +1450,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
           </div>
 
           <p v-if="queueWidgetError" class="printer-incident-message" role="alert">{{queueWidgetError}} Status antrean belum diperbarui.</p>
+          <div v-if="queueData.printerUsage" class="usage-queue-summary" :class="{'usage-check':queueData.printerUsage.needs_check}">
+            <b>WF-C5390 · {{queueData.printerUsage.points.toLocaleString('id-ID')}} poin</b>
+            <span>A5 {{queueData.printerUsage.a5.toLocaleString('id-ID')}} · B5 {{queueData.printerUsage.b5.toLocaleString('id-ID')}} halaman</span>
+            <strong v-if="queueData.printerUsage.needs_check" role="status">Cek tinta / isi bila perlu · sudah mencapai 50% batas</strong>
+            <span v-else-if="!queueData.printerUsage.point_limit">Atur batas poin untuk pengingat 50%.</span>
+            <span v-if="queueData.printerUsage.unresolved_jobs">Ada job yang perlu koreksi manual.</span>
+            <button type="button" class="ghost" @click="closeQueuePanel();go('printers')">Detail pemakaian</button>
+          </div>
           <div class="printer-queue-totals">
             <div><strong>{{queueWidgetAppJobs.length}}</strong><span>Job aplikasi</span></div>
             <div><strong>{{unmatchedSpoolerJobs().length}}</strong><span>CUPS lainnya</span></div>
@@ -1707,7 +1728,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </script>
 <script src="assets/product-traffic.js?v=3"></script>
 <script src="assets/instagram-reels.js?v=1"></script>
-<script src="assets/app.js?v=177">
+<script src="assets/app.js?v=178">
 </script>
 </body>
 </html>

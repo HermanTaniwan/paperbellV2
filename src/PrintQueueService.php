@@ -2,12 +2,19 @@
 declare(strict_types=1);
 
 require_once __DIR__.'/CourierPrintPolicy.php';
+require_once __DIR__.'/PrinterUsageService.php';
 
 final class PrintQueueService
 {
     private string $spoolerCacheFile;
     private string $cupsProgressTest;
     private string $cupsPrinterStateTest;
+    private ?PrinterUsageService $usage = null;
+
+    public function usage(): PrinterUsageService
+    {
+        return $this->usage ??= new PrinterUsageService($this->db);
+    }
 
     public function __construct(private PDO $db)
     {
@@ -20,6 +27,7 @@ final class PrintQueueService
 
     public function overview():array
     {
+        $this->usage();
         $spooler=$this->spoolerState();
         $this->reconcileSubmittedJobs($spooler);
         $this->reconcileCancelledRequests();
@@ -58,6 +66,7 @@ final class PrintQueueService
             'worker'=>$worker,
             'incidents'=>$incidents,
             'incidentCount'=>$unacknowledged,
+            'printerUsage'=>$this->usage()->summary(),
         ];
     }
 
@@ -149,7 +158,16 @@ final class PrintQueueService
         $submitted=$this->db->query("SELECT id,printer,spooler_job_id,submitted_at,file_path,job_type FROM print_jobs WHERE status='submitted'")->fetchAll();
         $complete=$this->db->prepare("UPDATE print_jobs SET status='completed',message=?,completed_at=? WHERE id=? AND status='submitted'");$now=time();
         $message=PHP_OS_FAMILY==='Windows'?'Selesai diproses antrean Windows':'Selesai diproses CUPS';
-        foreach($this->completedSubmittedJobIds($submitted,$spooler['jobs']??[]) as $id)$complete->execute([$message,$now,$id]);
+        $usage=$this->usage();
+        foreach($this->completedSubmittedJobIds($submitted,$spooler['jobs']??[]) as $id) {
+            $usage->locked(function () use ($id,$complete,$message,$now,$usage): void {
+                $find=$this->db->prepare("SELECT * FROM print_jobs WHERE id=? AND status='submitted' FOR UPDATE");
+                $find->execute([$id]);$job=$find->fetch();
+                if (!$job) return;
+                $usage->recordCompleted($job);
+                $complete->execute([$message,$now,$id]);
+            });
+        }
     }
 
     private function completedSubmittedJobIds(array $submitted,array $spoolerJobs,?bool $windows=null):array

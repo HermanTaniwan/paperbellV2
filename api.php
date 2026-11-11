@@ -632,6 +632,13 @@ try {
     }
     if ($action === 'print_label') { $input=body();$sn=trim((string)($input['order_sn']??''));requireOrderNoteAcknowledged($mysql,$sn);$id=$printing->queueLabel($sn,trim((string)($input['printer']??'')),(string)$_SESSION['paperbell_user']);respond(['ok'=>true,'id'=>$id]); }
     if ($action === 'printer_settings') respond($printing->printerSettings(true));
+    if ($action === 'printer_usage') respond($queueService()->usage()->summary(true));
+    if ($action === 'save_printer_usage') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond(['error'=>'Gunakan POST.'],405);
+        $queueService()->overview();
+        $queueService()->usage()->change(body(),(string)$_SESSION['paperbell_user']);
+        respond($queueService()->usage()->summary(true));
+    }
     if ($action === 'save_printer_settings') { $input=body();respond(['ok'=>true,'settings'=>$printing->savePrinterSettings($input)]); }
 
     if ($action === 'toggle_packaged') {
