@@ -8,12 +8,15 @@ $config = require $root.'/config.php';
 foreach (['Database','HostPathResolver','DataMappingService','ShopeeSkuIdentity'] as $class) require_once $root.'/src/'.$class.'.php';
 $db = Database::mysql($config['mysql']);
 $resolver = new HostPathResolver($config['paths'] ?? []);
-$sku = 'WHSK2L1+L2+L3A5A5';
-$identity = '48659135764:326630374010';
-$variation = 'Paket L1+L2+L3,A5 (20 Lubang)';
+$sixHole = in_array('--six-hole', $argv, true);
+$suffix = $sixHole ? 'H6' : '';
+$sku = 'WHSK2L1+L2+L3A5A5'.$suffix;
+$identity = $sixHole ? '48659135764:326630374011' : '48659135764:326630374010';
+$variation = 'Paket L1+L2+L3,A5 ('.($sixHole ? '6' : '20').' Lubang)';
 $components = [];
 $find = $db->prepare('SELECT * FROM data_mappings WHERE sku_id=?');
 foreach (['WHSK2L1A5A5','WHSK2L2A5A5','WHSK2L3A5A5'] as $componentSku) {
+    $componentSku .= $suffix;
     $find->execute([$componentSku]);
     $component = $find->fetch();
     if (!$component) throw new RuntimeException('Missing component: '.$componentSku);
@@ -34,7 +37,7 @@ $existing = $find->fetch();
 if ($previousAlias !== false && (int)$previousAlias !== (int)($existing['id'] ?? 0)) throw new RuntimeException('Variant is already mapped elsewhere.');
 $dir = $root.'/storage/bundles';
 if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) throw new RuntimeException('Cannot create bundle directory.');
-$request = $dir.'/hsk-l123-request.json';
+$request = $dir.'/hsk-l123'.$suffix.'-request.json';
 file_put_contents($request, json_encode($components, JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES), LOCK_EX);
 $fingerprint = hash('sha256', json_encode(array_map(static fn($c) => [$c['sku_id'], hash_file('sha256', $c['file_path']), $c['page_from'], $c['page_to'], $c['copies']], $components), JSON_THROW_ON_ERROR));
 $output = $dir.'/HSK2-L1-L2-L3-A5-'.substr($fingerprint, 0, 16).'.pdf';
@@ -47,14 +50,14 @@ if (proc_close($process) !== 0) throw new RuntimeException('Bundle PDF failed: '
 $pdf = json_decode($out, true, 512, JSON_THROW_ON_ERROR);
 $mapping = $components[0];
 unset($mapping['id']);
-$mapping = array_replace($mapping, ['sku_id'=>$sku,'product_name'=>'HSK 2 Paket L1+L2+L3 A5','variation_name'=>$variation,'variant_1'=>'L1+L2+L3','parent_sku'=>'','variation'=>$variation,'file_path'=>$output,'page_from'=>1,'page_to'=>$pdf['pages'],'search_alias'=>'HSK 2 Paket L1+L2+L3 A5 20 Lubang']);
+$mapping = array_replace($mapping, ['sku_id'=>$sku,'product_name'=>'HSK 2 Paket L1+L2+L3 A5','variation_name'=>$variation,'variant_1'=>'L1+L2+L3','parent_sku'=>'','variation'=>$variation,'file_path'=>$output,'page_from'=>1,'page_to'=>$pdf['pages'],'search_alias'=>'HSK 2 '.$variation]);
 if ($existing) {
     if ($existing['product_name'] !== $mapping['product_name'] || $existing['variation_name'] !== $variation) throw new RuntimeException('Bundle SKU already used by another mapping.');
     $mapping['id'] = $existing['id'];
 }
 echo json_encode(['sku'=>$sku,'variant'=>$variation,'pdf'=>$pdf,'affected_lines'=>count($lines),'apply'=>in_array('--apply',$argv,true)], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR).PHP_EOL;
 if (!in_array('--apply', $argv, true)) exit;
-$backup = $dir.'/hsk-l123-backup-'.date('Ymd-His').'-'.bin2hex(random_bytes(3)).'.json';
+$backup = $dir.'/hsk-l123'.$suffix.'-backup-'.date('Ymd-His').'-'.bin2hex(random_bytes(3)).'.json';
 if (file_put_contents($backup, json_encode(['mapping'=>$existing,'alias'=>$previousAlias,'lines'=>$lines], JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR), LOCK_EX) === false) throw new RuntimeException('Backup failed.');
 $saved = (new DataMappingService($db, $root, $resolver))->save($mapping);
 $db->beginTransaction();

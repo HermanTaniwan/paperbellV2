@@ -20,6 +20,15 @@ C:\xampp\php\php.exe tools/register-hsk-bundle.php
 C:\xampp\php\php.exe tools/register-hsk-bundle.php --apply
 ```
 
+The A5 6-hole variant `48659135764:326630374011` uses its own local SKU
+`WHSK2L1+L2+L3A5A5H6` and the corresponding `H6` component mappings.
+Its combined PDF also contains 166 pages. Register or rebuild it with:
+
+```powershell
+C:\xampp\php\php.exe tools/register-hsk-bundle.php --six-hole
+C:\xampp\php\php.exe tools/register-hsk-bundle.php --six-hole --apply
+```
+
 The command backs up the previous mapping, alias, and matching order lines to
 `storage/bundles` before applying. It updates only the matching variant's
 item keys and preserves printed flags/history. Generated PDFs and backups
