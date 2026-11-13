@@ -91,6 +91,8 @@ Pada detail order, setiap item memiliki **Pengaturan cetak item** untuk memilih 
 
 Cetak produk Brother di Windows mengikuti aplikasi desktop: ukuran kertas dikirim melalui parameter SumatraPDF, sumber kertas mengikuti pengaturan driver tanpa parameter bin, dan worker tidak mengubah ukuran default driver sementara. Job lama yang di-retry juga memakai aturan ini. Resi Brother memakai ukuran custom 105 x 182 mm melalui MP Tray.
 
+Profil Windows **Looseleaf A5 Tray1** memakai driver dan port Brother yang sama, dengan default A5, Plain Paper, kualitas Normal, Tray1 (tray bawah), dan duplex sisi panjang. Buat ulang profil melalui `tools/create-looseleaf-printer.ps1`, lalu tampilkan profil tersebut di Konfigurasi Printer dan pilih sebagai printer pada Data Mapping produk looseleaf. Mapping LCHRHBLAA5 menggunakan profil ini. Daftarkan juga kertas A5/Plain Paper untuk Tray1 pada panel Brother; pesan meminta kertas di Tray1 tetap perlu ditangani jika isi atau pengaturan tray tidak sesuai.
+
 Login web saat ini nonaktif. Untuk mengaktifkannya kembali, set `PAPERBELL_AUTH_ENABLED=true`, lalu atur `PAPERBELL_WEB_USER` dan `PAPERBELL_WEB_PASSWORD`. Konfigurasi database dan path ada di `config.php`.
 
 Paperbell memakai MariaDB/MySQL XAMPP standar di port `3306`. Database `paperbell` berada bersama database XAMPP lain, sedangkan backup migrasi dari server lama `3307` disimpan di `storage/backups`. File mapping produk tersimpan di tabel `data_mappings` dan `mapping_aliases`.
