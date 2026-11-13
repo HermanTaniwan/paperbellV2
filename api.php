@@ -13,6 +13,7 @@ require __DIR__ . '/src/PrintService.php';
 require __DIR__ . '/src/HostPathResolver.php';
 require __DIR__ . '/src/OAuthVault.php';
 require __DIR__ . '/src/MarketplaceOAuthService.php';
+require __DIR__ . '/src/EtsyOAuthService.php';
 require __DIR__ . '/src/LabelPdfPreparer.php';
 require __DIR__ . '/src/MarketplaceLabelService.php';
 require __DIR__ . '/src/MarketplaceOrderSyncService.php';
@@ -192,6 +193,7 @@ try {
     $pathResolver = new HostPathResolver($config['paths']??[]);
     $printing = new PrintService($mysql,$config['printing']['default_label_printer'],$pathResolver);
     $oauthService = static function() use ($mysql,$config): MarketplaceOAuthService { static $service=null;return $service??=new MarketplaceOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),$config['oauth']); };
+    $etsyService = static function() use ($mysql,$config): EtsyOAuthService { static $service=null;return $service??=new EtsyOAuthService($mysql,new OAuthVault($config['oauth']['key_file']),__DIR__.'/storage/etsy/credentials.json'); };
     $labelService = static function() use ($mysql,$config,$oauthService): MarketplaceLabelService { static $service=null;return $service??=new MarketplaceLabelService($mysql,$oauthService(),__DIR__.'/storage/labels',new LabelPdfPreparer($config['printing'],__DIR__),(string)$config['printing']['default_label_printer']); };
     $mappingService = new DataMappingService($mysql,__DIR__,$pathResolver);
     $queueService = static function() use ($mysql): PrintQueueService { static $service=null;return $service??=new PrintQueueService($mysql); };
@@ -265,7 +267,20 @@ try {
     if ($action === 'move_spooler_job') {$input=body();respond($queueService()->moveSpoolerJob(trim((string)($input['printer']??'')),(int)($input['job_id']??0),trim((string)($input['target_printer']??''))));}
     if ($action === 'printer_live_progress') respond($queueService()->liveProgress());
 
-    if ($action === 'oauth_status') respond($oauthService()->statuses(appBaseUrl($config)));
+    if ($action === 'oauth_status') {
+        $data=$oauthService()->statuses(appBaseUrl($config));
+        $data['items']['etsy']=$etsyService()->status();
+        respond($data);
+    }
+    if (in_array($action,['oauth_connect','oauth_disconnect','oauth_save_config'],true)) {
+        $etsyInput=body();
+        if (($etsyInput['provider']??'')==='etsy') {
+            if (($_SERVER['REQUEST_METHOD']??'')!=='POST' || stripos((string)($_SERVER['CONTENT_TYPE']??''),'application/json')!==0) respond(['error'=>'Gunakan POST JSON dari Paperbell.'],405);
+            if ($action==='oauth_connect') respond(['ok'=>true,'url'=>$etsyService()->connectUrl((string)$_SESSION['paperbell_user'])]);
+            if ($action==='oauth_disconnect') { $etsyService()->disconnect(); respond(['ok'=>true]); }
+            respond(['error'=>'Kredensial Etsy dikelola melalui file lokal pada host.'],422);
+        }
+    }
     if ($action === 'oauth_save_config') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));$oauthService()->saveConfig($provider,is_array($input['config']??null)?$input['config']:[]);respond(['ok'=>true,'data'=>$oauthService()->statuses(appBaseUrl($config))]); }
     if ($action === 'oauth_connect') { $input=body();$provider=strtolower(trim((string)($input['provider']??'')));respond(['ok'=>true,'url'=>$oauthService()->connectUrl($provider,appBaseUrl($config),(string)$_SESSION['paperbell_user'])]); }
     if ($action === 'oauth_disconnect') { $input=body();$oauthService()->disconnect(strtolower(trim((string)($input['provider']??''))));respond(['ok'=>true]); }

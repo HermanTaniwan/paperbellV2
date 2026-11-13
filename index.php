@@ -1284,18 +1284,18 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </div>
         <div v-if="loading&&!oauthData" class="panel connection-load-state" role="status" aria-live="polite">
           <span class="status-spinner" aria-hidden="true"></span>
-          <div><h3>Memeriksa koneksi marketplace</h3><p>Sedang mengambil status Shopee dan TikTok Shop dari server.</p></div>
+          <div><h3>Memeriksa koneksi marketplace</h3><p>Sedang mengambil status Shopee, TikTok Shop, dan Etsy dari server.</p></div>
         </div>
         <div v-else-if="error&&!oauthData" class="panel connection-load-state is-error">
           <span class="status-icon" aria-hidden="true">!</span>
           <div><h3>Status koneksi belum tersedia</h3><p>Terjadi error saat menghubungi server. Gunakan tombol Coba lagi di atas.</p></div>
         </div>
         <div v-if="oauthData" class="connection-grid">
-          <article v-for="provider in ['shopee','tiktok']" :key="provider" class="panel connection-card">
+          <article v-for="provider in ['shopee','tiktok','etsy']" :key="provider" class="panel connection-card">
             <div class="connection-head">
-<div class="market-logo" :class="provider">{{provider==='shopee'?'S':'T'}}</div>
+<div class="market-logo" :class="provider" :style="provider==='etsy'?{background:'#f1641e'}:{}">{{provider==='shopee'?'S':provider==='etsy'?'E':'T'}}</div>
 <div>
-<h3>{{provider==='shopee'?'Shopee':'TikTok Shop'}}</h3>
+<h3>{{provider==='shopee'?'Shopee':provider==='etsy'?'Etsy':'TikTok Shop'}}</h3>
 <p v-if="oauthData.items[provider].connected">{{oauthData.items[provider].account_name||oauthData.items[provider].account_id||'Akun terhubung'}}</p>
 <p v-else>Belum ada akun aktif</p>
 </div>
@@ -1323,7 +1323,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <label class="wide">API host<input v-model="oauthForms.shopee.api_host">
 </label>
 </div>
-              <div v-else class="credential-grid">
+              <div v-else-if="provider==='tiktok'" class="credential-grid">
 <label>App Key<input v-model="oauthForms.tiktok.app_key" placeholder="App Key">
 </label>
 <label>App Secret<input v-model="oauthForms.tiktok.app_secret" type="password" :placeholder="oauthData.items.tiktok.config.has_app_secret?'Tersimpan — kosongkan jika tidak diubah':'App Secret'">
@@ -1340,10 +1340,14 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 <label>Shop cipher<input v-model="oauthForms.tiktok.shop_cipher" placeholder="Opsional">
 </label>
 </div>
-              <button @click="saveOAuthConfig(provider)" :disabled="busy">Simpan konfigurasi</button>
+              <div v-else>
+                <p>Kredensial Etsy dibaca dari file lokal yang terlindungi. Keystring dan shared secret tidak ditampilkan di browser.</p>
+                <p>Daftarkan Callback URL di atas pada pengaturan aplikasi Etsy, lalu klik Hubungkan Etsy dari komputer ini. Gunakan browser yang sama sampai selesai.</p>
+              </div>
+              <button v-if="provider!=='etsy'" @click="saveOAuthConfig(provider)" :disabled="busy">Simpan konfigurasi</button>
             </details>
             <div class="connection-actions">
-<button v-if="!oauthData.items[provider].connected" @click="connectOAuth(provider)" :disabled="busy||!oauthData.items[provider].configured">Hubungkan {{provider==='shopee'?'Shopee':'TikTok'}}</button>
+<button v-if="!oauthData.items[provider].connected" @click="connectOAuth(provider)" :disabled="busy||!oauthData.items[provider].configured">Hubungkan {{provider==='shopee'?'Shopee':provider==='etsy'?'Etsy':'TikTok'}}</button>
 <button v-else class="ghost" @click="connectOAuth(provider)" :disabled="busy">Otorisasi ulang</button>
 <button v-if="oauthData.items[provider].connected" class="danger-button" @click="disconnectOAuth(provider)" :disabled="busy">Putuskan</button>
 </div>
@@ -1728,7 +1732,7 @@ window.PAPERBELL_CONFIG = <?= json_encode(['authEnabled' => (bool)($config['auth
 </script>
 <script src="assets/product-traffic.js?v=3"></script>
 <script src="assets/instagram-reels.js?v=1"></script>
-<script src="assets/app.js?v=179">
+<script src="assets/app.js?v=180">
 </script>
 </body>
 </html>
