@@ -1,6 +1,6 @@
 param(
     [string]$SourcePrinter = 'Brother DCP-T830DW Printer',
-    [string]$ProfileName = 'Looseleaf A5 Tray1'
+    [string]$ProfileName = 'Brother A5 Tray bawah'
 )
 $ErrorActionPreference = 'Stop'
 if ($SourcePrinter -eq $ProfileName) { throw 'The profile must use a separate printer queue.' }
