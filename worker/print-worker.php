@@ -13,7 +13,6 @@ $sumatra = $config['printing']['sumatra'];
 $labelPreparer = new LabelPdfPreparer($config['printing'],$root);
 $hostPathResolver = new HostPathResolver($config['paths']??[]);
 $once = in_array('--once', $argv, true);
-$brotherPaperSizeCache = [];
 $printerGroup='all';
 foreach($argv as $argument){
     if(str_starts_with($argument,'--printer-group='))$printerGroup=substr($argument,16);
@@ -213,52 +212,13 @@ function printPrinterForJob(array $job, string $printSettings): string
     return $brotherB5;
 }
 
-function printerPaperSize(string $printer): string
+function brotherProductPrintSettings(array $job, string $settings): string
 {
-    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
-    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); (Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString()";
-    return trim(powershellEncoded($script, 'Konfigurasi ukuran kertas printer tidak dapat dibaca.'));
-}
-
-function setPrinterPaperSize(string $printer, string $paper): void
-{
-    if (!in_array($paper, ['A4', 'A5', 'A6', 'B5', 'Letter'], true)) {
-        throw new InvalidArgumentException('Ukuran kertas printer tidak didukung: ' . $paper);
-    }
-    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
-    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); Set-PrintConfiguration -PrinterName \$p -PaperSize {$paper} -ErrorAction Stop; \$actual=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); if (\$actual -ne '{$paper}') { throw \"Ukuran printer tetap \$actual, bukan {$paper}.\" }";
-    powershellEncoded($script, 'Konfigurasi ukuran kertas printer tidak dapat diubah.');
-}
-
-function applyBrotherProductPaperSize(array $job, string $printSettings): ?string
-{
-    global $brotherPaperSizeCache;
-    if (!isWindowsPrintHost()) return null;
-    if (($job['job_type'] ?? '') !== 'product' || stripos((string)($job['printer'] ?? ''), 'Brother') === false) return null;
-    $paper = paperSizeFromPrintSettings($printSettings);
-    if ($paper === null) return null;
-
-    $printer = (string)$job['printer'];
-    if (array_key_exists($printer, $brotherPaperSizeCache)) {
-        $previous = (string)$brotherPaperSizeCache[$printer];
-        if (strcasecmp($previous, $paper) === 0) return null;
-        setPrinterPaperSize($printer, $paper);
-        $brotherPaperSizeCache[$printer] = $paper;
-        logLine("Job #{$job['id']} ukuran driver Brother diubah dari cache: {$previous} -> {$paper}");
-        return $previous;
-    }
-
-    $printer64 = base64_encode(mb_convert_encoding($printer, 'UTF-16LE', 'UTF-8'));
-    $script = "\$p=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{$printer64}')); \$previous=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); \$changed=\$false; if (\$previous -ne '{$paper}') { Set-PrintConfiguration -PrinterName \$p -PaperSize {$paper} -ErrorAction Stop; \$actual=(Get-PrintConfiguration -PrinterName \$p -ErrorAction Stop).PaperSize.ToString(); if (\$actual -ne '{$paper}') { throw \"Ukuran printer tetap \$actual, bukan {$paper}.\" }; \$changed=\$true }; [pscustomobject]@{previous=\$previous;changed=\$changed} | ConvertTo-Json -Compress";
-    $result = json_decode(trim(powershellEncoded($script, 'Konfigurasi ukuran kertas Brother tidak dapat disiapkan.')), true);
-    if (!is_array($result) || !isset($result['previous'], $result['changed'])) {
-        throw new RuntimeException('Respons konfigurasi ukuran kertas Brother tidak valid.');
-    }
-    $previous = (string)$result['previous'];
-    $brotherPaperSizeCache[$printer] = (bool)$result['changed'] ? $paper : $previous;
-    if (!(bool)$result['changed']) return null;
-    logLine("Job #{$job['id']} ukuran driver Brother diubah sementara: {$previous} -> {$paper}");
-    return $previous;
+    if (!isWindowsPrintHost()
+        || ($job['job_type'] ?? '') !== 'product'
+        || stripos((string)($job['printer'] ?? ''), 'Brother') === false) return $settings;
+    // Match the desktop app, including jobs saved with the previous tray rules.
+    return implode(',', array_filter(explode(',', $settings), static fn(string $part): bool => !preg_match('/^\s*bin\s*=/i', $part)));
 }
 
 function isEpson5790ProductJob(array $job): bool
@@ -324,27 +284,6 @@ function restoreEpson5790ProductPaperSize(string $printer, string $backup): void
         '-Restore', '-BackupPath', $backup,
     ], 'Konfigurasi native driver WF-5790 tidak dapat dikembalikan.');
     @unlink($backup);
-}
-
-function warmBrotherPaperSizeCache(PDO $db): void
-{
-    global $brotherPaperSizeCache;
-    if (!isWindowsPrintHost()) return;
-    try {
-        $raw = (string)($db->query("SELECT setting_value FROM printer_settings WHERE setting_key='visible_printers'")->fetchColumn() ?: '');
-        $printers = json_decode($raw, true);
-        if (!is_array($printers)) return;
-        foreach ($printers as $printer) {
-            $printer = (string)$printer;
-            if (stripos($printer, 'Brother') === false) continue;
-            $startedAt = microtime(true);
-            $brotherPaperSizeCache[$printer] = printerPaperSize($printer);
-            $elapsedMs = (int)round((microtime(true) - $startedAt) * 1000);
-            logLine("Cache ukuran driver Brother siap: {$printer}={$brotherPaperSizeCache[$printer]} ({$elapsedMs}ms saat startup)");
-        }
-    } catch (Throwable $error) {
-        logLine('Cache ukuran driver Brother tidak dapat dipanaskan: ' . $error->getMessage());
-    }
 }
 
 function prepareLabelPdf(array $job): string
@@ -557,13 +496,11 @@ if(defined('PAPERBELL_PRINT_WORKER_FUNCTIONS_ONLY'))return;
 $workerLocks=acquirePrintWorkerLocks($root.'/storage/worker-locks',$printerGroup);
 $db = connectDatabase();
 recoverInterruptedJobs($db);
-if(in_array($printerGroup,['all','brother'],true))warmBrotherPaperSizeCache($db);
 logLine("Worker printer aktif: kelompok {$printerGroup}");
 
 do {
     $job = null;
     $preparedLabelPath = null;
-    $temporaryPaperSize = null;
     $temporaryLabelPrintTicket = null;
     $printPrinter = null;
     $processingStartedAt = 0.0;
@@ -606,7 +543,7 @@ do {
         if (!is_file($job['file_path'])) throw new RuntimeException('File PDF tidak ditemukan: ' . $job['file_path']);
 
         $printPath = (string)$job['file_path'];
-        $printSettings = epson5790PdfPrintSettings($job, (string)$job['print_settings']);
+        $printSettings = brotherProductPrintSettings($job, epson5790PdfPrintSettings($job, (string)$job['print_settings']));
         $printPrinter = (string)$job['printer'];
         if ($job['job_type'] === 'label') {
             $stageStartedAt = microtime(true);
@@ -623,9 +560,6 @@ do {
         }
 
         $stageStartedAt = microtime(true);
-        if ($printPrinter === (string)$job['printer']) {
-            $temporaryPaperSize = applyBrotherProductPaperSize($job, $printSettings);
-        }
         $epsonSession=isWindowsPrintHost()&&isEpson5790ProductJob(array_replace($job,['printer'=>$printPrinter]));
         $timings['driver'] = (int)round((microtime(true) - $stageStartedAt) * 1000);
         $spoolerName=isWindowsPrintHost()?'Windows spooler':'CUPS';
@@ -710,16 +644,6 @@ do {
                 logLine("Job #{$job['id']} konfigurasi driver label sebelumnya dikembalikan");
             } catch (Throwable $restoreError) {
                 logLine('Konfigurasi driver label gagal dikembalikan: ' . $restoreError->getMessage());
-            }
-        }
-        if ($temporaryPaperSize !== null && $printPrinter !== null) {
-            try {
-                setPrinterPaperSize($printPrinter, $temporaryPaperSize);
-                $brotherPaperSizeCache[$printPrinter] = $temporaryPaperSize;
-                logLine("Job #{$job['id']} ukuran driver {$printPrinter} dikembalikan ke {$temporaryPaperSize}");
-            } catch (Throwable $restoreError) {
-                unset($brotherPaperSizeCache[$printPrinter]);
-                logLine('Ukuran driver printer gagal dikembalikan: ' . $restoreError->getMessage());
             }
         }
     }

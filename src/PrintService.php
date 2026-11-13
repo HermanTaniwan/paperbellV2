@@ -332,10 +332,8 @@ final class PrintService
         $borderless=str_contains($printer,'COVER BINDER A4 BORDERLESS')&&in_array($o['paper'],['DEFAULT','A4'],true);
         $parts[]=$borderless?'fit':'noscale';
         if($borderless)$parts[]='paper=A4 (Borderless) (210 x 297 mm)';
-        if(str_contains($printer,'BROTHER')) {
-            if($o['paper']==='A5')$parts[]='bin=1'; // Tray1: tray bawah.
-            elseif($o['paper']==='B5')$parts[]='bin=258'; // MP Tray: tray atas.
-        } elseif(str_contains($printer,'WF'))$parts[]=$o['paper']==='B5'?'bin=261':($o['paper']==='A5'?'bin=1':'bin=7');
+        // Brother products follow the driver's paper source, as in the desktop app.
+        if(!str_contains($printer,'BROTHER')&&str_contains($printer,'WF'))$parts[]=$o['paper']==='B5'?'bin=261':($o['paper']==='A5'?'bin=1':'bin=7');
         if(!$borderless&&in_array($o['paper'],['A4','A5','A6'],true))$parts[]='paper='.$o['paper'];elseif($o['paper']==='B5')$parts[]=str_contains($printer,'BROTHER')?'paper=B5':'paperkind=13';if($copies>1)$parts[]="{$copies}x";return implode(',',$parts);
     }
 
