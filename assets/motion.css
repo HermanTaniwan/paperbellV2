@@ -23,7 +23,6 @@
 .content > .panel-grid,
 .content > .feature-grid,
 .content > .table-card,
-.content > .order-groups,
 .content > .labels-split,
 .content > .document-grid {
   animation: section-rise 440ms var(--motion-ease) both;
@@ -151,7 +150,8 @@ tbody tr:hover {
 }
 
 .order-group {
-  animation: card-enter 380ms var(--motion-ease) both;
+  /* Live order rows must not retain animation transform/compositing layers. */
+  animation: none;
 }
 
 .order-group:nth-child(2) { animation-delay: 45ms; }
